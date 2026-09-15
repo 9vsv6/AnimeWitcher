@@ -103,6 +103,28 @@ void main() {
       );
     });
 
+    test('raw logical-id inequality cannot return to start/adoption', () {
+      final service = File(
+        'lib/core/services/download_service.dart',
+      ).readAsStringSync();
+      final start = service.indexOf(
+        'Future<DownloadCommandOutcome> startDownloadOutcome({',
+      );
+      final complete = service.indexOf(
+        'Future<List<TaskRecord>> _completeRecordsForEpisode(',
+        start,
+      );
+      expect(start, greaterThanOrEqualTo(0));
+      expect(complete, greaterThan(start));
+      final body = service.substring(start, complete);
+
+      expect(body, isNot(contains('candidateLogicalId != logicalId')));
+      expect(
+        'logicalIdentity.matchesPersistedKey(candidateLogicalId)'.allMatches(body),
+        hasLength(greaterThanOrEqualTo(2)),
+      );
+    });
+
     test('complete-record matching accepts enriched stable-id aliases', () {
       final service = File(
         'lib/core/services/download_service.dart',
