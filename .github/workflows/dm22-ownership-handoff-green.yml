@@ -1,4 +1,4 @@
-name: DM-22 ownership handoff GREEN
+name: Diagnose full Flutter tests
 
 on:
   push:
@@ -8,17 +8,14 @@ on:
       - .github/workflows/dm22-ownership-handoff-green.yml
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  green:
+  diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
-        with:
-          ref: plan/download-manager-reliability
-          fetch-depth: 0
 
       - uses: subosito/flutter-action@v2
         with:
@@ -32,661 +29,63 @@ jobs:
           flutter gen-l10n
           dart run build_runner build --delete-conflicting-outputs
 
-      - name: Prove DM-22 RED and apply ownership-handoff patch
-        shell: python
-        run: |
-          from pathlib import Path
-
-          parallel_path = Path('lib/core/services/persistent_parallel_download.dart')
-          service_path = Path('lib/core/services/download_service.dart')
-          swift_path = Path('ios/Runner/DownloadNativeWaitingQueue.swift')
-          test_path = Path('test/core/services/ios_multipart_ownership_handoff_source_test.dart')
-
-          parallel = parallel_path.read_text()
-          service = service_path.read_text()
-          swift = swift_path.read_text()
-
-          # RED: this workflow is intentionally a one-shot migration. If the
-          # durable claim contract is already present, never rewrite it.
-          already_green = (
-              'NativeParallelBackgroundCandidate' in parallel
-              and 'multipartClaims: [MultipartClaim]' in swift
-              and 'commitMultipartClaimBeforeResume' in swift
-          )
-          if already_green:
-              print('DM-22 production contract already present; verifier-only pass.')
-          else:
-              red_gaps = [
-                  ('Dart candidate carries claim', 'NativeParallelBackgroundCandidate' not in parallel),
-                  ('Swift persists multipart claim', 'multipartClaims: [MultipartClaim]' not in swift),
-                  ('pre-resume claim validation', 'commitMultipartClaimBeforeResume' not in swift),
-              ]
-              missing = [name for name, is_missing in red_gaps if is_missing]
-              if not missing:
-                  raise SystemExit('Expected DM-22 RED contract was not reproducible')
-              print('DM-22 RED reproduced:', ', '.join(missing))
-
-              old_plan = '''class NativeParallelBackgroundPlan {
-  const NativeParallelBackgroundPlan({
-    required this.parentTaskId,
-    required this.maxConcurrent,
-    required this.tasks,
-  });
-
-  final String parentTaskId;
-  final int maxConcurrent;
-  final List<DownloadTask> tasks;
-}'''
-              new_plan = '''const Duration kNativeMultipartClaimOfferLease = Duration(seconds: 30);
-
-class NativeParallelBackgroundCandidate {
-  const NativeParallelBackgroundCandidate({
-    required this.task,
-    required this.generation,
-    required this.claimId,
-    required this.claimLease,
-  });
-
-  final DownloadTask task;
-  final int generation;
-  final String claimId;
-  final Duration claimLease;
-}
-
-class NativeParallelBackgroundPlan {
-  const NativeParallelBackgroundPlan({
-    required this.parentTaskId,
-    required this.maxConcurrent,
-    required this.candidates,
-  });
-
-  final String parentTaskId;
-  final int maxConcurrent;
-  final List<NativeParallelBackgroundCandidate> candidates;
-}'''
-              if old_plan not in parallel:
-                  raise SystemExit('DM-22 Dart plan anchor drifted')
-              parallel = parallel.replace(old_plan, new_plan, 1)
-
-              old_fields = '''  final Set<String> _activeConnectionIds = {};
-  final DownloadConnectionGovernor _connectionGovernor ='''
-              new_fields = '''  final Set<String> _activeConnectionIds = {};
-  final Map<
-    String,
-    ({int generation, DateTime expiresAt, String claimId})
-  > _nativeClaimOffers = {};
-  final DownloadConnectionGovernor _connectionGovernor ='''
-              if old_fields not in parallel:
-                  raise SystemExit('DM-22 claim-offer field anchor drifted')
-              parallel = parallel.replace(old_fields, new_fields, 1)
-
-              old_native_plans = '''  List<NativeParallelBackgroundPlan> nativeBackgroundPlans() {
-    if (_disposed) return const <NativeParallelBackgroundPlan>[];
-    final plans = <NativeParallelBackgroundPlan>[];
-    for (final session in _sessions.values) {
-      if (!session.active || session.pauseRequested || session.deleted)
-        continue;
-      final provenWidth = _activeConnectionsForSession(session);
-      if (provenWidth <= 0) continue;
-      final tasks = session.parts
-          .where(
-            (part) =>
-                !part.complete &&
-                !part.launched &&
-                part.recoveryTimer == null &&
-                part.attemptGeneration > 0 &&
-                !part.sourceValidationRequired &&
-                part.progress <= 0 &&
-                part.credibleProgress <= 0,
-          )
-          .map((part) => part.task)
-          .toList(growable: false);
-      if (tasks.isEmpty) continue;
-      plans.add(
-        NativeParallelBackgroundPlan(
-          parentTaskId: session.task.taskId,
-          maxConcurrent: provenWidth.clamp(1, kDownloadGlobalConnectionBudget),
-          tasks: tasks,
-        ),
-      );
-    }
-    return plans;
-  }'''
-              new_native_plans = '''  List<NativeParallelBackgroundPlan> nativeBackgroundPlans() {
-    if (_disposed) return const <NativeParallelBackgroundPlan>[];
-    final plans = <NativeParallelBackgroundPlan>[];
-    final now = DateTime.now();
-    for (final session in _sessions.values) {
-      if (!session.active || session.pauseRequested || session.deleted) {
-        continue;
-      }
-      final provenWidth = _activeConnectionsForSession(session);
-      if (provenWidth <= 0) continue;
-      final candidates = <NativeParallelBackgroundCandidate>[];
-      for (final part in session.parts) {
-        if (part.complete ||
-            part.launched ||
-            part.recoveryTimer != null ||
-            part.attemptGeneration <= 0 ||
-            part.sourceValidationRequired ||
-            part.progress > 0 ||
-            part.credibleProgress > 0) {
-          continue;
-        }
-        final existing = _nativeClaimOffers[part.task.taskId];
-        final offer = existing != null &&
-                existing.generation == part.attemptGeneration &&
-                existing.expiresAt.isAfter(now)
-            ? existing
-            : (
-                generation: part.attemptGeneration,
-                expiresAt: now.add(kNativeMultipartClaimOfferLease),
-                claimId:
-                    '${session.task.taskId}:${part.task.taskId}:g${part.attemptGeneration}:o${now.microsecondsSinceEpoch}',
-              );
-        _nativeClaimOffers[part.task.taskId] = offer;
-        candidates.add(
-          NativeParallelBackgroundCandidate(
-            task: part.task,
-            generation: offer.generation,
-            claimId: offer.claimId,
-            claimLease: kNativeMultipartClaimOfferLease,
-          ),
-        );
-      }
-      if (candidates.isEmpty) continue;
-      plans.add(
-        NativeParallelBackgroundPlan(
-          parentTaskId: session.task.taskId,
-          maxConcurrent: provenWidth.clamp(1, kDownloadGlobalConnectionBudget),
-          candidates: candidates,
-        ),
-      );
-    }
-    return plans;
-  }'''
-              if old_native_plans not in parallel:
-                  raise SystemExit('DM-22 nativeBackgroundPlans anchor drifted')
-              parallel = parallel.replace(old_native_plans, new_native_plans, 1)
-
-              old_launchable = '''  Iterable<_DownloadPart> _launchableParts(_ParallelSession session) =>
-      session.parts.where(
-        (part) =>
-            !part.complete && !part.launched && part.recoveryTimer == null,
-      );'''
-              new_launchable = '''  bool _hasActiveNativeClaimOffer(_DownloadPart part) {
-    final offer = _nativeClaimOffers[part.task.taskId];
-    if (offer == null) return false;
-    if (offer.generation != part.attemptGeneration ||
-        !offer.expiresAt.isAfter(DateTime.now())) {
-      _nativeClaimOffers.remove(part.task.taskId);
-      return false;
-    }
-    return true;
-  }
-
-  Iterable<_DownloadPart> _launchableParts(_ParallelSession session) =>
-      session.parts.where(
-        (part) =>
-            !part.complete &&
-            !part.launched &&
-            part.recoveryTimer == null &&
-            !_hasActiveNativeClaimOffer(part),
-      );'''
-              if old_launchable not in parallel:
-                  raise SystemExit('DM-22 launchable-parts anchor drifted')
-              parallel = parallel.replace(old_launchable, new_launchable, 1)
-              parallel_path.write_text(parallel)
-
-              old_export = '''          'waiters': <Map<String, Object>>[
-            for (final child in plan.tasks) nativeWaitingPayload(child),
-          ],'''
-              new_export = '''          'waiters': <Map<String, Object>>[
-            for (final child in plan.candidates)
-              <String, Object>{
-                ...nativeWaitingPayload(child.task),
-                'generation': child.generation,
-                'claimId': child.claimId,
-                'claimLeaseMillis': child.claimLease.inMilliseconds,
-              },
-          ],'''
-              if old_export not in service:
-                  raise SystemExit('DM-22 service export anchor drifted')
-              service = service.replace(old_export, new_export, 1)
-              service_path.write_text(service)
-
-              old_waiter_fields = '''    var progress: Double?
-    var expectedBytes: Int64?
-
-    var taskDescription: String {'''
-              new_waiter_fields = '''    var progress: Double?
-    var expectedBytes: Int64?
-    var generation: Int?
-    var claimId: String?
-    var claimLeaseMillis: Int?
-
-    var taskDescription: String {'''
-              if old_waiter_fields not in swift:
-                  raise SystemExit('DM-22 Swift waiter field anchor drifted')
-              swift = swift.replace(old_waiter_fields, new_waiter_fields, 1)
-
-              old_waiter_init = '''        resumeDataBase64: string(arguments["resumeDataBase64"]),
-        progress: doubleValue(arguments["progress"]),
-        expectedBytes: int64Value(arguments["expectedBytes"])
-      )'''
-              new_waiter_init = '''        resumeDataBase64: string(arguments["resumeDataBase64"]),
-        progress: doubleValue(arguments["progress"]),
-        expectedBytes: int64Value(arguments["expectedBytes"]),
-        generation: intValue(arguments["generation"]),
-        claimId: string(arguments["claimId"]),
-        claimLeaseMillis: intValue(arguments["claimLeaseMillis"])
-      )'''
-              if old_waiter_init not in swift:
-                  raise SystemExit('DM-22 Swift waiter decode anchor drifted')
-              swift = swift.replace(old_waiter_init, new_waiter_init, 1)
-
-              multipart_plan_end = '''  struct RunningSample: Codable, Equatable {
-    var written: Int64'''
-              multipart_claim_insert = '''  struct MultipartClaim: Codable, Equatable, Sendable {
-    var parentTaskId: String
-    var maxConcurrent: Int
-    var waiter: Waiter
-    var generation: Int
-    var claimId: String
-    var expiresAtMillis: Int64
-    var launchCommitted: Bool
-  }
-
-  struct RunningSample: Codable, Equatable {
-    var written: Int64'''
-              if multipart_plan_end not in swift:
-                  raise SystemExit('DM-22 MultipartClaim insertion anchor drifted')
-              swift = swift.replace(multipart_plan_end, multipart_claim_insert, 1)
-
-              swift = swift.replace(
-                  '    var multipartPlans: [MultipartPlan]\n\n    init(',
-                  '    var multipartPlans: [MultipartPlan]\n    var multipartClaims: [MultipartClaim]\n\n    init(',
-                  1,
-              )
-              swift = swift.replace(
-                  '      runningSamples: [String: RunningSample] = [:],\n      multipartPlans: [MultipartPlan] = []\n    ) {',
-                  '      runningSamples: [String: RunningSample] = [:],\n      multipartPlans: [MultipartPlan] = [],\n      multipartClaims: [MultipartClaim] = []\n    ) {',
-                  1,
-              )
-              swift = swift.replace(
-                  '      self.runningSamples = runningSamples\n      self.multipartPlans = multipartPlans\n    }',
-                  '      self.runningSamples = runningSamples\n      self.multipartPlans = multipartPlans\n      self.multipartClaims = multipartClaims\n    }',
-                  1,
-              )
-              swift = swift.replace(
-                  '      multipartPlans = try container.decodeIfPresent([MultipartPlan].self, forKey: .multipartPlans) ?? []\n    }',
-                  '      multipartPlans = try container.decodeIfPresent([MultipartPlan].self, forKey: .multipartPlans) ?? []\n      multipartClaims = try container.decodeIfPresent([MultipartClaim].self, forKey: .multipartClaims) ?? []\n    }',
-                  1,
-              )
-              if 'var multipartClaims: [MultipartClaim]' not in swift:
-                  raise SystemExit('DM-22 State claim storage insertion failed')
-
-              swift = swift.replace(
-                  '    let current = loadLocked()\n    let snapshotVersion = intValue(arguments["snapshotVersion"])',
-                  '    var current = loadLocked()\n    requeueExpiredMultipartClaimsLocked(&current)\n    let snapshotVersion = intValue(arguments["snapshotVersion"])',
-                  1,
-              )
-              old_plans_parse = '''    let dartMultipartPlans = dictionaryArray(arguments["multipartPlans"])
-      .compactMap(MultipartPlan.from(arguments:))
-    let released = Set(stringArray(arguments["queueWaitingTaskIds"]))'''
-              new_plans_parse = '''    var dartMultipartPlans = dictionaryArray(arguments["multipartPlans"])
-      .compactMap(MultipartPlan.from(arguments:))
-    let claimedChildIds = Set(current.multipartClaims.map { $0.waiter.taskId })
-    if !claimedChildIds.isEmpty {
-      for index in dartMultipartPlans.indices {
-        dartMultipartPlans[index].waiters.removeAll {
-          claimedChildIds.contains($0.taskId)
-        }
-      }
-    }
-    let released = Set(stringArray(arguments["queueWaitingTaskIds"]))'''
-              if old_plans_parse not in swift:
-                  raise SystemExit('DM-22 persist plan parse anchor drifted')
-              swift = swift.replace(old_plans_parse, new_plans_parse, 1)
-              swift = swift.replace(
-                  '        runningSamples: current.runningSamples.filter { transferringSet.contains($0.key) },\n        multipartPlans: dartMultipartPlans\n      )',
-                  '        runningSamples: current.runningSamples.filter { transferringSet.contains($0.key) },\n        multipartPlans: dartMultipartPlans,\n        multipartClaims: current.multipartClaims\n      )',
-                  1,
-              )
-
-              helper_anchor = '''  /// URLSession transport failures that are worth retrying without waking
-  /// Flutter.'''
-              helpers = '''  private static func nowMillis() -> Int64 {
-    Int64(Date().timeIntervalSince1970 * 1000)
-  }
-
-  private static func requeueExpiredMultipartClaimsLocked(_ state: inout State) {
-    let now = nowMillis()
-    let expired = state.multipartClaims.filter { $0.expiresAtMillis <= now }
-    guard !expired.isEmpty else { return }
-    for claim in expired {
-      if let index = state.multipartPlans.firstIndex(where: {
-        $0.parentTaskId == claim.parentTaskId
-      }) {
-        if !state.multipartPlans[index].waiters.contains(where: {
-          $0.taskId == claim.waiter.taskId
-        }) {
-          state.multipartPlans[index].waiters.insert(claim.waiter, at: 0)
-        }
-      } else {
-        state.multipartPlans.append(
-          MultipartPlan(
-            parentTaskId: claim.parentTaskId,
-            maxConcurrent: claim.maxConcurrent,
-            waiters: [claim.waiter]
-          )
-        )
-      }
-    }
-    let expiredIds = Set(expired.map { $0.claimId })
-    state.multipartClaims.removeAll { expiredIds.contains($0.claimId) }
-  }
-
-  private static func releaseMultipartClaim(_ waiter: Waiter, requeue: Bool) {
-    lock.lock()
-    defer { lock.unlock() }
-    var state = loadLocked()
-    guard let claimId = waiter.claimId,
-          let index = state.multipartClaims.firstIndex(where: {
-            $0.claimId == claimId && $0.waiter.taskId == waiter.taskId
-          })
-    else { return }
-    let claim = state.multipartClaims.remove(at: index)
-    if requeue {
-      if let planIndex = state.multipartPlans.firstIndex(where: {
-        $0.parentTaskId == claim.parentTaskId
-      }) {
-        if !state.multipartPlans[planIndex].waiters.contains(where: {
-          $0.taskId == waiter.taskId
-        }) {
-          state.multipartPlans[planIndex].waiters.insert(waiter, at: 0)
-        }
-      } else {
-        state.multipartPlans.append(
-          MultipartPlan(
-            parentTaskId: claim.parentTaskId,
-            maxConcurrent: claim.maxConcurrent,
-            waiters: [waiter]
-          )
-        )
-      }
-    }
-    saveLocked(state)
-  }
-
-  private static func commitMultipartClaimBeforeResume(_ waiter: Waiter) -> Bool {
-    guard let claimId = waiter.claimId,
-          let generation = waiter.generation
-    else { return false }
-    lock.lock()
-    defer { lock.unlock() }
-    var state = loadLocked()
-    requeueExpiredMultipartClaimsLocked(&state)
-    guard let index = state.multipartClaims.firstIndex(where: {
-      $0.claimId == claimId &&
-        $0.waiter.taskId == waiter.taskId &&
-        $0.generation == generation
-    }) else {
-      saveLocked(state)
-      return false
-    }
-    // Once URLSession resume is committed, keep the durable fence long enough
-    // for delayed first-byte / suspension. The first byte or completion settles
-    // it earlier. If the process dies before URLSession owns the task, expiry
-    // safely requeues the exact waiter.
-    state.multipartClaims[index].launchCommitted = true
-    state.multipartClaims[index].expiresAtMillis = nowMillis() + 15 * 60 * 1000
-    saveLocked(state)
-    return true
-  }
-
-  private static func settleMultipartClaim(childTaskId: String) {
-    lock.lock()
-    defer { lock.unlock() }
-    var state = loadLocked()
-    let oldCount = state.multipartClaims.count
-    state.multipartClaims.removeAll { $0.waiter.taskId == childTaskId }
-    if state.multipartClaims.count != oldCount {
-      saveLocked(state)
-    }
-  }
-
-  /// URLSession transport failures that are worth retrying without waking
-  /// Flutter.'''
-              if helper_anchor not in swift:
-                  raise SystemExit('DM-22 helper insertion anchor drifted')
-              swift = swift.replace(helper_anchor, helpers, 1)
-
-              old_selection = '''      var state = loadLocked()
-      guard let index = state.multipartPlans.firstIndex(where: { $0.parentTaskId == parentId }) else {
-        lock.unlock()
-        return
-      }
-      var plan = state.multipartPlans[index]
-      plan.waiters.removeAll { liveChildIds.contains($0.taskId) }
-      let available = max(min(plan.maxConcurrent, 16) - liveChildIds.count, 0)
-      selected = Array(plan.waiters.prefix(available))
-      if !selected.isEmpty {
-        let selectedIds = Set(selected.map(\\.taskId))
-        plan.waiters.removeAll { selectedIds.contains($0.taskId) }
-      }
-      state.multipartPlans[index] = plan
-      saveLocked(state)'''
-              new_selection = '''      var state = loadLocked()
-      requeueExpiredMultipartClaimsLocked(&state)
-      guard let index = state.multipartPlans.firstIndex(where: { $0.parentTaskId == parentId }) else {
-        lock.unlock()
-        return
-      }
-      var plan = state.multipartPlans[index]
-      plan.waiters.removeAll { liveChildIds.contains($0.taskId) }
-      let available = max(min(plan.maxConcurrent, 16) - liveChildIds.count, 0)
-      let claimable = plan.waiters.filter {
-        ($0.generation ?? 0) > 0 &&
-          !($0.claimId ?? "").isEmpty &&
-          ($0.claimLeaseMillis ?? 0) > 0
-      }
-      selected = Array(claimable.prefix(available))
-      if !selected.isEmpty {
-        let selectedIds = Set(selected.map(\\.taskId))
-        plan.waiters.removeAll { selectedIds.contains($0.taskId) }
-        for waiter in selected {
-          guard let generation = waiter.generation,
-                let claimId = waiter.claimId,
-                let lease = waiter.claimLeaseMillis
-          else { continue }
-          state.multipartClaims.removeAll { $0.waiter.taskId == waiter.taskId }
-          state.multipartClaims.append(
-            MultipartClaim(
-              parentTaskId: parentId,
-              maxConcurrent: plan.maxConcurrent,
-              waiter: waiter,
-              generation: generation,
-              claimId: claimId,
-              expiresAtMillis: nowMillis() + Int64(max(lease, 1)),
-              launchCommitted: false
-            )
-          )
-        }
-      }
-      state.multipartPlans[index] = plan
-      saveLocked(state)'''
-              if old_selection not in swift:
-                  raise SystemExit('DM-22 atomic selection anchor drifted')
-              swift = swift.replace(old_selection, new_selection, 1)
-
-              old_start = '''  private static func startMultipartChild(_ waiter: Waiter, on session: URLSession) {
-    guard waiter.savedProgress <= 0,
-          waiter.resumeDataBase64?.isEmpty ?? true,
-          let url = URL(string: waiter.url)
-    else { return }
-    var request = URLRequest(url: url)'''
-              new_start = '''  private static func startMultipartChild(_ waiter: Waiter, on session: URLSession) {
-    guard waiter.savedProgress <= 0,
-          waiter.resumeDataBase64?.isEmpty ?? true,
-          let url = URL(string: waiter.url)
-    else {
-      releaseMultipartClaim(waiter, requeue: true)
-      return
-    }
-    guard !isAppInForeground() else {
-      releaseMultipartClaim(waiter, requeue: true)
-      return
-    }
-    var request = URLRequest(url: url)'''
-              if old_start not in swift:
-                  raise SystemExit('DM-22 start guard anchor drifted')
-              swift = swift.replace(old_start, new_start, 1)
-
-              old_resume = '''    task.taskDescription = waiter.taskDescription
-    task.priority = URLSessionTask.highPriority
-    DownloadNativeDiagnosticLog.record("background.multipart.promote", task: task)
-    task.resume()
-  }'''
-              new_resume = '''    task.taskDescription = waiter.taskDescription
-    task.priority = URLSessionTask.highPriority
-    guard !isAppInForeground(), commitMultipartClaimBeforeResume(waiter) else {
-      task.cancel()
-      releaseMultipartClaim(waiter, requeue: true)
-      return
-    }
-    // Foreground can win between URLSession task construction and ownership
-    // commit. Recheck at the last possible point before bytes are allowed.
-    guard !isAppInForeground() else {
-      task.cancel()
-      releaseMultipartClaim(waiter, requeue: true)
-      return
-    }
-    DownloadNativeDiagnosticLog.record("background.multipart.promote", task: task)
-    task.resume()
-  }'''
-              if old_resume not in swift:
-                  raise SystemExit('DM-22 pre-resume validation anchor drifted')
-              swift = swift.replace(old_resume, new_resume, 1)
-
-              post_guard = '''    guard isDownloadPart(task),
-          let childId = taskId(from: task),
-          let parentId = parentTaskId(from: task)
-    else {
-      return
-    }
-
-    let now = CFAbsoluteTimeGetCurrent()'''
-              post_guard_new = '''    guard isDownloadPart(task),
-          let childId = taskId(from: task),
-          let parentId = parentTaskId(from: task)
-    else {
-      return
-    }
-
-    if totalWritten > 0 || completed {
-      settleMultipartClaim(childTaskId: childId)
-    }
-
-    let now = CFAbsoluteTimeGetCurrent()'''
-              if post_guard not in swift:
-                  raise SystemExit('DM-22 claim settlement anchor drifted')
-              swift = swift.replace(post_guard, post_guard_new, 1)
-
-              swift_path.write_text(swift)
-
-          test_path.write_text(r'''import 'dart:io';
-
-import 'package:flutter_test/flutter_test.dart';
-
-void main() {
-  test('DM-22 multipart promotion uses generation-fenced durable claims', () {
-    final parallel = File(
-      'lib/core/services/persistent_parallel_download.dart',
-    ).readAsStringSync();
-    final service = File(
-      'lib/core/services/download_service.dart',
-    ).readAsStringSync();
-    final swift = File(
-      'ios/Runner/DownloadNativeWaitingQueue.swift',
-    ).readAsStringSync();
-
-    expect(parallel, contains('class NativeParallelBackgroundCandidate'));
-    expect(parallel, contains('final int generation;'));
-    expect(parallel, contains('final String claimId;'));
-    expect(parallel, contains('final Duration claimLease;'));
-    expect(parallel, contains('_nativeClaimOffers'));
-    expect(parallel, contains('!_hasActiveNativeClaimOffer(part)'));
-
-    expect(service, contains("'generation': child.generation"));
-    expect(service, contains("'claimId': child.claimId"));
-    expect(service, contains("'claimLeaseMillis': child.claimLease.inMilliseconds"));
-
-    expect(swift, contains('struct MultipartClaim: Codable'));
-    expect(swift, contains('var multipartClaims: [MultipartClaim]'));
-    expect(swift, contains('requeueExpiredMultipartClaimsLocked(&current)'));
-    expect(swift, contains('claimedChildIds.contains($0.taskId)'));
-    expect(swift, contains('commitMultipartClaimBeforeResume(waiter)'));
-    expect(swift, contains('guard !isAppInForeground() else'));
-    expect(swift, contains('settleMultipartClaim(childTaskId: childId)'));
-
-    final claimAppend = swift.indexOf('state.multipartClaims.append(');
-    final startLoop = swift.indexOf('for waiter in selected {');
-    expect(claimAppend, greaterThanOrEqualTo(0));
-    expect(startLoop, greaterThan(claimAppend));
-
-    final commit = swift.indexOf('commitMultipartClaimBeforeResume(waiter)');
-    final resume = swift.indexOf('task.resume()', commit);
-    expect(commit, greaterThanOrEqualTo(0));
-    expect(resume, greaterThan(commit));
-  });
-}
-''')
-
-      - name: Format DM-22 Dart changes
-        run: dart format lib/core/services/persistent_parallel_download.dart lib/core/services/download_service.dart test/core/services/ios_multipart_ownership_handoff_source_test.dart
-
-      - name: Run DM-22 focused acceptance
-        run: >-
-          flutter test
-          test/core/services/ios_multipart_ownership_handoff_source_test.dart
-          test/core/services/ios_multipart_native_bridge_source_test.dart
-          test/core/services/persistent_parallel_download_test.dart
-          test/core/services/ios_native_queue_snapshot_version_guard_test.dart
-          test/core/services/ios_native_queue_checkpoint_ack_guard_test.dart
-          --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
-
-      - name: Analyze touched Dart code
-        run: >-
-          flutter analyze --no-fatal-warnings --no-fatal-infos
-          lib/core/services/persistent_parallel_download.dart
-          lib/core/services/download_service.dart
-          test/core/services/ios_multipart_ownership_handoff_source_test.dart
-
-      - name: Diff sanity
-        run: git diff --check
-
-      - name: Commit GREEN production contract
+      - name: Run suite and capture failures
+        id: tests
         shell: bash
         run: |
-          git reset -- build/ 2>/dev/null || true
-          git checkout -- build/ 2>/dev/null || true
-          git clean -fd build/ 2>/dev/null || true
-          if git diff --quiet -- \
-            lib/core/services/persistent_parallel_download.dart \
-            lib/core/services/download_service.dart \
-            ios/Runner/DownloadNativeWaitingQueue.swift \
-            test/core/services/ios_multipart_ownership_handoff_source_test.dart; then
-            echo 'DM-22 production contract already committed.'
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add \
-            lib/core/services/persistent_parallel_download.dart \
-            lib/core/services/download_service.dart \
-            ios/Runner/DownloadNativeWaitingQueue.swift \
-            test/core/services/ios_multipart_ownership_handoff_source_test.dart
-          git commit -m 'fix(downloads): fence iOS multipart ownership handoff (DM-22)'
-          git pull --rebase origin plan/download-manager-reliability
-          git push origin HEAD:plan/download-manager-reliability
+          set +e
+          flutter test --reporter json --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key 2>&1 | tee /tmp/flutter-test.jsonl
+          test_exit=${PIPESTATUS[0]}
+          set -e
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          tests = {}
+          errors = {}
+          failed = []
+          for line in Path('/tmp/flutter-test.jsonl').read_text(errors='replace').splitlines():
+              try:
+                  event = json.loads(line)
+              except Exception:
+                  continue
+              kind = event.get('type')
+              if kind == 'testStart':
+                  test = event.get('test') or {}
+                  tests[test.get('id')] = test
+              elif kind == 'error':
+                  test_id = event.get('testID')
+                  errors.setdefault(test_id, []).append({
+                      'error': event.get('error', ''),
+                      'stackTrace': event.get('stackTrace', ''),
+                  })
+              elif kind == 'testDone' and event.get('result') == 'failure':
+                  failed.append(event.get('testID'))
+
+          lines = []
+          for test_id in failed:
+              test = tests.get(test_id, {})
+              lines.append(f"TEST: {test.get('name', '<unknown>')}")
+              lines.append(f"URL: {test.get('url', '<unknown>')}")
+              if test.get('line') is not None:
+                  lines.append(f"LINE: {test.get('line')}")
+              for detail in errors.get(test_id, []):
+                  if detail['error']:
+                      lines.append('ERROR: ' + detail['error'])
+                  if detail['stackTrace']:
+                      lines.append('STACK:\n' + detail['stackTrace'])
+              lines.append('---')
+          if not lines:
+              lines = ['No failing testDone events were parsed.']
+          Path('/tmp/failures.txt').write_text('\n'.join(lines))
+          print(Path('/tmp/failures.txt').read_text())
+          PY
+          exit "$test_exit"
+
+      - name: Upload failure diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-test-failures
+          path: /tmp/failures.txt
+          retention-days: 1
