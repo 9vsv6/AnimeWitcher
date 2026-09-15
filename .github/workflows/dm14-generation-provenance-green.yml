@@ -1,4 +1,4 @@
-name: DM-14 provenance and canceled GC GREEN
+name: DM-24 alias adoption apply
 
 on:
   push:
@@ -11,12 +11,12 @@ permissions:
   contents: write
 
 concurrency:
-  group: dm14-generation-provenance-${{ github.ref }}
+  group: dm24-alias-adoption-apply-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  generation-provenance:
-    runs-on: ubuntu-latest
+  apply:
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
@@ -33,132 +33,134 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Apply DM-14 manifest provenance GREEN
+      - name: Prove DM-24 start/adoption RED before production patch
+        shell: bash
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path('lib/core/services/persistent_parallel_download.dart')
-          text = path.read_text()
-
-          replacements = [
-              (
-                  """    required this.schemaVersion,\n    required this.parentTaskId,""",
-                  """    required this.schemaVersion,\n    required this.generation,\n    required this.parentTaskId,""",
-              ),
-              (
-                  """  final int schemaVersion;\n  final String parentTaskId;""",
-                  """  final int schemaVersion;\n  final int generation;\n  final String parentTaskId;""",
-              ),
-              (
-                  """          if (schemaVersion < 1 ||\n              schemaVersion > kParallelManifestSchemaVersion) {\n            continue;\n          }\n          final parentTaskId =""",
-                  """          if (schemaVersion < 1 ||\n              schemaVersion > kParallelManifestSchemaVersion) {\n            continue;\n          }\n          final generation = (snapshot['generation'] as num?)?.toInt() ?? 0;\n          if (generation < 0) continue;\n          final parentTaskId =""",
-              ),
-              (
-                  """            if (restored is! DownloadTask ||\n                !restored.taskId.startsWith('$parentTaskId.part.')) {\n              layoutValid = false;\n              break;\n            }\n            final size = to - from + 1;""",
-                  """            if (restored is! DownloadTask ||\n                !restored.taskId.startsWith('$parentTaskId.part.')) {\n              layoutValid = false;\n              break;\n            }\n            final childPath = p.normalize(await restored.filePath());\n            final ownedPartsDirectory = p.normalize(p.dirname(canonicalPath));\n            if (!p.equals(p.dirname(childPath), ownedPartsDirectory)) {\n              layoutValid = false;\n              break;\n            }\n            final size = to - from + 1;""",
-              ),
-              (
-                  """            schemaVersion: schemaVersion,\n            parentTaskId: parentTaskId,""",
-                  """            schemaVersion: schemaVersion,\n            generation: generation,\n            parentTaskId: parentTaskId,""",
-              ),
-          ]
-
-          changed = False
-          for old, new in replacements:
-              if new in text:
-                  continue
-              if old not in text:
-                  raise SystemExit(f'missing expected anchor:\n{old}')
-              text = text.replace(old, new, 1)
-              changed = True
-
-          if changed:
-              path.write_text(text)
-          PY
-
-      - name: Verify manifest provenance GREEN
-        run: |
-          flutter test test/core/services/persistent_parallel_download_manifest_discovery_test.dart \
+          set +e
+          flutter test test/core/services/download_logical_identity_start_test.dart \
             --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
-          flutter analyze --no-fatal-warnings --no-fatal-infos \
-            lib/core/services/persistent_parallel_download.dart \
-            test/core/services/persistent_parallel_download_manifest_discovery_test.dart
-          git diff --check
-
-      - name: Commit manifest provenance if needed
-        run: |
-          if git diff --quiet -- lib/core/services/persistent_parallel_download.dart; then
-            echo 'Manifest provenance GREEN already present.'
-          else
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add lib/core/services/persistent_parallel_download.dart
-            git commit -m 'fix(downloads): harden manifest artifact provenance (DM-14)'
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo 'Expected alias-aware start/adoption regression to be RED before the production patch.'
+            exit 1
           fi
+          echo "Observed expected RED (exit=$status)."
 
-      - name: Apply ownership-fenced canceled multipart cleanup
+      - name: Apply alias-aware logical adoption
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
           path = Path('lib/core/services/download_service.dart')
           text = path.read_text()
-          old = """      final restored = job.restoreTaskSnapshot();
-      if (restored != null) {
-        try {
-          final path = await restored.filePath();"""
-          new = """      final restored = job.restoreTaskSnapshot();
-      if (restored is ParallelDownloadTask) {
-        try {
-          // The canceled tombstone plus notOwned runtime state proves the
-          // logical attempt is obsolete. Let the multipart owner settle its
-          // exact child identities before deleting its manifest/part files.
-          await _parallel.cancel(restored);
-        } catch (_) {
-          // Preserve both the tombstone and artifacts when child ownership
-          // cannot be settled. A later recovery pass can retry safely.
-          continue;
+
+          replacements = [
+              (
+                  """    final logicalId = DownloadLogicalIdentity.fromMedia(
+              item: item,
+              episode: episode,
+            ).key;""",
+                  """    final logicalIdentity = DownloadLogicalIdentity.fromMedia(
+              item: item,
+              episode: episode,
+            );
+            final logicalId = logicalIdentity.key;""",
+              ),
+              (
+                  """      final logicalJobs = await _jobStore.allForLogicalId(logicalId);""",
+                  """      final logicalJobs = (await _jobStore.all())
+              .where((job) {
+                final persisted = job.logicalId;
+                return persisted != null &&
+                    logicalIdentity.matchesPersistedKey(persisted);
+              })
+              .toList(growable: false);""",
+              ),
+              (
+                  """          final candidateLogicalId =
+              candidateJob.logicalId ?? logicalDownloadIdFromMetadata(metadata);
+          if (candidateLogicalId != logicalId) continue;""",
+                  """          final candidateLogicalId =
+              candidateJob.logicalId ?? logicalDownloadIdFromMetadata(metadata);
+          if (candidateLogicalId == null ||
+              !logicalIdentity.matchesPersistedKey(candidateLogicalId)) {
+            continue;
+          }""",
+              ),
+              (
+                  """          if (candidateLogicalId != null) {
+            if (candidateLogicalId != logicalId) continue;
+            existingLogicalJob = candidateJob;""",
+                  """          if (candidateLogicalId != null) {
+            if (!logicalIdentity.matchesPersistedKey(candidateLogicalId)) {
+              continue;
+            }
+            existingLogicalJob = candidateJob;""",
+              ),
+              (
+                  """    final storage = _ref.read(storageServiceProvider);
+    final matches = <TaskRecord>[];
+    for (final record in records) {""",
+                  """    final storage = _ref.read(storageServiceProvider);
+    final matches = <TaskRecord>[];
+    final logicalIdentity = DownloadLogicalIdentity.fromMedia(
+      item: item,
+      episode: episode,
+    );
+    for (final record in records) {""",
+              ),
+              (
+                  """      if (candidateLogicalId != null) {
+        if (candidateLogicalId == logicalId) matches.add(record);
+        continue;
+      }""",
+                  """      if (candidateLogicalId != null) {
+        if (candidateLogicalId == logicalId ||
+            logicalIdentity.matchesPersistedKey(candidateLogicalId)) {
+          matches.add(record);
         }
-      }
-      if (restored != null) {
-        try {
-          final path = await restored.filePath();"""
-          if new not in text:
+        continue;
+      }""",
+              ),
+          ]
+
+          for old, new in replacements:
+              if new in text:
+                  continue
               if old not in text:
-                  raise SystemExit('missing DM-14 tombstone GC anchor')
+                  raise SystemExit(f'missing expected DM-24 anchor:\n{old}')
               text = text.replace(old, new, 1)
-              path.write_text(text)
+
+          path.write_text(text)
           PY
 
-      - name: Verify canceled multipart GC GREEN
+      - name: Verify DM-24 GREEN
         run: |
-          flutter test test/core/services/download_canceled_parallel_artifact_gc_guard_test.dart \
-            test/core/services/download_delete_tombstone_guard_test.dart \
+          flutter test \
+            test/core/services/download_logical_identity_test.dart \
+            test/core/services/download_logical_identity_start_test.dart \
+            test/core/services/download_job_logical_identity_test.dart \
+            test/core/services/download_logical_identity_persistence_test.dart \
+            test/core/services/download_overlay_logical_identity_test.dart \
+            test/features/library/presentation/downloads_logical_identity_test.dart \
             --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
           flutter analyze --no-fatal-warnings --no-fatal-infos \
+            lib/core/services/download_logical_identity.dart \
             lib/core/services/download_service.dart \
-            test/core/services/download_canceled_parallel_artifact_gc_guard_test.dart \
-            test/core/services/download_delete_tombstone_guard_test.dart
+            test/core/services/download_logical_identity_test.dart \
+            test/core/services/download_logical_identity_start_test.dart
           git diff --check
 
-      - name: Commit verified DM-14 production changes
+      - name: Commit verified production patch
         run: |
-          if ! git diff --quiet -- lib/core/services/download_service.dart; then
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add lib/core/services/download_service.dart
-            git commit -m 'fix(downloads): clean canceled multipart artifacts safely (DM-14)'
+          if git diff --quiet -- lib/core/services/download_service.dart; then
+            echo 'Alias-aware service adoption already present.'
+            exit 0
           fi
-          if git status --porcelain --untracked-files=no | grep -q .; then
-            echo 'Unexpected tracked working-tree changes remain:'
-            git status --short
-            exit 1
-          fi
-          git clean -fd
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add lib/core/services/download_service.dart
+          git commit -m 'fix(downloads): adopt enriched logical identity aliases (DM-24)'
           git pull --rebase origin plan/download-manager-reliability
-          flutter test test/core/services/persistent_parallel_download_manifest_discovery_test.dart \
-            test/core/services/download_canceled_parallel_artifact_gc_guard_test.dart \
-            test/core/services/download_delete_tombstone_guard_test.dart \
-            --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
           git push origin HEAD:plan/download-manager-reliability
