@@ -12,6 +12,7 @@ on:
       - lib/core/services/download_transport.dart
       - test/core/services/download_teardown_barrier_test.dart
       - test/core/services/download_range_transfer_test.dart
+      - test/core/services/download_range_dispose_join_test.dart
       - test/core/services/download_transport_test.dart
   workflow_dispatch:
 
@@ -52,6 +53,7 @@ jobs:
           flutter test
           test/core/services/download_teardown_barrier_test.dart
           test/core/services/download_range_transfer_test.dart
+          test/core/services/download_range_dispose_join_test.dart
           --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
 
       - name: Verify DM-28 transport policy
