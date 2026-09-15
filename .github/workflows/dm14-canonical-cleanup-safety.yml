@@ -44,7 +44,9 @@ jobs:
         run: |
           grep -q '_directoryContainsOnlyEmptyDirectories' lib/core/utils/download_cleanup.dart
           ! grep -q '_directoryContainsOnlyKnownDownloadArtifacts' lib/core/utils/download_cleanup.dart
-          grep -q 'resolvesInsideAppDownloads' lib/core/utils/download_cleanup.dart
+          grep -q 'resolvesInsideConfiguredAppDownloads' lib/core/utils/download_cleanup.dart
+          grep -q 'pathIsInsideConfiguredAppDownloads' lib/core/utils/download_cleanup.dart
+          grep -q '_platformConfiguredAppDownloadRoots' lib/core/utils/download_cleanup.dart
 
       - name: Verify canonical cleanup safety
         run: |
