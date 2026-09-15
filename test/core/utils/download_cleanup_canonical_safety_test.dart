@@ -33,6 +33,36 @@ void main() {
     );
   });
 
+  test('series cleanup rejects an unconfigured lookalike app root', () async {
+    final sandbox = await Directory.systemTemp.createTemp('aw-cleanup-root-');
+    addTearDown(() async {
+      if (await sandbox.exists()) await sandbox.delete(recursive: true);
+    });
+
+    final unconfiguredSeries = Directory(
+      p.join(
+        sandbox.path,
+        'unconfigured',
+        'AnimeWitcher',
+        'Downloads',
+        'Show',
+      ),
+    );
+    await unconfiguredSeries.create(recursive: true);
+
+    await deleteSeriesFolderIfNoVideosRemain(
+      File(p.join(unconfiguredSeries.path, 'episode 01.mp4')),
+    );
+
+    expect(
+      await unconfiguredSeries.exists(),
+      isTrue,
+      reason:
+          'a matching AnimeWitcher/Downloads suffix is not proof that this is '
+          'one of the configured app-owned roots',
+    );
+  });
+
   test('series cleanup never recursively deletes unknown user content', () async {
     final sandbox = await Directory.systemTemp.createTemp('aw-cleanup-safety-');
     addTearDown(() async {
