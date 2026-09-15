@@ -2155,11 +2155,16 @@ class PersistentParallelDownload {
       if (!part.launched || part.complete || part.speed <= 0) return sum;
       return sum + part.speed * 1000 * 1000;
     });
+    // Child-reported speed is only a fallback when byte totals are unavailable.
+    // Once credible bytes exist, wait for the minimum observation window instead
+    // of turning a sub-second callback burst into stable-looking telemetry.
+    final fallbackSpeedBytesPerSecond =
+        observedBytes > 0 ? 0.0 : childSpeedBytesPerSecond;
     final telemetry = _speedTelemetry.observe(
       taskId: task.taskId,
       transferredBytes: observedBytes,
       expectedBytes: expectedBytes,
-      fallbackSpeedBytesPerSecond: childSpeedBytesPerSecond,
+      fallbackSpeedBytesPerSecond: fallbackSpeedBytesPerSecond,
     );
     final speed = telemetry.speedBytesPerSecond > 0
         ? telemetry.speedBytesPerSecond / 1000 / 1000
