@@ -33,34 +33,36 @@ if new_identity not in start_body:
         raise SystemExit(f'logical identity anchor mismatch: {count}')
     start_body = start_body.replace(old_identity, new_identity, 1)
 
-old_reconstructed_fence = '          if (candidateLogicalId != logicalId) continue;'
-new_reconstructed_fence = '''          if (candidateLogicalId == null ||
+old_reconstructed = '''          final candidateLogicalId =
+              candidateJob.logicalId ?? logicalDownloadIdFromMetadata(metadata);
+          if (candidateLogicalId != logicalId) continue;
+'''
+new_reconstructed = '''          final candidateLogicalId =
+              candidateJob.logicalId ?? logicalDownloadIdFromMetadata(metadata);
+          if (candidateLogicalId == null ||
               !logicalIdentity.matchesPersistedKey(candidateLogicalId)) {
             continue;
-          }'''
-if new_reconstructed_fence not in start_body:
-    count = start_body.count(old_reconstructed_fence)
+          }
+'''
+if new_reconstructed not in start_body:
+    count = start_body.count(old_reconstructed)
     if count != 1:
         raise SystemExit(f'reconstructed identity fence mismatch: {count}')
-    start_body = start_body.replace(
-        old_reconstructed_fence,
-        new_reconstructed_fence,
-        1,
-    )
+    start_body = start_body.replace(old_reconstructed, new_reconstructed, 1)
 
-old_known_identity_fence = '            if (candidateLogicalId != logicalId) continue;'
-new_known_identity_fence = (
-    '            if (!logicalIdentity.matchesPersistedKey(candidateLogicalId)) continue;'
-)
-if new_known_identity_fence not in start_body:
-    count = start_body.count(old_known_identity_fence)
+old_known_identity = '''          if (candidateLogicalId != null) {
+            if (candidateLogicalId != logicalId) continue;
+            existingLogicalJob = candidateJob;
+'''
+new_known_identity = '''          if (candidateLogicalId != null) {
+            if (!logicalIdentity.matchesPersistedKey(candidateLogicalId)) continue;
+            existingLogicalJob = candidateJob;
+'''
+if new_known_identity not in start_body:
+    count = start_body.count(old_known_identity)
     if count != 1:
         raise SystemExit(f'known identity fence mismatch: {count}')
-    start_body = start_body.replace(
-        old_known_identity_fence,
-        new_known_identity_fence,
-        1,
-    )
+    start_body = start_body.replace(old_known_identity, new_known_identity, 1)
 
 source = source[:start] + start_body + source[complete:]
 
