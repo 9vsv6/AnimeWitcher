@@ -10,6 +10,7 @@ on:
       - lib/core/services/download_range_transfer.dart
       - lib/core/services/download_continued_processing_service.dart
       - test/core/services/download_teardown_barrier_test.dart
+      - test/core/services/download_range_dispose_join_test.dart
   workflow_dispatch:
 
 permissions:
@@ -48,6 +49,7 @@ jobs:
         run: >-
           flutter test
           test/core/services/download_teardown_barrier_test.dart
+          test/core/services/download_range_dispose_join_test.dart
           --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
 
       - name: Verify Range teardown regressions
