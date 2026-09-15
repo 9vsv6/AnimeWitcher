@@ -26,6 +26,7 @@ class RunnerTests: XCTestCase {
       session: session, task: replacement, error: nil,
       terminalSuccess: terminal, requiresTerminalObservation: true
     )
+    session.invalidateAndCancel()
     let state = DownloadNativeWaitingQueue.load()
     XCTAssertEqual(state.transferringTaskIds, ["ep1"])
     XCTAssertEqual(state.waiters.map(\.taskId), ["ep2"])
@@ -49,6 +50,7 @@ class RunnerTests: XCTestCase {
       session: session, task: task, error: nil,
       terminalSuccess: terminal, requiresTerminalObservation: true
     )
+    session.invalidateAndCancel()
     let state = DownloadNativeWaitingQueue.load()
     XCTAssertFalse(state.completedTaskIds.contains("ep1"))
     XCTAssertTrue(state.pausedTaskIds.contains("ep1"))
