@@ -3,11 +3,16 @@ from pathlib import Path
 
 def replace_once(path: str, old: str, new: str) -> None:
     p = Path(path)
-    text = p.read_text()
+    raw = p.read_bytes()
+    newline = '\r\n' if b'\r\n' in raw else '\n'
+    text = raw.decode('utf-8').replace('\r\n', '\n')
     count = text.count(old)
     if count != 1:
         raise SystemExit(f'{path}: expected exactly one match, got {count}')
-    p.write_text(text.replace(old, new, 1))
+    updated = text.replace(old, new, 1)
+    if newline == '\r\n':
+        updated = updated.replace('\n', '\r\n')
+    p.write_bytes(updated.encode('utf-8'))
 
 
 # Continued-processing update acknowledgements: an expired iOS 26 system task
@@ -215,7 +220,7 @@ replace_once(
   Future<void> onAppBackgrounded() async {
     if (!await _awaitLifecycleReadiness('background')) return;
     _appInForeground = false;
-    await _serializeQueue(_persistNativeWaitingSnapshot);
+    await _serializeQueue(() => _persistNativeWaitingSnapshot());
   }
 
   /// Attach UI to live native tasks. Never detach a live URLSession task.
