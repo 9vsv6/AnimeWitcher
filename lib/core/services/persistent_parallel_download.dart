@@ -1163,6 +1163,7 @@ class PersistentParallelDownload {
             )) {
               continue;
             }
+            _armRestoredOwnershipLease(session, part);
             _armTailStallWatch(session, part);
             continue;
           }
@@ -1297,6 +1298,73 @@ class PersistentParallelDownload {
       if (await file.exists()) return await file.length();
     } catch (_) {}
     return 0;
+  }
+
+  void _armRestoredOwnershipLease(
+    _ParallelSession session,
+    _DownloadPart part,
+  ) {
+    if (_disposed ||
+        !session.active ||
+        session.pauseRequested ||
+        session.deleted ||
+        part.complete ||
+        !part.launched) {
+      _cancelPendingStartLease(part);
+      return;
+    }
+
+    _cancelPendingStartLease(part);
+    final parentGeneration = session.generation;
+    final attemptGeneration = part.attemptGeneration;
+    part.pendingStartLeaseTimer = Timer(pendingStartLeaseDelay, () {
+      part.pendingStartLeaseTimer = null;
+      unawaited(
+        session.serialize(() async {
+          if (_disposed ||
+              !session.active ||
+              session.pauseRequested ||
+              session.deleted ||
+              session.generation != parentGeneration ||
+              part.complete ||
+              !part.launched ||
+              part.attemptGeneration != attemptGeneration) {
+            return;
+          }
+
+          final lookup = livePartIds;
+          if (lookup == null) {
+            _armRestoredOwnershipLease(session, part);
+            return;
+          }
+
+          Set<String> live;
+          try {
+            live = await lookup();
+          } catch (_) {
+            // Query failure is unknown ownership. Never create a second writer.
+            _armRestoredOwnershipLease(session, part);
+            return;
+          }
+          if (live.contains(part.task.taskId)) {
+            // The OS still claims this exact worker. Keep its slot fenced, but
+            // re-check later because a relaunch can lose its terminal callback.
+            _armRestoredOwnershipLease(session, part);
+            return;
+          }
+
+          diagnosticLog?.record('parallel.restoredOwnerReleased', {
+            'taskId': session.task.taskId,
+            'childTaskId': part.task.taskId,
+            'attemptGeneration': attemptGeneration,
+          });
+          _schedulePartRecovery(session, part);
+          await _persist(session);
+          if (session.active) await _status(session, TaskStatus.running);
+          _schedulePumpAll();
+        }),
+      );
+    });
   }
 
   void _armPendingStartLease(_ParallelSession session, _DownloadPart part) {
@@ -2063,12 +2131,26 @@ class PersistentParallelDownload {
     if (_disposed || !session.active || session.deleted) return;
     final task = session.task;
     final progress = session.progress;
-    final creditedBytes = session.creditedBytes;
     final expectedBytes = session.size;
+    // Speed is presentation telemetry, not recovery authority. On iOS the
+    // exact bytes currently arriving live in URLSession's temporary file and
+    // therefore advance credibleProgress before they can advance durableBytes.
+    // Feeding only durableBytes into the speed estimator made progress move
+    // while the UI stayed at 0 MB/s until a whole Range finalized.
+    final observedBytes = session.parts.fold<int>(0, (sum, part) {
+      final credible = part.credibleProgress.clamp(0.0, 1.0).toDouble();
+      final bytes = (part.size * credible).round().clamp(0, part.size).toInt();
+      return sum + bytes;
+    });
+    final childSpeedBytesPerSecond = session.parts.fold<double>(0, (sum, part) {
+      if (!part.launched || part.complete || part.speed <= 0) return sum;
+      return sum + part.speed * 1000 * 1000;
+    });
     final telemetry = _speedTelemetry.observe(
       taskId: task.taskId,
-      transferredBytes: creditedBytes,
+      transferredBytes: observedBytes,
       expectedBytes: expectedBytes,
+      fallbackSpeedBytesPerSecond: childSpeedBytesPerSecond,
     );
     final speed = telemetry.speedBytesPerSecond > 0
         ? telemetry.speedBytesPerSecond / 1000 / 1000

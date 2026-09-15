@@ -68,6 +68,7 @@ class DownloadContinuedProcessingService {
   bool _handlerInstalled = false;
   bool _disposed = false;
   int _nativeQueueSnapshotVersion = 0;
+
   /// False means queued work stays with the foreground scheduler. A persisted
   /// checkpoint is not proof that native background promotion is available.
   bool nativePromotionAvailable = false;
@@ -96,7 +97,7 @@ class DownloadContinuedProcessingService {
   Future<void> configureDiagnosticLog(bool enabled) =>
       _invoke('configureDiagnosticLog', {'enabled': enabled});
 
-  Future<void> start({
+  Future<bool> start({
     required String taskId,
     required String displayName,
     double progress = 0.0,
@@ -108,8 +109,7 @@ class DownloadContinuedProcessingService {
     int currentIndex = 0,
   }) async {
     _cancelPendingUpdate();
-    _lastUpdateAt = DateTime.now();
-    await _invoke('start', <String, Object>{
+    final result = await _invokeForResult<Object?>('start', <String, Object>{
       'taskId': taskId,
       'displayName': displayName,
       'progress': progress.clamp(0.0, 1.0).toDouble(),
@@ -120,6 +120,13 @@ class DownloadContinuedProcessingService {
       'speedBytesPerSecond': speedBytesPerSecond,
       'currentIndex': currentIndex,
     });
+    final accepted = switch (result) {
+      final String identifier => identifier.trim().isNotEmpty,
+      final bool value => value,
+      _ => false,
+    };
+    if (accepted) _lastUpdateAt = DateTime.now();
+    return accepted;
   }
 
   Future<void> update({

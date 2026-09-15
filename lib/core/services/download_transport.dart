@@ -5,6 +5,21 @@ import 'package:background_downloader/background_downloader.dart';
 bool isNativeSingleDownloadTask(Task task) =>
     task is DownloadTask && task is! ParallelDownloadTask;
 
+/// Only non-final executor states can plausibly own a native writer. This is
+/// useful when a runtime API returns a status together with the task identity;
+/// persisted database status alone is never sufficient negative ownership
+/// evidence.
+bool runtimeTaskStatusCanOwnWriter(TaskStatus status) => switch (status) {
+  TaskStatus.enqueued ||
+  TaskStatus.running ||
+  TaskStatus.waitingToRetry => true,
+  TaskStatus.paused ||
+  TaskStatus.complete ||
+  TaskStatus.canceled ||
+  TaskStatus.failed ||
+  TaskStatus.notFound => false,
+};
+
 const int kDownloadLargeFileHintThresholdBytes = 50 * 1024 * 1024;
 
 /// Runtime ownership is intentionally separate from persisted task status.

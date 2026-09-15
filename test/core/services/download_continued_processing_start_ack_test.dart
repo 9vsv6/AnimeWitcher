@@ -37,7 +37,8 @@ void main() {
   test('start reports native acceptance for an installed iOS task', () async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
-          if (call.method == 'start') return 'com.animewitcher.app.download.session';
+          if (call.method == 'start')
+            return 'com.animewitcher.app.download.session';
           return true;
         });
     final service = DownloadContinuedProcessingService(

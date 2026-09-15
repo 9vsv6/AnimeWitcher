@@ -2797,7 +2797,7 @@ class DownloadService {
         currentIndex: session.currentIndex,
       );
     } else {
-      await _continuedProcessing.start(
+      final started = await _continuedProcessing.start(
         taskId: session.currentTaskId,
         displayName: session.displayName,
         progress: session.progress,
@@ -2808,8 +2808,13 @@ class DownloadService {
         speedBytesPerSecond: speed < 0 ? 0 : speed,
         currentIndex: session.currentIndex,
       );
+      if (!started) {
+        diagnosticLog.record('continued.startRejected', {
+          'taskId': session.currentTaskId,
+        });
+      }
+      _sessionOverlayActive = started;
     }
-    _sessionOverlayActive = true;
     await _persistNativeWaitingSnapshot(overlay: session);
   }
 
