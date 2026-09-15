@@ -6,13 +6,12 @@ void main() {
   test('continued-processing update reports whether native still owns a session', () {
     final manager = File(
       'ios/Runner/DownloadContinuedProcessingManager.swift',
-    ).readAsStringSync();
-    final appDelegate = File('ios/Runner/AppDelegate.swift').readAsStringSync();
+    ).readAsStringSync().replaceAll('\r\n', '\n');
+    final appDelegate = File(
+      'ios/Runner/AppDelegate.swift',
+    ).readAsStringSync().replaceAll('\r\n', '\n');
 
-    expect(
-      manager,
-      contains('func update(\n'),
-    );
+    expect(manager, contains('func update(\n'));
     expect(
       manager,
       contains(') -> Bool {'),
@@ -22,10 +21,7 @@ void main() {
       manager,
       contains('guard var snapshot = snapshot else { return false }'),
     );
-    expect(
-      appDelegate,
-      contains('let active = manager.update('),
-    );
+    expect(appDelegate, contains('let active = manager.update('));
     expect(appDelegate, contains('result(active)'));
   });
 }
