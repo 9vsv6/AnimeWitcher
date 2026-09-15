@@ -1,0 +1,122 @@
+name: Download Lifecycle Handoff Fix
+
+on:
+  push:
+    branches: [plan/download-manager-reliability]
+    paths:
+      - '.github/workflows/download-lifecycle-handoff-fix.yml'
+      - '.github/scripts/apply_download_lifecycle_handoff_fix.py'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: plan/download-manager-reliability
+          fetch-depth: 0
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.1
+          cache: true
+
+      - name: Install dependencies and generate sources
+        run: |
+          flutter pub get
+          flutter gen-l10n
+          dart run build_runner build --delete-conflicting-outputs
+
+      - name: Confirm focused regressions are RED before patch
+        shell: bash
+        run: |
+          set +e
+          flutter test \
+            test/core/services/download_continued_processing_start_ack_test.dart \
+            test/core/services/download_native_claim_foreground_test.dart \
+            test/core/services/ios_continued_processing_update_ack_source_test.dart \
+            test/core/services/download_native_claim_lifecycle_source_test.dart
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo 'Expected the new regression tests to fail before the production patch.'
+            exit 1
+          fi
+          echo 'RED confirmed.'
+
+      - name: Apply production fixes
+        run: python3 .github/scripts/apply_download_lifecycle_handoff_fix.py
+
+      - name: Format Dart changes
+        run: |
+          dart format \
+            lib/core/services/download_continued_processing_service.dart \
+            lib/core/services/download_service.dart \
+            lib/core/services/persistent_parallel_download.dart \
+            lib/main.dart \
+            test/core/services/download_continued_processing_start_ack_test.dart \
+            test/core/services/download_native_claim_foreground_test.dart \
+            test/core/services/ios_continued_processing_update_ack_source_test.dart \
+            test/core/services/download_native_claim_lifecycle_source_test.dart
+
+      - name: Focused lifecycle and ownership tests
+        run: |
+          flutter test test/core/services/download_continued_processing_start_ack_test.dart
+          flutter test test/core/services/download_native_claim_foreground_test.dart
+          flutter test test/core/services/ios_continued_processing_update_ack_source_test.dart
+          flutter test test/core/services/download_native_claim_lifecycle_source_test.dart
+          flutter test test/core/services/download_ios_restart_telemetry_regression_test.dart
+          flutter test test/core/services/persistent_parallel_download_test.dart
+          flutter test test/core/services/persistent_parallel_download_pending_start_lease_test.dart
+          flutter test test/core/services/ios_multipart_ownership_handoff_source_test.dart
+          flutter test test/core/services/download_runtime_ownership_test.dart
+
+      - name: Analyze changed runtime surface
+        run: |
+          flutter analyze --no-fatal-warnings --no-fatal-infos \
+            lib/core/services/download_continued_processing_service.dart \
+            lib/core/services/download_service.dart \
+            lib/core/services/persistent_parallel_download.dart \
+            lib/main.dart \
+            test/core/services/download_continued_processing_start_ack_test.dart \
+            test/core/services/download_native_claim_foreground_test.dart \
+            test/core/services/ios_continued_processing_update_ack_source_test.dart \
+            test/core/services/download_native_claim_lifecycle_source_test.dart
+
+      - name: Commit verified fixes and remove temporary fixer
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/download-lifecycle-handoff-fix.yml
+          git rm .github/scripts/apply_download_lifecycle_handoff_fix.py
+          git add lib ios test
+          git commit -m 'fix(downloads): harden iOS lifecycle handoff'
+          git push origin HEAD:plan/download-manager-reliability
+
+  ios-simulator-build:
+    needs: apply-and-verify
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: plan/download-manager-reliability
+          fetch-depth: 0
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.1
+          cache: true
+
+      - name: Install dependencies and generate sources
+        run: |
+          flutter pub get
+          flutter gen-l10n
+          dart run build_runner build --delete-conflicting-outputs
+
+      - name: Build iOS Simulator
+        run: flutter build ios --simulator --debug
