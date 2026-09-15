@@ -1,4 +1,4 @@
-name: Diagnose full Flutter tests
+name: Diagnose source guard failures
 
 on:
   push:
@@ -13,79 +13,41 @@ permissions:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
-
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          flutter-version: 3.47.1
-          cache: true
-
-      - name: Install dependencies and generate sources
+      - name: Capture exact source guard boundaries
+        shell: python
         run: |
-          flutter pub get
-          flutter gen-l10n
-          dart run build_runner build --delete-conflicting-outputs
-
-      - name: Run suite and capture failures
-        id: tests
-        shell: bash
-        run: |
-          set +e
-          flutter test --reporter json --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key 2>&1 | tee /tmp/flutter-test.jsonl
-          test_exit=${PIPESTATUS[0]}
-          set -e
-          python3 - <<'PY'
-          import json
           from pathlib import Path
 
-          tests = {}
-          errors = {}
-          failed = []
-          for line in Path('/tmp/flutter-test.jsonl').read_text(errors='replace').splitlines():
-              try:
-                  event = json.loads(line)
-              except Exception:
-                  continue
-              kind = event.get('type')
-              if kind == 'testStart':
-                  test = event.get('test') or {}
-                  tests[test.get('id')] = test
-              elif kind == 'error':
-                  test_id = event.get('testID')
-                  errors.setdefault(test_id, []).append({
-                      'error': event.get('error', ''),
-                      'stackTrace': event.get('stackTrace', ''),
-                  })
-              elif kind == 'testDone' and event.get('result') == 'failure':
-                  failed.append(event.get('testID'))
+          out = []
+          source = Path('lib/core/services/download_service.dart').read_text()
+          start = source.find('Future<void> _recoverPersistedDownloads() async')
+          end = source.find('int _occupiedSlotCount(', start)
+          recovery = source[start:end]
+          job = recovery.find('final oldJob = await _jobStore.get(task.taskId);')
+          canceled = recovery.find('record.status == TaskStatus.canceled')
+          out += [
+              f'recovery start={start} end={end} job={job} canceled={canceled}',
+              'RECOVERY_TAIL:', recovery[max(0, min(job, canceled) - 500):max(job, canceled) + 1200],
+          ]
 
-          lines = []
-          for test_id in failed:
-              test = tests.get(test_id, {})
-              lines.append(f"TEST: {test.get('name', '<unknown>')}")
-              lines.append(f"URL: {test.get('url', '<unknown>')}")
-              if test.get('line') is not None:
-                  lines.append(f"LINE: {test.get('line')}")
-              for detail in errors.get(test_id, []):
-                  if detail['error']:
-                      lines.append('ERROR: ' + detail['error'])
-                  if detail['stackTrace']:
-                      lines.append('STACK:\n' + detail['stackTrace'])
-              lines.append('---')
-          if not lines:
-              lines = ['No failing testDone events were parsed.']
-          Path('/tmp/failures.txt').write_text('\n'.join(lines))
-          print(Path('/tmp/failures.txt').read_text())
-          PY
-          exit "$test_exit"
-
-      - name: Upload failure diagnostics
-        if: always()
+          swift = Path('ios/Runner/DownloadNativeWaitingQueue.swift').read_text()
+          hook_start = swift.find('private static func hookComplete(')
+          hook_end = swift.find('private static func hookFinishDownload(', hook_start)
+          hook = swift[hook_start:hook_end]
+          retry = hook.find('retryBackgroundTransferIfNeeded(')
+          callback = hook.find('if let original = DownloadUrlSessionHook.originalComplete')
+          out += [
+              f'hook start={hook_start} end={hook_end} retry={retry} callback={callback}',
+              'HOOK:', hook,
+              f'has_crlf={chr(13)+chr(10) in Path("ios/Runner/DownloadNativeWaitingQueue.swift").read_bytes().decode("utf-8")}',
+          ]
+          Path('/tmp/source-diagnostics.txt').write_text('\n'.join(out))
+          print(Path('/tmp/source-diagnostics.txt').read_text())
+      - name: Upload diagnostics
         uses: actions/upload-artifact@v4
         with:
-          name: flutter-test-failures
-          path: /tmp/failures.txt
+          name: source-guard-diagnostics
+          path: /tmp/source-diagnostics.txt
           retention-days: 1
