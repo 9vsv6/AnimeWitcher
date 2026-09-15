@@ -108,6 +108,11 @@ jobs:
               "'if let original = DownloadUrlSessionHook.originalComplete'",
               "'guard let original = DownloadUrlSessionHook.originalComplete'",
           )
+          replace_once(
+              'test/core/services/download_runtime_stability_review_test.dart',
+              "contains('oldJob?.userPaused == true')",
+              "contains('downloadJobHasUserPauseIntent(oldJob.state)')",
+          )
 
           thermal = Path('test/core/services/download_thermal_efficiency_test.dart')
           text = thermal.read_text()
