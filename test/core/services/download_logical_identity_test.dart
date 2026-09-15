@@ -102,6 +102,38 @@ void main() {
       expect(newRoute.key, oldRoute.key);
     });
 
+    test('external-id enrichment still matches persisted logical identity', () {
+      final original = DownloadLogicalIdentity.fromMedia(
+        item: item(syncData: const {'anilistId': '123'}),
+        episode: episode(),
+      );
+      final enriched = DownloadLogicalIdentity.fromMedia(
+        item: item(
+          syncData: const {'malId': '999', 'anilistId': '123'},
+          url: 'https://animewitcher.com/watch/renamed-route',
+        ),
+        episode: episode(),
+      );
+
+      expect(original.key, isNot(enriched.key));
+      expect(enriched.matchesPersistedKey(original.key), isTrue);
+    });
+
+    test('external-id aliases never collapse a different episode', () {
+      final original = DownloadLogicalIdentity.fromMedia(
+        item: item(syncData: const {'anilistId': '123'}),
+        episode: episode(number: 12),
+      );
+      final otherEpisode = DownloadLogicalIdentity.fromMedia(
+        item: item(
+          syncData: const {'malId': '999', 'anilistId': '123'},
+        ),
+        episode: episode(number: 13),
+      );
+
+      expect(otherEpisode.matchesPersistedKey(original.key), isFalse);
+    });
+
     test('fallback content URL is canonicalized without query or fragment', () {
       final first = DownloadLogicalIdentity.fromMedia(
         item: item(
@@ -136,6 +168,7 @@ void main() {
       );
 
       expect(a.key, isNot(b.key));
+      expect(a.matchesPersistedKey(b.key), isFalse);
     });
   });
 }
