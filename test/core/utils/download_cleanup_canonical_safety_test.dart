@@ -33,12 +33,21 @@ void main() {
     );
   });
 
-  test('series cleanup rejects an unconfigured lookalike app root', () async {
+  test('configured containment rejects a lookalike root', () async {
     final sandbox = await Directory.systemTemp.createTemp('aw-cleanup-root-');
     addTearDown(() async {
       if (await sandbox.exists()) await sandbox.delete(recursive: true);
     });
 
+    final configuredRoot = Directory(
+      p.join(
+        sandbox.path,
+        'configured',
+        'AnimeWitcher',
+        'Downloads',
+      ),
+    );
+    await configuredRoot.create(recursive: true);
     final unconfiguredSeries = Directory(
       p.join(
         sandbox.path,
@@ -50,8 +59,17 @@ void main() {
     );
     await unconfiguredSeries.create(recursive: true);
 
+    expect(
+      pathIsInsideConfiguredAppDownloads(
+        unconfiguredSeries.path,
+        [configuredRoot.path],
+      ),
+      isFalse,
+    );
+
     await deleteSeriesFolderIfNoVideosRemain(
       File(p.join(unconfiguredSeries.path, 'episode 01.mp4')),
+      appDownloadRoots: [configuredRoot.path],
     );
 
     expect(
@@ -63,14 +81,74 @@ void main() {
     );
   });
 
+  test('configured empty series can be removed', () async {
+    final sandbox = await Directory.systemTemp.createTemp('aw-cleanup-empty-');
+    addTearDown(() async {
+      if (await sandbox.exists()) await sandbox.delete(recursive: true);
+    });
+    final downloads = Directory(
+      p.join(sandbox.path, 'AnimeWitcher', 'Downloads'),
+    );
+    final series = Directory(p.join(downloads.path, 'Show'));
+    await series.create(recursive: true);
+
+    await deleteSeriesFolderIfNoVideosRemain(
+      File(p.join(series.path, 'episode 01.mp4')),
+      appDownloadRoots: [downloads.path],
+    );
+
+    expect(await series.exists(), isFalse);
+    expect(await downloads.exists(), isTrue);
+  });
+
+  test('deleteDownloadedVideo preserves an external lookalike file', () async {
+    final sandbox = await Directory.systemTemp.createTemp('aw-cleanup-file-');
+    addTearDown(() async {
+      if (await sandbox.exists()) await sandbox.delete(recursive: true);
+    });
+    final configuredRoot = Directory(
+      p.join(
+        sandbox.path,
+        'configured',
+        'AnimeWitcher',
+        'Downloads',
+      ),
+    );
+    await configuredRoot.create(recursive: true);
+    final externalSeries = Directory(
+      p.join(
+        sandbox.path,
+        'external',
+        'AnimeWitcher',
+        'Downloads',
+        'Show',
+      ),
+    );
+    await externalSeries.create(recursive: true);
+    final externalFile = File(p.join(externalSeries.path, 'episode 01.mp4'));
+    final externalTemp = File('${externalFile.path}.part');
+    await externalFile.writeAsBytes([1, 2, 3]);
+    await externalTemp.writeAsBytes([4, 5, 6]);
+
+    final deleted = await deleteDownloadedVideo(
+      externalFile,
+      appDownloadRoots: [configuredRoot.path],
+    );
+
+    expect(deleted, isFalse);
+    expect(await externalFile.exists(), isTrue);
+    expect(await externalTemp.exists(), isTrue);
+  });
+
   test('series cleanup never recursively deletes unknown user content', () async {
     final sandbox = await Directory.systemTemp.createTemp('aw-cleanup-safety-');
     addTearDown(() async {
       if (await sandbox.exists()) await sandbox.delete(recursive: true);
     });
-    final series = Directory(
-      p.join(sandbox.path, 'AnimeWitcher', 'Downloads', 'Show'),
+    final downloads = Directory(
+      p.join(sandbox.path, 'AnimeWitcher', 'Downloads'),
     );
+    final series = Directory(p.join(downloads.path, 'Show'));
     await series.create(recursive: true);
     final unknown = File(p.join(series.path, 'notes.txt'));
     await unknown.writeAsString('keep me');
@@ -78,7 +156,10 @@ void main() {
     final deletedEpisode = File(
       p.join(series.path, 'Season 1', 'episode 01.mp4'),
     );
-    await deleteSeriesFolderIfNoVideosRemain(deletedEpisode);
+    await deleteSeriesFolderIfNoVideosRemain(
+      deletedEpisode,
+      appDownloadRoots: [downloads.path],
+    );
 
     expect(await unknown.exists(), isTrue);
     expect(await series.exists(), isTrue);
@@ -91,9 +172,10 @@ void main() {
       addTearDown(() async {
         if (await sandbox.exists()) await sandbox.delete(recursive: true);
       });
-      final series = Directory(
-        p.join(sandbox.path, 'AnimeWitcher', 'Downloads', 'Show'),
+      final downloads = Directory(
+        p.join(sandbox.path, 'AnimeWitcher', 'Downloads'),
       );
+      final series = Directory(p.join(downloads.path, 'Show'));
       final season = Directory(p.join(series.path, 'Season 1'));
       await season.create(recursive: true);
       final partial = File(p.join(season.path, 'episode 01.mp4.part'));
@@ -105,6 +187,7 @@ void main() {
 
       await deleteSeriesFolderIfNoVideosRemain(
         File(p.join(season.path, 'episode 01.mp4')),
+        appDownloadRoots: [downloads.path],
       );
 
       expect(await partial.exists(), isTrue);
@@ -119,15 +202,17 @@ void main() {
     addTearDown(() async {
       if (await sandbox.exists()) await sandbox.delete(recursive: true);
     });
-    final series = Directory(
-      p.join(sandbox.path, 'AnimeWitcher', 'Downloads', 'Show'),
+    final downloads = Directory(
+      p.join(sandbox.path, 'AnimeWitcher', 'Downloads'),
     );
+    final series = Directory(p.join(downloads.path, 'Show'));
     await series.create(recursive: true);
     final extensionless = File(p.join(series.path, 'episode-final'));
     await extensionless.writeAsBytes([1, 2, 3, 4]);
 
     await deleteSeriesFolderIfNoVideosRemain(
       File(p.join(series.path, 'episode 01.mp4')),
+      appDownloadRoots: [downloads.path],
     );
 
     expect(await extensionless.exists(), isTrue);
@@ -153,6 +238,7 @@ void main() {
 
     await deleteSeriesFolderIfNoVideosRemain(
       File(p.join(link.path, 'Season 1', 'episode 01.mp4')),
+      appDownloadRoots: [downloads.path],
     );
 
     expect(await link.exists(), isTrue);
