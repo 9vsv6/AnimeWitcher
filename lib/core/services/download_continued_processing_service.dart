@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'download_concurrency.dart';
 
 typedef SystemDownloadCancellation = Future<void> Function(String taskId);
+typedef SystemDownloadSessionLost = void Function();
 typedef SystemDownloadTaskUpdate = void Function({
   required String taskId,
   required String trackingUrl,
@@ -62,6 +63,7 @@ class DownloadContinuedProcessingService {
   );
 
   final SystemDownloadCancellation onSystemCancel;
+  final SystemDownloadSessionLost? onSessionLost;
   final SystemDownloadTaskUpdate? onTaskUpdate;
   final SystemDownloadChunkUpdate? onChunkUpdate;
   final bool forceAvailableForTesting;
@@ -80,6 +82,7 @@ class DownloadContinuedProcessingService {
 
   DownloadContinuedProcessingService({
     required this.onSystemCancel,
+    this.onSessionLost,
     this.onTaskUpdate,
     this.onChunkUpdate,
     @visibleForTesting this.forceAvailableForTesting = false,
@@ -164,7 +167,7 @@ class DownloadContinuedProcessingService {
       final pending = _pendingUpdate;
       _pendingUpdate = null;
       _lastUpdateAt = now;
-      if (pending != null) await _invoke('update', pending);
+      if (pending != null) await _sendUpdate(pending);
       return;
     }
 
@@ -175,8 +178,15 @@ class DownloadContinuedProcessingService {
       _pendingUpdate = null;
       if (pending == null || !_isAvailable || _disposed) return;
       _lastUpdateAt = DateTime.now();
-      await _invoke('update', pending);
+      await _sendUpdate(pending);
     });
+  }
+
+  Future<void> _sendUpdate(Map<String, Object> arguments) async {
+    final accepted = await _invokeForResult<Object?>('update', arguments);
+    if (accepted is bool && !accepted && !_disposed) {
+      onSessionLost?.call();
+    }
   }
 
   void _cancelPendingUpdate() {

@@ -314,6 +314,9 @@ class _MyAppState extends ConsumerState<MyApp>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(ref.read(downloadServiceProvider).onAppForegrounded());
+    } else if (state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused) {
+      unawaited(ref.read(downloadServiceProvider).onAppBackgrounded());
     }
     if (state != AppLifecycleState.resumed) return;
     final account = ref

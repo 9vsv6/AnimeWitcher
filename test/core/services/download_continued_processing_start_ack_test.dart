@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:animewitcher/core/services/download_continued_processing_service.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -59,6 +61,7 @@ void main() {
 
   test('native update rejection invalidates the cached iOS session', () async {
     var lost = 0;
+    final lostSignal = Completer<void>();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
           if (call.method == 'start') {
@@ -69,7 +72,10 @@ void main() {
         });
     final service = DownloadContinuedProcessingService(
       onSystemCancel: (_) async {},
-      onSessionLost: () => lost++,
+      onSessionLost: () {
+        lost++;
+        if (!lostSignal.isCompleted) lostSignal.complete();
+      },
       forceAvailableForTesting: true,
     );
 
@@ -84,6 +90,7 @@ void main() {
         totalBytes: 100,
         transferredBytes: 25,
       );
+      await lostSignal.future.timeout(const Duration(seconds: 2));
       expect(lost, 1);
     } finally {
       await service.dispose();

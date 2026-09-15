@@ -437,6 +437,7 @@ class DownloadService {
   final Set<String> _terminalJobIds = <String>{};
   final List<String> _sessionOrder = [];
   bool _sessionOverlayActive = false;
+  bool _appInForeground = true;
   int _sessionCompletedCount = 0;
   int _sessionBatchTotal = 0;
   String _overlayCurrentTaskId = '';
@@ -543,6 +544,13 @@ class DownloadService {
     );
     _continuedProcessing = DownloadContinuedProcessingService(
       onSystemCancel: _cancelFromSystemUI,
+      onSessionLost: () {
+        if (_disposed) return;
+        _sessionOverlayActive = false;
+        Future<void>.delayed(Duration.zero, () {
+          if (!_disposed) unawaited(_syncSessionOverlay());
+        });
+      },
       onTaskUpdate: _handleNativeTaskUpdate,
       onChunkUpdate: _handleNativeChunkUpdate,
     );
@@ -2535,13 +2543,24 @@ class DownloadService {
     await _persistNativeWaitingSnapshot();
   }
 
+  /// Persist the background handoff while Flutter is still alive. Native
+  /// multipart plans are deliberately exported only here; ordinary foreground
+  /// overlay/queue snapshots must never reserve untouched Ranges for Swift.
+  Future<void> onAppBackgrounded() async {
+    if (!await _awaitLifecycleReadiness('background')) return;
+    _appInForeground = false;
+    await _serializeQueue(() => _persistNativeWaitingSnapshot());
+  }
+
   /// Attach UI to live native tasks. Never detach a live URLSession task.
   /// Promote leftover parked waiters only if native does not already own
   /// that episode. Never pause/re-enqueue/restart URLSession here.
   Future<void> onAppForegrounded() async {
+    _appInForeground = true;
     if (!await _awaitLifecycleReadiness('foreground')) return;
     await _serializeQueue(() async {
       await _reconcileTransferOwnership();
+      _parallel.releaseNativeBackgroundOffers();
       await _attachUiToLiveNativeTasks();
       await _syncQueueToCapUnlocked();
     });
@@ -2952,7 +2971,7 @@ class DownloadService {
       } catch (_) {}
     }
     final multipartPlans = <Map<String, Object>>[];
-    if (Platform.isIOS) {
+    if (Platform.isIOS && !_appInForeground) {
       for (final plan in _parallel.nativeBackgroundPlans()) {
         multipartPlans.add(<String, Object>{
           'parentTaskId': plan.parentTaskId,

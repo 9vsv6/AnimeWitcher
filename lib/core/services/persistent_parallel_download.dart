@@ -552,6 +552,15 @@ class PersistentParallelDownload {
     return plans;
   }
 
+  /// Returns unclaimed native background offers to Dart after a foreground
+  /// reconciliation pass has already adopted any URLSession children that
+  /// actually started. Live children remain fenced by [part.launched].
+  void releaseNativeBackgroundOffers() {
+    if (_disposed || _nativeClaimOffers.isEmpty) return;
+    _nativeClaimOffers.clear();
+    _schedulePumpAll();
+  }
+
   /// Repair a child whose native resume checkpoint claimed progress but no
   /// resumable/native/on-disk bytes survived. The immutable Range itself is
   /// retained; only the unprovable prefix is discarded so recovery can fetch
