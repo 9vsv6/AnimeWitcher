@@ -86,6 +86,7 @@ jobs:
 
       - name: Analyze changed download code
         run: |
+          dart run build_runner build --delete-conflicting-outputs
           flutter analyze --no-fatal-warnings --no-fatal-infos \
             lib/core/services/download_transport.dart \
             lib/core/services/persistent_parallel_download.dart \
