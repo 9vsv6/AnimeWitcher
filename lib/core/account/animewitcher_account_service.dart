@@ -105,22 +105,40 @@ class AnimeWitcherAccountService {
         _ownedProfileDocumentIds.contains(comment.userId);
   }
 
-  Future<AnimeWitcherAccountSnapshot> restoreSession() async {
+  /// Restores only the locally cached account state.
+  ///
+  /// This deliberately performs no network I/O so app startup can render the
+  /// signed-in account immediately instead of waiting for Firebase/profile
+  /// verification and a full sync on every launch.
+  Future<AnimeWitcherAccountSnapshot> restoreCachedSession() async {
     final rawSession = await _secureStorage.read(_sessionKey);
     if (rawSession == null || rawSession.isEmpty) return snapshot;
 
     try {
-      _session = AnimeWitcherSession.fromJson(
+      final restoredSession = AnimeWitcherSession.fromJson(
         Map<String, dynamic>.from(jsonDecode(rawSession) as Map),
       );
-      _sessionGeneration++;
+      AnimeWitcherProfile? restoredProfile;
       final rawProfile = await _secureStorage.read(_profileKey);
       if (rawProfile != null && rawProfile.isNotEmpty) {
-        _profile = AnimeWitcherProfile.fromJson(
+        restoredProfile = AnimeWitcherProfile.fromJson(
           Map<String, dynamic>.from(jsonDecode(rawProfile) as Map),
         );
       }
-      final cachedProfile = _profile;
+
+      _session = restoredSession;
+      _profile = restoredProfile;
+      _sessionGeneration++;
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('[AnimeWitcherAccount] Cached restore failed: $error');
+      }
+      await _clearLocalSession();
+      return snapshot;
+    }
+
+    final cachedProfile = _profile;
+    try {
       _lastSyncAt = DateTime.tryParse(
         _storage.getString(
               cachedProfile == null
@@ -129,34 +147,78 @@ class AnimeWitcherAccountService {
             ) ??
             '',
       );
+    } catch (error) {
+      // The secure account cache is authoritative for startup. A settings-box
+      // failure must not make a valid signed-in account disappear.
+      _lastSyncAt = null;
+      if (kDebugMode) {
+        debugPrint(
+          '[AnimeWitcherAccount] Cached sync timestamp unavailable: $error',
+        );
+      }
+    }
+    return snapshot;
+  }
 
+  /// Verifies a previously restored account and refreshes cloud-backed state.
+  ///
+  /// Callers may run this in the background after [restoreCachedSession].
+  /// Generation checks prevent an old startup refresh from overwriting a user
+  /// who signs out or switches accounts while network requests are in flight.
+  Future<AnimeWitcherAccountSnapshot> refreshRestoredSession() async {
+    if (_session == null) return snapshot;
+    final generation = _sessionGeneration;
+
+    try {
       final session = await _authorizedSession();
-      final user = await _auth.lookup(session.idToken);
-      if (session.signInMethod == AnimeWitcherSignInMethod.email &&
-          user['emailVerified'] != true) {
-        await _clearLocalSession();
+      if (generation != _sessionGeneration || _session == null) {
         return snapshot;
       }
-      _session = session.copyWith(
+
+      final user = await _auth.lookup(session.idToken);
+      if (generation != _sessionGeneration || _session == null) {
+        return snapshot;
+      }
+
+      if (session.signInMethod == AnimeWitcherSignInMethod.email &&
+          user['emailVerified'] != true) {
+        if (generation == _sessionGeneration) {
+          await _clearLocalSession();
+        }
+        return snapshot;
+      }
+
+      final refreshedSession = session.copyWith(
         email: _optionalString(user['email']),
         displayName: _optionalString(user['displayName']),
         photoUrl: _optionalString(user['photoUrl']),
         providerIds: _providerIdsFromUser(user['providerUserInfo']),
       );
-      _profile = await _resolveProfile(
-        _session!,
+      final resolvedProfile = await _resolveProfile(
+        refreshedSession,
         createIfMissing:
-            _session!.signInMethod == AnimeWitcherSignInMethod.google,
+            refreshedSession.signInMethod == AnimeWitcherSignInMethod.google,
       );
+      if (generation != _sessionGeneration || _session == null) {
+        return snapshot;
+      }
+
+      _session = refreshedSession;
+      _profile = resolvedProfile;
       await _persistSession();
-      _syncNewAuthEmailBestEffort(_session!);
+      if (generation != _sessionGeneration || _session == null) {
+        return snapshot;
+      }
+      _syncNewAuthEmailBestEffort(refreshedSession);
       await syncAll();
     } on AnimeWitcherAccountException catch (error) {
       if (error.code == 'invalid-session' ||
           error.code == 'account-not-found' ||
           error.code == 'profile-not-found' ||
           error.code == 'account-banned') {
-        await _clearLocalSession();
+        if (generation == _sessionGeneration) {
+          await _clearLocalSession();
+        }
       } else if (kDebugMode) {
         debugPrint('[AnimeWitcherAccount] Restore deferred: $error');
       }
@@ -168,6 +230,13 @@ class AnimeWitcherAccountService {
       }
     }
     return snapshot;
+  }
+
+  /// Compatibility path for callers that explicitly require a fully verified
+  /// restore before continuing.
+  Future<AnimeWitcherAccountSnapshot> restoreSession() async {
+    await restoreCachedSession();
+    return refreshRestoredSession();
   }
 
   Future<AnimeWitcherAccountSnapshot> signInWithEmail({
@@ -322,14 +391,6 @@ class AnimeWitcherAccountService {
           'The birth year must be between 1970 and 2020.',
         );
       }
-    }
-    final existingBirthYear = profile.birthYear?.trim() ?? '';
-    if (existingBirthYear.isNotEmpty &&
-        normalizedBirthYear != existingBirthYear) {
-      throw const AnimeWitcherAccountException(
-        'birth-year-locked',
-        'The birth year can only be set once.',
-      );
     }
     const maximumImageBytes = 10 * 1024 * 1024;
     if ((avatarBytes?.length ?? 0) > maximumImageBytes ||
@@ -2050,7 +2111,15 @@ class AnimeWitcherAccountService {
     } catch (_) {}
     await _secureStorage.delete(_sessionKey);
     await _secureStorage.delete(_profileKey);
-    await _storage.remove(_legacyLastSyncKey);
+    try {
+      await _storage.remove(_legacyLastSyncKey);
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          '[AnimeWitcherAccount] Failed to clear legacy sync timestamp: $error',
+        );
+      }
+    }
   }
 
   Map<String, Map<String, dynamic>> _readPendingMutations(String storageKey) {

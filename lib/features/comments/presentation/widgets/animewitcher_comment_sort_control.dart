@@ -33,6 +33,16 @@ class AnimeWitcherCommentSortControl extends StatelessWidget {
   /// Details comments/reviews non-iOS control width.
   static const double width = 72;
 
+  /// Matches the persistent back button's physical leading inset on iOS.
+  /// Keeping both controls 8pt from their respective edges mirrors their
+  /// centers around the middle of the screen.
+  static const double persistentTrailingInset = 8;
+
+  /// Space kept between the page title and the compact 46pt sort control.
+  /// The old 92pt value was sized for the former wide, titled menu button and
+  /// left Arabic titles noticeably too far toward the center.
+  static const double persistentTitleClearance = 64;
+
   static const String systemImage = 'arrow.up.arrow.down';
   static const IconData fallbackIcon = Icons.filter_list_rounded;
 
@@ -86,7 +96,7 @@ class AnimeWitcherCommentSortControl extends StatelessWidget {
     ];
   }
 
-  static double persistentWidth(bool isArabic) => isArabic ? 150 : 140;
+  static double persistentWidth(bool isArabic) => size;
 
   /// iOS persistent Liquid Glass trailing button from the details header.
   static List<AppleLiquidGlassToolbarButton> persistentButtons({
@@ -103,7 +113,9 @@ class AnimeWitcherCommentSortControl extends StatelessWidget {
         tooltip: tooltip,
         icon: fallbackIconFor(sort),
         systemImage: systemImageFor(sort),
-        title: labelFor(sort, isArabic),
+        // The selected value stays visible in the menu itself. Keeping the
+        // persistent chrome icon-only lets its 46pt circle mirror Back exactly.
+        title: null,
         color: colors.primary,
         menuTintColor: colors.primary,
         onPressed: null,

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
+import 'package:animewitcher/core/providers/episode_sort_provider.dart';
 import 'package:animewitcher/core/services/download_concurrency.dart';
 import 'package:animewitcher/core/services/download_service.dart';
 import 'package:animewitcher/core/utils/download_cleanup.dart';
@@ -80,9 +81,19 @@ class _StubDownloadsNotifier extends DownloadsNotifier {
   Future<List<DownloadItem>> build() async => _items;
 }
 
+class _StubEpisodeSortAscendingNotifier extends EpisodeSortAscendingNotifier {
+  _StubEpisodeSortAscendingNotifier(this._value);
+
+  final bool _value;
+
+  @override
+  bool build() => _value;
+}
+
 Widget _downloadsApp(
   List<DownloadItem> items, {
   TextDirection? shellDirection,
+  bool episodeSortAscending = true,
 }) {
   Widget home = const Scaffold(
     body: RepaintBoundary(
@@ -96,6 +107,9 @@ Widget _downloadsApp(
   return ProviderScope(
     overrides: [
       downloadsProvider.overrideWith(() => _StubDownloadsNotifier(items)),
+      episodeSortAscendingProvider.overrideWith(
+        () => _StubEpisodeSortAscendingNotifier(episodeSortAscending),
+      ),
     ],
     child: MaterialApp(
       locale: const Locale('ar'),
@@ -150,7 +164,11 @@ void main() {
       expect(usedRawPath, isFalse);
       expect(usedLabels, isFalse);
 
-      await deleteDownloadedVideo(resolved);
+      await deleteDownloadedVideo(
+        resolved,
+
+        appDownloadRoots: [p.join(root.path, 'AnimeWitcher', 'Downloads')],
+      );
 
       expect(await taskFile.exists(), isFalse);
       expect(await reconstructed.exists(), isTrue);
@@ -210,15 +228,12 @@ void main() {
 
         final video = File(p.join(season.path, 'الحلقة 9.mp4'));
         await video.writeAsBytes(List<int>.filled(32, 1));
-        await File(
-          p.join(season.path, '${p.basename(video.path)}.part'),
-        ).writeAsBytes([1]);
-        await File(
-          p.join(season.path, '${p.basename(video.path)}.tmp'),
-        ).writeAsBytes([1]);
-        await File(
-          p.join(season.path, '${p.basename(video.path)}.download'),
-        ).writeAsBytes([1]);
+        await File(p.join(season.path, '${p.basename(video.path)}.part'))
+            .writeAsBytes([1]);
+        await File(p.join(season.path, '${p.basename(video.path)}.tmp'))
+            .writeAsBytes([1]);
+        await File(p.join(season.path, '${p.basename(video.path)}.download'))
+            .writeAsBytes([1]);
         await File(p.join(season.path, 'thumb.jpg')).writeAsBytes([1]);
         await Directory(p.join(series.path, 'Season 2')).create();
 
@@ -227,7 +242,11 @@ void main() {
         final otherVideo = File(p.join(otherSeries.path, 'الحلقة 1.mp4'));
         await otherVideo.writeAsBytes(List<int>.filled(32, 3));
 
-        await deleteDownloadedVideo(video);
+        await deleteDownloadedVideo(
+          video,
+
+          appDownloadRoots: [p.join(root.path, 'AnimeWitcher', 'Downloads')],
+        );
 
         expect(await video.exists(), isFalse);
         expect(await File('${video.path}.part').exists(), isFalse);
@@ -237,7 +256,10 @@ void main() {
         // or empty user directories merely because the selected video is gone.
         expect(await series.exists(), isTrue);
         expect(await File(p.join(season.path, 'thumb.jpg')).exists(), isTrue);
-        expect(await Directory(p.join(series.path, 'Season 2')).exists(), isTrue);
+        expect(
+          await Directory(p.join(series.path, 'Season 2')).exists(),
+          isTrue,
+        );
         expect(await downloadsRoot.exists(), isTrue);
         expect(await otherSeries.exists(), isTrue);
         expect(await otherVideo.exists(), isTrue);
@@ -266,7 +288,11 @@ void main() {
       await tmp.writeAsBytes([1]);
       await download.writeAsBytes([1]);
 
-      await deleteDownloadedVideo(video);
+      await deleteDownloadedVideo(
+        video,
+
+        appDownloadRoots: [p.join(root.path, 'AnimeWitcher', 'Downloads')],
+      );
 
       expect(await video.exists(), isFalse);
       expect(await part.exists(), isFalse);
@@ -295,10 +321,10 @@ void main() {
         hasLength(1),
       );
       expect(
-        collapseDuplicateDownloads([
-          older,
-          newer,
-        ]).extraCompleteRecords.single.id,
+        collapseDuplicateDownloads([older, newer])
+            .extraCompleteRecords
+            .single
+            .id,
         'old-complete',
       );
 
@@ -517,12 +543,10 @@ void main() {
       );
       final image = await boundary.toImage(pixelRatio: 2);
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      File(
-        '${artifacts.path}/downloads_waiting_in_app.png',
-      ).writeAsBytesSync(bytes!.buffer.asUint8List());
-      File(
-        '${artifacts.path}/downloads_no_reorder_handle.png',
-      ).writeAsBytesSync(bytes.buffer.asUint8List());
+      File('${artifacts.path}/downloads_waiting_in_app.png')
+          .writeAsBytesSync(bytes!.buffer.asUint8List());
+      File('${artifacts.path}/downloads_no_reorder_handle.png')
+          .writeAsBytesSync(bytes.buffer.asUint8List());
     });
   });
 
@@ -589,9 +613,8 @@ void main() {
         );
         final image = await boundary.toImage(pixelRatio: 2);
         final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-        File(
-          '${artifacts.path}/downloads_active_ungrouped.png',
-        ).writeAsBytesSync(bytes!.buffer.asUint8List());
+        File('${artifacts.path}/downloads_active_ungrouped.png')
+            .writeAsBytesSync(bytes!.buffer.asUint8List());
       });
     }
   });
@@ -665,11 +688,60 @@ void main() {
         );
         final image = await boundary.toImage(pixelRatio: 2);
         final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-        File(
-          '${artifacts.path}/downloads_completed_grouped.png',
-        ).writeAsBytesSync(bytes!.buffer.asUint8List());
+        File('${artifacts.path}/downloads_completed_grouped.png')
+            .writeAsBytesSync(bytes!.buffer.asUint8List());
       });
     }
+  });
+
+  testWidgets('completed episodes follow the details-page sort direction', (
+    tester,
+  ) async {
+    final show = MultimediaItem(
+      title: 'Scrambled',
+      url: 'https://animewitcher.test/scrambled',
+      posterUrl: '',
+      contentType: MultimediaContentType.anime,
+      tmdbId: 99,
+    );
+
+    DownloadItem episode(int number, int timestamp) => DownloadItem(
+      task: _task(
+        taskId: 'scrambled-$number',
+        filename: 'الحلقة $number.mp4',
+        metaData: 'https://animewitcher.test/scrambled/$number',
+      ),
+      status: TaskStatus.complete,
+      progress: 1,
+      item: show,
+      episode: Episode(
+        name: 'الحلقة $number',
+        url: 'https://animewitcher.test/scrambled/$number',
+        season: 1,
+        episode: number,
+        serverName: 'الحلقة $number',
+      ),
+      timestamp: timestamp,
+    );
+
+    await tester.pumpWidget(
+      _downloadsApp([
+        episode(10, 300),
+        episode(12, 200),
+        episode(11, 100),
+      ], episodeSortAscending: false),
+    );
+    await tester.pump();
+    await tester.tap(find.text('المكتملة'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Scrambled'));
+    await tester.pumpAndSettle();
+
+    final episode12Y = tester.getTopLeft(find.text('الحلقة 12')).dy;
+    final episode11Y = tester.getTopLeft(find.text('الحلقة 11')).dy;
+    final episode10Y = tester.getTopLeft(find.text('الحلقة 10')).dy;
+    expect(episode12Y, lessThan(episode11Y));
+    expect(episode11Y, lessThan(episode10Y));
   });
 
   testWidgets('tab swipe follows RTL and lands on the completed anime group', (
@@ -714,10 +786,10 @@ void main() {
     }
 
     await tester.pumpWidget(
-      _downloadsApp(
-        [episode(20, TaskStatus.running), episode(9, TaskStatus.complete)],
-        shellDirection: TextDirection.ltr,
-      ),
+      _downloadsApp([
+        episode(20, TaskStatus.running),
+        episode(9, TaskStatus.complete),
+      ], shellDirection: TextDirection.ltr),
     );
     await tester.pump();
 
@@ -849,9 +921,8 @@ void main() {
         );
         final image = await boundary.toImage(pixelRatio: 2);
         final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-        File(
-          '${artifacts.path}/downloads_completed_cards_ltr.png',
-        ).writeAsBytesSync(bytes!.buffer.asUint8List());
+        File('${artifacts.path}/downloads_completed_cards_ltr.png')
+            .writeAsBytesSync(bytes!.buffer.asUint8List());
       });
     }
   });
@@ -948,9 +1019,8 @@ void main() {
       );
       final image = await boundary.toImage(pixelRatio: 2);
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      File(
-        '${artifacts.path}/downloads_paused_not_running.png',
-      ).writeAsBytesSync(bytes!.buffer.asUint8List());
+      File('${artifacts.path}/downloads_paused_not_running.png')
+          .writeAsBytesSync(bytes!.buffer.asUint8List());
     });
   });
 

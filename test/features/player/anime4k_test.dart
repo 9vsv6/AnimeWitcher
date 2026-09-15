@@ -70,10 +70,9 @@ void main() {
       expect(files, <String>[
         'Anime4K_Clamp_Highlights.glsl',
         'Anime4K_Upscale_Denoise_CNN_x2_M.glsl',
-        // Nothing collides in this pipeline, so the upscale runs at the size
-        // that was asked for rather than dropping to S the way A's second
-        // pass has to.
-        'Anime4K_Upscale_CNN_x2_M.glsl',
+        // The first x2 stage expands the pixel workload. Later CNN work uses
+        // the stage-aware S ceiling rather than paying M cost again.
+        'Anime4K_Upscale_CNN_x2_S.glsl',
       ]);
     });
 
@@ -88,12 +87,12 @@ void main() {
       ]);
     });
 
-    test('C+A adds a restore after the denoising upscale', () {
+    test('C+A adds a cheaper restore after the denoising upscale', () {
       expect(_chain(Anime4kMode.ca).files, <String>[
         'Anime4K_Clamp_Highlights.glsl',
         'Anime4K_Upscale_Denoise_CNN_x2_M.glsl',
-        'Anime4K_Restore_CNN_M.glsl',
-        'Anime4K_Upscale_CNN_x2_M.glsl',
+        'Anime4K_Restore_CNN_S.glsl',
+        'Anime4K_Upscale_CNN_x2_S.glsl',
       ]);
     });
   });
@@ -114,12 +113,11 @@ void main() {
       }
     });
 
-    test('even at the smallest size, where the obvious choice collides', () {
-      // Mode A wants the chosen size and then S. Choosing S already means the
-      // second pass has to move, not repeat.
+    test('at S the repeated pass is skipped rather than upgraded', () {
       final files = _chain(Anime4kMode.a, quality: Anime4kQuality.s).files;
       expect(files.toSet(), hasLength(files.length));
       expect(files, contains('Anime4K_Upscale_CNN_x2_S.glsl'));
+      expect(files, isNot(contains('Anime4K_Upscale_CNN_x2_M.glsl')));
     });
   });
 
@@ -137,7 +135,7 @@ void main() {
         folder: onlySmall,
       );
       // UL was asked for and none exists, so each step takes the largest
-      // that does: M for the first upscale, S for the second.
+      // downward-only candidate that does: M first, S after the x2 stage.
       expect(chain.files, <String>[
         'Anime4K_Clamp_Highlights.glsl',
         'Anime4K_Restore_CNN_S.glsl',
@@ -169,22 +167,22 @@ void main() {
     });
 
     test('a step skipped for the one-use rule is not called missing', () {
-      // One upscale file and a mode that wants two: the second pass is
-      // dropped because the file is already in the chain, which is the rule
-      // working. Reporting it as missing would send the viewer looking for a
-      // file sitting in the folder in front of them.
+      // At S the late stage cannot legally upgrade, and the only S upscale is
+      // already in the chain. The pass is skipped by the one-use rule, not
+      // reported as a missing download.
       final chain = _chain(
         Anime4kMode.a,
+        quality: Anime4kQuality.s,
         folder: const <String>[
           'Anime4K_Clamp_Highlights.glsl',
-          'Anime4K_Restore_CNN_M.glsl',
-          'Anime4K_Upscale_CNN_x2_M.glsl',
+          'Anime4K_Restore_CNN_S.glsl',
+          'Anime4K_Upscale_CNN_x2_S.glsl',
         ],
       );
       expect(chain.files, <String>[
         'Anime4K_Clamp_Highlights.glsl',
-        'Anime4K_Restore_CNN_M.glsl',
-        'Anime4K_Upscale_CNN_x2_M.glsl',
+        'Anime4K_Restore_CNN_S.glsl',
+        'Anime4K_Upscale_CNN_x2_S.glsl',
       ]);
       expect(chain.missing, isEmpty);
     });
@@ -319,35 +317,38 @@ void main() {
     });
   });
 
+  group('GPU video-output validation', () {
+    test('accepts mpv outputs that implement custom shaders', () {
+      for (final vo in <String>['gpu', 'gpu-next', 'libmpv', '  GPU  ']) {
+        expect(anime4kGpuRendererSupportsShaders(vo), isTrue, reason: vo);
+      }
+    });
+
+    test('rejects outputs without the mpv GLSL render stage', () {
+      for (final vo in <String>['', 'null', 'xv', 'mediacodec_embed']) {
+        expect(anime4kGpuRendererSupportsShaders(vo), isFalse, reason: vo);
+      }
+    });
+  });
+
   group('where it is offered at all', () {
     test('desktop on the mpv backend, and nowhere else', () {
       expect(
-        anime4kAvailableOn(
-          isDesktopPlatform: true,
-          usingAdaptiveBackend: false,
-        ),
+        anime4kAvailableOn(isNativePlatform: true, usingAdaptiveBackend: false),
         isTrue,
       );
     });
 
-    test('not on a phone, whatever is playing', () {
-      // The shaders are a real load on a GPU, and a phone has neither the
-      // thermal room nor a screen big enough to show what the work bought.
-      for (final adaptive in <bool>[true, false]) {
-        expect(
-          anime4kAvailableOn(
-            isDesktopPlatform: false,
-            usingAdaptiveBackend: adaptive,
-          ),
-          isFalse,
-          reason: 'adaptive backend: $adaptive',
-        );
-      }
+    test('native mobile playback is supported', () {
+      expect(
+        anime4kAvailableOn(isNativePlatform: true, usingAdaptiveBackend: false),
+        isTrue,
+      );
     });
 
     test('not on the backend that has no shader stage', () {
       expect(
-        anime4kAvailableOn(isDesktopPlatform: true, usingAdaptiveBackend: true),
+        anime4kAvailableOn(isNativePlatform: true, usingAdaptiveBackend: true),
         isFalse,
       );
     });

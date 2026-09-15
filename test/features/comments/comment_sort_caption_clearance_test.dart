@@ -1,5 +1,9 @@
+import 'dart:io';
+
+import 'package:animewitcher/core/account/animewitcher_comment_models.dart';
 import 'package:animewitcher/core/utils/window_controls_inset.dart';
 import 'package:animewitcher/features/comments/presentation/widgets/animewitcher_comment_sort_control.dart';
+import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -71,5 +75,59 @@ void main() {
     final windowRight = tester.getSize(find.byType(MaterialApp)).width;
 
     expect(windowRight - sort.right, lessThan(24));
+  });
+
+  testWidgets(
+    'persistent comment sort is a compact icon aligned with the back button',
+    (tester) async {
+      List<AppleLiquidGlassToolbarButton>? buttons;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) {
+              buttons = AnimeWitcherCommentSortControl.persistentButtons(
+                context: context,
+                isArabic: true,
+                tooltip: 'ترتيب التعليقات',
+                sort: AnimeWitcherCommentSort.newest,
+                onSelected: (_) {},
+              );
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      );
+
+      expect(buttons, isNotNull);
+      expect(buttons!.single.width, AnimeWitcherCommentSortControl.size);
+      expect(buttons!.single.title, isNull);
+      expect(
+        AnimeWitcherCommentSortControl.persistentTrailingInset,
+        8,
+        reason: 'the sort button should mirror the 8pt back-button edge inset',
+      );
+      expect(
+        AnimeWitcherCommentSortControl.persistentTitleClearance,
+        lessThan(92),
+        reason: 'the title should move right with the compact sort control',
+      );
+    },
+  );
+
+  test('native single-icon toolbar host stays exactly 46pt wide', () {
+    final swiftSource = File('ios/Runner/AppDelegate.swift').readAsStringSync();
+
+    expect(
+      swiftSource,
+      contains('isCompactSingleAction(actions)'),
+      reason:
+          'the native host needs an explicit compact path so its center mirrors Back',
+    );
+    expect(
+      swiftSource,
+      contains('if isCompactSingleAction(actions) { return 46 }'),
+      reason: 'the transparent toolbar host must not keep the old 78pt minimum',
+    );
   });
 }

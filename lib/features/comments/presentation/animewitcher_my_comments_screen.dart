@@ -464,6 +464,9 @@ class _AnimeWitcherMyCommentsScreenState
             title: ApplePersistentGlassHeaderScope(
               enabled: Navigator.of(context).canPop() || usePersistentGlass,
               onBack: () => Navigator.of(context).maybePop(),
+              toolbarTrailingInset: usePersistentGlass
+                  ? AnimeWitcherCommentSortControl.persistentTrailingInset
+                  : null,
               trailingButtons: usePersistentGlass
                   ? AnimeWitcherCommentSortControl.persistentButtons(
                       context: context,
@@ -477,8 +480,12 @@ class _AnimeWitcherMyCommentsScreenState
                   : null,
               child: Padding(
                 padding: EdgeInsets.only(
-                  right: usePersistentGlass && isArabic ? 92 : 0,
-                  left: usePersistentGlass && !isArabic ? 92 : 0,
+                  right: usePersistentGlass && isArabic
+                      ? AnimeWitcherCommentSortControl.persistentTitleClearance
+                      : 0,
+                  left: usePersistentGlass && !isArabic
+                      ? AnimeWitcherCommentSortControl.persistentTitleClearance
+                      : 0,
                 ),
                 child: Align(
                   alignment:
