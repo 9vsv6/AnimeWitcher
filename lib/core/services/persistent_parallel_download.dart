@@ -2155,11 +2155,29 @@ class PersistentParallelDownload {
       if (!part.launched || part.complete || part.speed <= 0) return sum;
       return sum + part.speed * 1000 * 1000;
     });
+    final timestamp = DateTime.now();
+    final nativeBridgeContributors = session.parts
+        .where(
+          (part) =>
+              part.lastNativeBridgeAt != null &&
+              timestamp.difference(part.lastNativeBridgeAt!) <
+                  const Duration(seconds: 2) &&
+              part.speed > 0,
+        )
+        .toList(growable: false);
+    final nativeBridgeSpeedBytesPerSecond =
+        nativeBridgeContributors.fold<double>(
+          0,
+          (sum, part) => sum + part.speed * 1000 * 1000,
+        );
     // Child-reported speed is only a fallback when byte totals are unavailable.
-    // Once credible bytes exist, wait for the minimum observation window instead
-    // of turning a sub-second callback burst into stable-looking telemetry.
-    final fallbackSpeedBytesPerSecond =
-        observedBytes > 0 ? 0.0 : childSpeedBytesPerSecond;
+    // Once credible bytes exist, use it only for one fresh native byte bridge;
+    // multiple child callbacks need the estimator's minimum observation window.
+    final fallbackSpeedBytesPerSecond = observedBytes <= 0
+        ? childSpeedBytesPerSecond
+        : nativeBridgeContributors.length == 1
+        ? nativeBridgeSpeedBytesPerSecond
+        : 0.0;
     final telemetry = _speedTelemetry.observe(
       taskId: task.taskId,
       transferredBytes: observedBytes,
