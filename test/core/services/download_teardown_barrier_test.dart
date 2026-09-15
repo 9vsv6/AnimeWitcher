@@ -5,6 +5,7 @@ import 'package:animewitcher/core/network/dio_client_provider.dart';
 import 'package:animewitcher/core/services/download_continued_processing_service.dart';
 import 'package:animewitcher/core/services/download_range_transfer.dart';
 import 'package:animewitcher/core/services/download_service.dart';
+import 'package:animewitcher/core/services/download_service_readiness.dart';
 import 'package:animewitcher/core/storage/storage_service.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
