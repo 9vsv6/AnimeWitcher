@@ -111,6 +111,48 @@ jobs:
 
           safe_block = ours[safe_start:safe_end]
           merged = merged[:unsafe_start] + safe_block + merged[unsafe_end:]
+
+          # DM-14 made destructive cleanup fail closed unless the caller proves
+          # the configured app Downloads root. These temp-directory tests are
+          # synthetic, so inject their explicit test root instead of weakening
+          # the production ownership boundary.
+          resolved_call = '      await deleteDownloadedVideo(resolved);'
+          rooted_resolved_call = """      await deleteDownloadedVideo(
+            resolved,
+            appDownloadRoots: [
+              p.join(root.path, 'AnimeWitcher', 'Downloads'),
+            ],
+          );"""
+          video_call = '        await deleteDownloadedVideo(video);'
+          rooted_video_call = """        await deleteDownloadedVideo(
+          video,
+          appDownloadRoots: [
+            p.join(root.path, 'AnimeWitcher', 'Downloads'),
+          ],
+        );"""
+          if merged.count(resolved_call) != 1:
+              raise SystemExit(
+                  f'expected exactly one unrooted resolved delete, found {merged.count(resolved_call)}'
+              )
+          if merged.count(video_call) != 1:
+              raise SystemExit(
+                  f'expected exactly one indented unrooted video delete, found {merged.count(video_call)}'
+              )
+          merged = merged.replace(resolved_call, rooted_resolved_call, 1)
+          merged = merged.replace(video_call, rooted_video_call, 1)
+
+          sibling_video_call = '      await deleteDownloadedVideo(video);'
+          sibling_rooted_call = """      await deleteDownloadedVideo(
+        video,
+        appDownloadRoots: [
+          p.join(root.path, 'AnimeWitcher', 'Downloads'),
+        ],
+      );"""
+          if merged.count(sibling_video_call) != 1:
+              raise SystemExit(
+                  f'expected exactly one sibling-temp unrooted delete, found {merged.count(sibling_video_call)}'
+              )
+          merged = merged.replace(sibling_video_call, sibling_rooted_call, 1)
           path.write_text(merged)
 
           pattern = re.compile(r"\b(?:test|testWidgets)\s*\(\s*(['\"])(.*?)\1", re.S)
@@ -125,6 +167,8 @@ jobs:
               raise SystemExit(f'merged test-title mismatch; missing={missing}, extra={extra}')
           if unsafe_title in merged_titles:
               raise SystemExit('legacy destructive cleanup contract survived resolution')
+          if merged.count('appDownloadRoots: [') < 3:
+              raise SystemExit('trusted-root coverage is incomplete in cleanup tests')
           print(f'merged presentation tests: {len(merged_titles)} titles; DM-14 safe contract preserved')
           PY
 
