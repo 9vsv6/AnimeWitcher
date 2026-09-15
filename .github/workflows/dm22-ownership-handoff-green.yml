@@ -44,59 +44,59 @@ jobs:
                   raise SystemExit(f'{path}: expected one match, found {count}')
               p.write_text(text.replace(old, new, 1))
 
-          replace_once(
-              'lib/core/services/persistent_parallel_download.dart',
-              """  Future<void> _status(_ParallelSession session, TaskStatus status) async {
-    diagnosticLog?.record('parallel.status', {
-      'taskId': session.task.taskId,
-      'status': status.name,
-      'progress': session.progress,
-    });
-    if (status == TaskStatus.running) {
-      session.parentRunningReported = true;
-    } else if (status == TaskStatus.enqueued || status == TaskStatus.paused) {
-      session.parentRunningReported = false;
-    }
-    await _writeParentRecord(
-      session,
-      TaskRecord(session.task, status, session.progress, session.size),
-    );
-    onUpdate(TaskStatusUpdate(session.task, status));
-  }
-""",
-              """  Future<void> _status(_ParallelSession session, TaskStatus status) async {
-    diagnosticLog?.record('parallel.status', {
-      'taskId': session.task.taskId,
-      'status': status.name,
-      'progress': session.progress,
-    });
-    if (status == TaskStatus.running) {
-      session.parentRunningReported = true;
-    } else if (status == TaskStatus.enqueued || status == TaskStatus.paused) {
-      session.parentRunningReported = false;
-    }
-    final record = TaskRecord(
-      session.task,
-      status,
-      session.progress,
-      session.size,
-    );
-    if (status == TaskStatus.running) {
-      // Running is liveness/presentation telemetry. Queue persistence on the
-      // ordered parent-record chain without blocking later child progress.
-      onUpdate(TaskStatusUpdate(session.task, status));
-      unawaited(
-        _writeParentRecord(session, record).catchError(
-          (Object _, StackTrace __) {},
-        ),
-      );
-      return;
-    }
-    await _writeParentRecord(session, record);
-    onUpdate(TaskStatusUpdate(session.task, status));
-  }
-""",
-          )
+          old_status = '\n'.join([
+              '  Future<void> _status(_ParallelSession session, TaskStatus status) async {',
+              "    diagnosticLog?.record('parallel.status', {",
+              "      'taskId': session.task.taskId,",
+              "      'status': status.name,",
+              "      'progress': session.progress,",
+              '    });',
+              '    if (status == TaskStatus.running) {',
+              '      session.parentRunningReported = true;',
+              '    } else if (status == TaskStatus.enqueued || status == TaskStatus.paused) {',
+              '      session.parentRunningReported = false;',
+              '    }',
+              '    await _writeParentRecord(',
+              '      session,',
+              '      TaskRecord(session.task, status, session.progress, session.size),',
+              '    );',
+              '    onUpdate(TaskStatusUpdate(session.task, status));',
+              '  }',
+          ])
+          new_status = '\n'.join([
+              '  Future<void> _status(_ParallelSession session, TaskStatus status) async {',
+              "    diagnosticLog?.record('parallel.status', {",
+              "      'taskId': session.task.taskId,",
+              "      'status': status.name,",
+              "      'progress': session.progress,",
+              '    });',
+              '    if (status == TaskStatus.running) {',
+              '      session.parentRunningReported = true;',
+              '    } else if (status == TaskStatus.enqueued || status == TaskStatus.paused) {',
+              '      session.parentRunningReported = false;',
+              '    }',
+              '    final record = TaskRecord(',
+              '      session.task,',
+              '      status,',
+              '      session.progress,',
+              '      session.size,',
+              '    );',
+              '    if (status == TaskStatus.running) {',
+              '      // Running is liveness/presentation telemetry. Queue persistence on the',
+              '      // ordered parent-record chain without blocking later child progress.',
+              '      onUpdate(TaskStatusUpdate(session.task, status));',
+              '      unawaited(',
+              '        _writeParentRecord(session, record).catchError(',
+              '          (Object _, StackTrace __) {},',
+              '        ),',
+              '      );',
+              '      return;',
+              '    }',
+              '    await _writeParentRecord(session, record);',
+              '    onUpdate(TaskStatusUpdate(session.task, status));',
+              '  }',
+          ])
+          replace_once('lib/core/services/persistent_parallel_download.dart', old_status, new_status)
 
           replace_once(
               'test/core/services/download_runtime_stability_review_test.dart',
@@ -108,18 +108,15 @@ jobs:
               "'if let original = DownloadUrlSessionHook.originalComplete'",
               "'guard let original = DownloadUrlSessionHook.originalComplete'",
           )
-          replace_once(
-              'test/core/services/download_thermal_efficiency_test.dart',
-              """  test('native multipart state persistence is coalesced per parent sample', () {
-    final swift = File('ios/Runner/DownloadNativeWaitingQueue.swift')
-        .readAsStringSync();
-""",
-              """  test('native multipart state persistence is coalesced per parent sample', () {
-    final swift = File('ios/Runner/DownloadNativeWaitingQueue.swift')
-        .readAsStringSync()
-        .replaceAll('\\r\\n', '\\n');
-""",
-          )
+
+          thermal = Path('test/core/services/download_thermal_efficiency_test.dart')
+          text = thermal.read_text()
+          needle = ".readAsStringSync();"
+          marker = "native multipart state persistence is coalesced per parent sample"
+          marker_at = text.index(marker)
+          needle_at = text.index(needle, marker_at)
+          text = text[:needle_at] + ".readAsStringSync()\n        .replaceAll('\\r\\n', '\\n');" + text[needle_at + len(needle):]
+          thermal.write_text(text)
 
       - name: Format changed Dart files
         run: dart format lib/core/services/persistent_parallel_download.dart test/core/services/download_runtime_stability_review_test.dart test/core/services/download_thermal_efficiency_test.dart
@@ -139,6 +136,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add lib/core/services/persistent_parallel_download.dart test/core/services/download_runtime_stability_review_test.dart test/core/services/download_thermal_efficiency_test.dart
-          git diff --cached --exit-code && { echo "No changes to commit"; exit 1; } || true
+          git diff --cached --quiet && { echo "No changes to commit"; exit 1; }
           git commit -m "fix(downloads): unblock progress and refresh source guards"
           git push origin HEAD:plan/download-manager-reliability
