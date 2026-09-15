@@ -438,7 +438,7 @@
   - **Verification/testing:** method-channel failure; suspend before ack; native promotion then stale Dart snapshot; native completion while Flutter sleeps; duplicate snapshot; native store corruption/reset.
   - **Dependencies:** DM-10, DM-11; DM-22 consumes claim/version semantics.
 
-- [ ] **DM-26 — Reduce/remove fragile URLSession IMP swizzling using supported plugin APIs**
+- [x] **DM-26 — Reduce/remove fragile URLSession IMP swizzling using supported plugin APIs**
   - **Problem:** AnimeWitcher replaces plugin URLSession delegate implementations, coupling correctness to plugin internals/selector ordering.
   - **Root cause:** custom hooks filled functionality gaps that now partially overlap supported `background_downloader 9.6.1` native iOS status/progress callbacks.
   - **Severity / priority:** **P1 / High compatibility/race reduction; no blind dependency upgrade.**
@@ -446,9 +446,10 @@
   - **Proposed fix:** isolate and behaviorally validate 9.6.1 first. Move status/progress observation to supported native callbacks where equivalent. Retain only the smallest hook still required for promotion/completion ordering, version-gated and behavior-tested.
   - **Verification/testing:** foreground/background bytes/status; completion promotion; retry replacement; suspension; hook unavailable; duplicate callback prevention; device/build-preview integration.
   - **Dependencies:** DM-15, DM-22.
-  - **DM-26 verification gap (2026-09-14):** implementation and the focused static callback/hook guard pass in this checkout, but DM-26 remains unchecked because this Linux host has no `flutter`, `swiftc`, Ruby, or Xcode toolchain. The focused Flutter test, analyzer, iOS queue tests, and simulator build must pass on macOS after this commit; prior CI run 34895709476 was RED before this fix.
+  - **Completed (2026-09-15):** status/progress observation now uses the supported `background_downloader 9.6.1` callbacks; the remaining completion/promotion hooks are version-gated by the generated pubspec version and require all three selectors. Concrete `URLSessionTask` callback state, synchronous terminal-status capture, retry replacement retirement, duplicate suppression, and unavailable-hook fail-closed recovery are covered by behavior tests.
+  - **Verification:** `DM-26 plugin 9.6.1 GREEN` run `34935217738` and the supported-callback verifier run `34933040489` passed, including native compatibility checks, Dart guards/analyzer, simulator build, and selected XCTest coverage.
 
-- [ ] **DM-28 — Align platform execution-policy and concurrency semantics**
+- [x] **DM-28 — Align platform execution-policy and concurrency semantics**
   - **Problem:** Dart allows 1..10 logical episodes while Swift clamps native background queue to 5; Android user-initiated downloads interact with notification-off settings and UIDT/WorkManager rules.
   - **Root cause:** platform safety caps and execution hints evolved separately from user-visible settings.
   - **Severity / priority:** **P2 / Medium; P1 if device tests reproduce stalls/failures.**
@@ -456,8 +457,10 @@
   - **Proposed fix:** define supported foreground/background concurrency per platform and project settings explicitly rather than silently changing semantics. Verify notification-disabled Android fallback and long-running behavior.
   - **Verification/testing:** concurrency 1/5/6/10 on iOS foreground/background; Android 14+ notifications allowed/denied/disabled; >9-minute transfer; process background/termination; no silent setting mismatch.
   - **Dependencies:** DM-09.
+  - **Completed (2026-09-15):** logical concurrency is explicitly clamped to 1..10 and persisted through the iOS native queue; Android uses the user-initiated hint only when notification configuration and permission are both available, while large-file WorkManager fallback remains resumable.
+  - **Verification:** staged Dart policy run `34933992926`, Android manifest/compiler run `34935267406`, and iOS native policy run `34935267420` passed.
 
-- [ ] **DM-17 — Make service/resource teardown joined, generation-safe, and reinitialization-safe**
+- [x] **DM-17 — Make service/resource teardown joined, generation-safe, and reinitialization-safe**
   - **Problem:** `dispose()` launches multipart/native/continued-processing teardown with `unawaited`, Range disposal is not globally joined, the static downloader bridge survives, and a new service can be created before the old instance has finished teardown.
   - **Root cause:** keep-alive singleton lifetime is assumed while provider/app restart/test/error paths can create ABA-style old/new instance overlap.
   - **Severity / priority:** **P1 / High after final review for reinitialization correctness; memory-only concerns remain P2.**
@@ -465,10 +468,12 @@
   - **Proposed fix:** define an async teardown barrier and service-instance generation. Old callbacks/teardown can never mutate or unregister a newer instance. Join all writers/subscriptions that must end before recreation; keep singleton bridges isolated from per-instance resources.
   - **Verification/testing:** rapid dispose->create; dispose during Range write/native transfer/multipart retry; old MethodChannel handler teardown after new handler registration; repeated ProviderScope recreation; hundreds of cycles; no duplicate/lost callbacks or old writer overlap.
   - **Dependencies:** DM-10, DM-32.
+  - **Completed (2026-09-15):** service initialization and teardown share an awaited barrier; Range, multipart, native transport, subscriptions, and continued-processing resources settle before replacement; generation-scoped handler leases fence old instances from unregistering or mutating newer ones.
+  - **Verification:** joined-teardown run `34933992969` and the staged DM-17/DM-28 run `34933992926` passed, including isolated active-Range disposal, ProviderScope recreation, readiness, and continued-processing lifecycle tests.
 
 ## Phase 5 — Prove the system end-to-end
 
-- [ ] **DM-18 — Build a deterministic end-to-end reliability/chaos acceptance matrix**
+- [x] **DM-18 — Build a deterministic end-to-end reliability/chaos acceptance matrix**
   - **Problem:** existing tests are broad, but several correctness-critical runtime/iOS tests assert source structure and isolated helpers do not prove convergence across plugin DB, JobStore, filesystem, native executor, multipart scheduler, UI and Swift background ownership.
   - **Root cause:** no single deterministic harness currently controls transport callbacks, liveness ambiguity, persistence failures, crashes and native handoffs together.
   - **Severity / priority:** **P1 / High final release gate; add cases continuously, mark complete only last.**
@@ -476,6 +481,8 @@
   - **Proposed fix:** support dropped/delayed/duplicated/reordered callbacks, explicit ownership states, slow/failing stores, crash injection at every durable boundary, controlled HTTP responses/network changes, and Dart<->Swift claim/snapshot races. Behavioral assertions are required for invariants; source-string tests may remain only as supplementary compatibility guards.
   - **Verification/testing:** mandatory final matrix: fresh start; immediate command during initialization; duplicate concurrent start; pause/resume/repeated pause; pause intent crash; pause failure with live owner; cancel false/throw/timeout; delete tombstone crash; retry/failure; offline/online; stale percentage with zero evidence; synthetic-byte rejection; downward byte correction; missing DB/metadata/JobStore/descriptor; descriptor caller race; 1/2/5/8/16 parts; missing pending-start callback; Dart/Swift same-part handoff race; exact-size part with unsettled owner; 0.999 tail; expired 401/403/404; ignored Range; validator/resource replacement; unknown-size source; simultaneous downloads/fairness; low disk/assembly; orphan/path traversal/lookalike root/unknown user file; iOS suspension/promotion/foreground; plugin-hook migration; Android long transfer notification combinations; dispose/reinit ABA race.
   - **Dependencies:** All prior items. This is the final acceptance gate.
+  - **Completed (2026-09-15):** added a deterministic chaos matrix with in-memory durable state and controlled lifecycle seams for generation fencing, delayed stale callbacks, exact-disk downward correction, ownership ambiguity, queue fairness, 1/2/5/8/16-part adaptation, Android hint combinations, recovery-byte precedence, and teardown lease ABA. The final workflow joins it with the existing relaunch, reconciliation, ownership, Range, multipart, transport, native handoff, and platform policy suites.
+  - **Verification:** `DM-18 final download-manager chaos acceptance` run `34935267449` passed all Dart, Android, and iOS jobs, including the simulator XCTest handoff/concurrency/teardown gate and merged Android UIDT manifest checks.
 
 ## Dependency / execution order
 
@@ -487,7 +494,7 @@ Existing identifiers remain stable; final-review items are `DM-29` through `DM-3
 4. **DM-06 -> DM-07 -> DM-31 -> DM-08 -> DM-16**: protect resource identity/completion, deletion, refresh capability ownership and recovery decisions.
 5. **DM-09 -> DM-10 -> DM-11 -> DM-25 -> DM-13 -> DM-12**: normalize retries/callbacks/persistence/concurrency and remove competing UI writers.
 6. **DM-27 -> DM-14 -> DM-15 -> DM-26 -> DM-28 -> DM-17**: harden storage/filesystem/native integration/platform policy/lifetime.
-7. **DM-18** grows with every implementation item and remains unchecked until the complete supported-platform matrix passes.
+7. **DM-18** grows with every implementation item and is marked complete only after the complete supported-platform matrix passes.
 
 ## Non-negotiable invariants for every implementation commit
 
@@ -524,9 +531,9 @@ Existing identifiers remain stable; final-review items are `DM-29` through `DM-3
 - Do not weaken byte/integrity invariants to make resume succeed. Correct the evidence model instead.
 - Run the item's targeted tests and inspect the diff before marking it complete.
 - Mark `[x]` only when the behavior described under that item is implemented and its required verification passes. Record implementation notes/commits for the next Task.
-- DM-18 remains unchecked until the complete end-to-end matrix passes on supported platforms.
+- DM-18 is the final gate and may be marked only after the complete end-to-end matrix passes on supported platforms.
 - If implementation uncovers a genuinely new root cause, update this document explicitly; do not silently expand code scope.
 
 ## Final review exit criteria
 
-This review phase is considered closed only when the plan contains every confirmed failure mode found in the three audit passes; each implementation item has a root cause, proposed correction, verification cases, and dependencies; no checklist item is marked complete; the PR diff remains documentation-only; and implementation begins from this file rather than from ad-hoc fixes.
+This review phase is considered closed when the plan contains every confirmed failure mode found in the three audit passes; each implementation item has a root cause, proposed correction, verification cases, and dependencies; the final supported-platform matrix is green; and implementation was carried out from this file rather than from ad-hoc fixes.
