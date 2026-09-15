@@ -1,0 +1,40 @@
+name: Probe main merge conflicts
+
+on:
+  push:
+    branches:
+      - plan/download-manager-reliability
+    paths:
+      - .github/workflows/merge-main-conflict-probe.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: plan/download-manager-reliability
+          fetch-depth: 0
+
+      - name: Probe merge conflicts without changing the branch
+        shell: bash
+        run: |
+          set -uo pipefail
+          git fetch origin main
+          set +e
+          git merge --no-commit --no-ff origin/main
+          rc=$?
+          set -e
+          echo "merge_exit=$rc"
+          echo "--- conflicted files ---"
+          git diff --name-only --diff-filter=U || true
+          echo "--- conflict markers ---"
+          for file in $(git diff --name-only --diff-filter=U); do
+            echo "### $file"
+            grep -n -C 6 -E '^(<<<<<<<|=======|>>>>>>>)' "$file" || true
+          done
+          git merge --abort >/dev/null 2>&1 || true
