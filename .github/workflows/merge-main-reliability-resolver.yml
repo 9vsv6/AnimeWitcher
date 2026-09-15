@@ -6,6 +6,7 @@ on:
       - plan/download-manager-reliability
     paths:
       - .github/workflows/merge-main-reliability-resolver.yml
+      - .github/merge-main-reliability-trigger
   workflow_dispatch:
 
 permissions:
