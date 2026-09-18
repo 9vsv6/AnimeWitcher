@@ -1,0 +1,100 @@
+/// Where the app's navigation sits on a desktop window.
+///
+/// Chosen once, on the first launch, from a picker; changeable later in
+/// settings. Phones keep the floating bar: a rail eats width a handset does
+/// not have, and a top bar sits under the thumb's least reachable edge.
+library;
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../storage/storage_service.dart';
+
+enum AppLayoutStyle {
+  /// The floating bar along the bottom — the layout the app always had.
+  dock,
+
+  /// A narrow column of icons down the side.
+  sideRail,
+
+  /// A bar of named pages across the top, over the artwork on home.
+  topBar;
+
+  static AppLayoutStyle? fromName(String? raw) {
+    for (final value in AppLayoutStyle.values) {
+      if (value.name == raw?.trim()) return value;
+    }
+    return null;
+  }
+
+  String label({required bool arabic}) => switch (this) {
+    AppLayoutStyle.dock => arabic ? 'الشريط السفلي' : 'Bottom bar',
+    AppLayoutStyle.sideRail => arabic ? 'شريط جانبي' : 'Side rail',
+    AppLayoutStyle.topBar => arabic ? 'شريط علوي' : 'Top bar',
+  };
+
+  String description({required bool arabic}) => switch (this) {
+    AppLayoutStyle.dock =>
+      arabic
+          ? 'الشكل الافتراضي: شريط عائم أسفل الشاشة'
+          : 'The default: a floating bar at the bottom',
+    AppLayoutStyle.sideRail =>
+      arabic
+          ? 'أيقونات على جانب الشاشة، والمساحة كلها للمحتوى'
+          : 'Icons down the side, the full width for content',
+    AppLayoutStyle.topBar =>
+      arabic
+          ? 'أسماء الصفحات في شريط أعلى الشاشة'
+          : 'Named pages in a bar across the top',
+  };
+}
+
+/// The style actually drawn: a stored choice on a desktop, the dock anywhere
+/// else or before anything was chosen.
+AppLayoutStyle effectiveAppLayout({
+  required AppLayoutStyle? stored,
+  required bool isDesktopPlatform,
+}) {
+  if (!isDesktopPlatform) return AppLayoutStyle.dock;
+  return stored ?? AppLayoutStyle.dock;
+}
+
+/// Whether to put the picker in front of the viewer: a desktop that has
+/// never recorded a choice.
+bool shouldAskForAppLayout({
+  required AppLayoutStyle? stored,
+  required bool isDesktopPlatform,
+}) {
+  return isDesktopPlatform && stored == null;
+}
+
+/// The stored choice; null until the viewer has picked one.
+final appLayoutStyleProvider =
+    NotifierProvider<AppLayoutStyleNotifier, AppLayoutStyle?>(
+      AppLayoutStyleNotifier.new,
+    );
+
+class AppLayoutStyleNotifier extends Notifier<AppLayoutStyle?> {
+  static const String storageKey = 'app_layout_style';
+
+  StorageService get _storage => ref.read(storageServiceProvider);
+
+  @override
+  AppLayoutStyle? build() {
+    try {
+      return AppLayoutStyle.fromName(_storage.getString(storageKey));
+    } catch (_) {
+      // Unreadable storage asks again rather than keeping the app from
+      // drawing its shell.
+      return null;
+    }
+  }
+
+  void select(AppLayoutStyle style) {
+    state = style;
+    try {
+      _storage.setString(storageKey, style.name);
+    } catch (_) {
+      // Worst case the picker is offered again on the next launch.
+    }
+  }
+}

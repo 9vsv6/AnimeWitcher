@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:animewitcher/core/navigation/app_layout_style.dart';
 import 'package:animewitcher/core/navigation/taskbar_destination.dart';
+import 'package:animewitcher/core/storage/storage_service.dart';
+import 'package:animewitcher/features/news/presentation/open_news.dart';
+import 'package:animewitcher/features/onboarding/first_run_setup_screen.dart';
+import 'package:animewitcher/shared/widgets/app_navigation_bars.dart';
 import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:animewitcher/shared/widgets/custom_bottom_nav.dart';
 
@@ -28,6 +33,23 @@ class AppScaffold extends ConsumerStatefulWidget {
 }
 
 class _AppScaffoldState extends ConsumerState<AppScaffold> {
+  bool _askedForLayout = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _askForLayoutOnce());
+  }
+
+  /// The first launch opens the setup screen: layout, seasons bar and
+  /// Anime4K on one page with a live preview.
+  Future<void> _askForLayoutOnce() async {
+    if (!mounted || _askedForLayout) return;
+    _askedForLayout = true;
+    if (FirstRunSetup.isDone(ref.read(storageServiceProvider))) return;
+    await showFirstRunSetup(context);
+  }
+
   void _onItemTapped(int index, BuildContext context) {
     if (appleUsesPersistentLiquidGlassHeader) {
       applePersistentGlassHeaderController.setActiveBranch(index);
@@ -62,20 +84,90 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
     );
     final isAtDefaultHome = widget.navigationShell.currentIndex == defaultIndex;
 
+    final isDesktopPlatform = ResponsiveBreakpoints.isDesktopPlatform();
+    final layout = effectiveAppLayout(
+      stored: ref.watch(appLayoutStyleProvider),
+      isDesktopPlatform: isDesktopPlatform,
+    );
+
     final bottomInset = CustomBottomNavBar.bottomInsetFor(context);
     final navBarTotalHeight = CustomBottomNavBar.height + bottomInset;
     final mq = MediaQuery.of(context);
 
-    return PopScope(
+    Widget withShellPopScope(Widget child) => PopScope(
       canPop: shellBackLeavesApp(
         isAtDefaultHome: isAtDefaultHome,
-        isDesktopPlatform: ResponsiveBreakpoints.isDesktopPlatform(),
+        isDesktopPlatform: isDesktopPlatform,
       ),
       onPopInvokedWithResult: (didPop, result) {
         if (didPop || isAtDefaultHome) return;
         widget.navigationShell.goBranch(defaultIndex);
       },
-      child: Scaffold(
+      child: child,
+    );
+
+    void onDestination(TaskbarDestination destination) =>
+        _onItemTapped(destination.branchIndex, context);
+    final currentIndex = widget.navigationShell.currentIndex;
+
+    if (layout == AppLayoutStyle.sideRail) {
+      return withShellPopScope(
+        Scaffold(
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          body: Row(
+            children: [
+              AppSideRail(
+                destinations: taskbarDestinations,
+                currentBranchIndex: currentIndex,
+                onTap: onDestination,
+                onNews: () => openNewsScreen(context, ref),
+              ),
+              Expanded(child: widget.navigationShell),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (layout == AppLayoutStyle.topBar) {
+      // Home runs its artwork up under the bar; every other page starts
+      // below it. Only the padding changes between them, so the shell keeps
+      // its place in the tree and no branch loses its state on a switch.
+      final overArtwork =
+          currentIndex == TaskbarDestination.home.branchIndex;
+      return withShellPopScope(
+        Scaffold(
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          body: Stack(
+            children: [
+              Positioned.fill(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    top: overArtwork ? 0 : AppTopBar.height,
+                  ),
+                  child: widget.navigationShell,
+                ),
+              ),
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: AppTopBar(
+                  destinations: taskbarDestinations,
+                  currentBranchIndex: currentIndex,
+                  overArtwork: overArtwork,
+                  onTap: onDestination,
+                  onNews: () => openNewsScreen(context, ref),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return withShellPopScope(
+      Scaffold(
         resizeToAvoidBottomInset: false,
         extendBody: true,
         body: MediaQuery(
@@ -107,6 +199,9 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
                   destinations: taskbarDestinations,
                   onTap: (destination) =>
                       _onItemTapped(destination.branchIndex, context),
+                  onNews: isDesktopPlatform
+                      ? () => openNewsScreen(context, ref)
+                      : null,
                 ),
               ),
       ),

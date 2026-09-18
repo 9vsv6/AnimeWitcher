@@ -13,11 +13,16 @@ class CustomBottomNavBar extends StatelessWidget {
   final List<TaskbarDestination> destinations;
   final ValueChanged<TaskbarDestination> onTap;
 
+  /// A news button after the page tabs — on a desktop, where the news has a
+  /// button of its own instead of a row on home. Null leaves it out.
+  final VoidCallback? onNews;
+
   const CustomBottomNavBar({
     super.key,
     required this.currentBranchIndex,
     required this.destinations,
     required this.onTap,
+    this.onNews,
   });
 
   static const double height = 64;
@@ -48,7 +53,8 @@ class CustomBottomNavBar extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
-    final count = destinations.length;
+    // The news cell counts, so the highlight lands on the right tab.
+    final count = destinations.length + (onNews == null ? 0 : 1);
     final selectedIndex = destinations.indexWhere(
       (destination) => destination.branchIndex == currentBranchIndex,
     );
@@ -85,13 +91,26 @@ class CustomBottomNavBar extends StatelessWidget {
       for (final destination in destinations)
         Expanded(
           child: _NavTabCell(
-            destination: destination,
+            icon: destination.icon,
+            selectedIcon: destination.selectedIcon,
             label: destination.label(localizations),
             isSelected: destination.branchIndex == currentBranchIndex,
             onTap: () {
               HapticFeedback.selectionClick();
               onTap(destination);
             },
+          ),
+        ),
+      if (onNews case final openNews?)
+        Expanded(
+          child: _NavTabCell(
+            icon: Icons.newspaper_rounded,
+            selectedIcon: Icons.newspaper_rounded,
+            label: localizations.localeName.toLowerCase().startsWith('ar')
+                ? 'الأخبار'
+                : 'News',
+            isSelected: false,
+            onTap: openNews,
           ),
         ),
     ];
@@ -169,13 +188,15 @@ class CustomBottomNavBar extends StatelessWidget {
 }
 
 class _NavTabCell extends StatefulWidget {
-  final TaskbarDestination destination;
+  final IconData icon;
+  final IconData selectedIcon;
   final String label;
   final bool isSelected;
   final VoidCallback onTap;
 
   const _NavTabCell({
-    required this.destination,
+    required this.icon,
+    required this.selectedIcon,
     required this.label,
     required this.isSelected,
     required this.onTap,
@@ -222,9 +243,7 @@ class _NavTabCellState extends State<_NavTabCell> {
               onTap: widget.onTap,
               child: Center(
                 child: Icon(
-                  widget.isSelected
-                      ? widget.destination.selectedIcon
-                      : widget.destination.icon,
+                  widget.isSelected ? widget.selectedIcon : widget.icon,
                   color: widget.isSelected
                       ? colorScheme.primary
                       : colorScheme.onSurfaceVariant,

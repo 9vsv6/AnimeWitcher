@@ -159,7 +159,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final scaffold = AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
-        backgroundColor: Colors.black,
+        // The theme's page colour, so the amber theme reaches home too.
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: _buildBody(
           context,
           homeDataAsync,
@@ -262,6 +263,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       );
     }
 
+    // On a desktop every layout — dock, side rail, top bar — carries a news
+    // button of its own, so home leaves the news row out rather than showing
+    // it twice. Phones keep the row.
+    final newsHasItsOwnButton = ResponsiveBreakpoints.isDesktopPlatform();
+    List<NewsItem> newsFor(List<NewsItem> news) =>
+        newsHasItsOwnButton ? const <NewsItem>[] : news;
+
     final activeProvider = ref.watch(activeProviderProvider);
     if (activeProvider == null) {
       return _buildNoProviderState(context, l10n, isWidescreen: isWidescreen);
@@ -286,7 +294,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       ),
       HomeOffline() => _buildErrorState(context, ref),
       HomeError() => _buildErrorState(context, ref),
-      HomeSuccess(:final data, :final news) => _withGradientEdgeHint(
+      HomeSuccess(:final data, news: final homeNews) => _withGradientEdgeHint(
         MouseDragRefreshIndicator(
           onRefresh: () async {
             await Future.wait<void>([
@@ -331,7 +339,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   _buildProviderSectionsWithNews(
                     context,
                     data,
-                    news,
+                    newsFor(homeNews),
                     activeProvider,
                   ),
                 ),

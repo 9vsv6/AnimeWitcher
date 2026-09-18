@@ -38,7 +38,6 @@ import 'core/providers/device_info_provider.dart';
 import 'shared/widgets/loading_indicator.dart';
 import 'features/settings/presentation/general_settings_provider.dart';
 import 'core/account/account_providers.dart';
-import 'core/widgets/welcome_dialog.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -296,7 +295,8 @@ class _MyAppState extends ConsumerState<MyApp>
         }),
       );
       _checkAppUpdates();
-      _maybeShowWelcomeDialog();
+      // The first-launch welcome (theme, skipping, sign-in) is part of the
+      // setup screen AppScaffold opens, so it is not shown separately here.
     });
   }
 
@@ -411,17 +411,6 @@ class _MyAppState extends ConsumerState<MyApp>
     }
   }
 
-  Future<void> _maybeShowWelcomeDialog() async {
-    if (!mounted) return;
-    final navContext = ref
-        .read(appRouterProvider)
-        .routerDelegate
-        .navigatorKey
-        .currentContext;
-    if (navContext == null || !navContext.mounted) return;
-    await maybeShowWelcomeDialog(navContext, ref);
-  }
-
   Future<void> _toggleFullscreen() async {
     if (!(Platform.isMacOS || Platform.isWindows)) return;
     try {
@@ -438,7 +427,7 @@ class _MyAppState extends ConsumerState<MyApp>
     // blocking the first frame. Local library/history remain immediately
     // available while the async provider performs its merge in the background.
     ref.watch(animeWitcherAccountControllerProvider);
-    final themeMode = ref.watch(appThemeModeProvider);
+    final themeStyle = ref.watch(appThemeStyleProvider);
     final appRouter = ref.watch(appRouterProvider);
     final locale = ref.watch(localeProvider);
     final profileAsync = ref.watch(deviceProfileProvider);
@@ -480,11 +469,15 @@ class _MyAppState extends ConsumerState<MyApp>
           scrollBehavior: const MaterialScrollBehavior().copyWith(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           ),
-          themeMode: themeMode,
+          // The chosen theme decides both the mode and which dark theme is
+          // drawn; there is no longer a system-following choice.
+          themeMode: themeStyle.themeMode,
           theme: lightDynamic != null
               ? AppTheme.createLightTheme(lightDynamic)
               : AppTheme.createLightTheme(null),
-          darkTheme: AppTheme.createDarkTheme(darkScheme),
+          darkTheme: themeStyle == AppThemeStyle.amber
+              ? AppTheme.createAmberTheme()
+              : AppTheme.createDarkTheme(darkScheme),
           routerConfig: appRouter,
           locale: locale,
           localizationsDelegates: const [

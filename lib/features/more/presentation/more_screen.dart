@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/account/account_providers.dart';
+import '../../../core/navigation/app_layout_style.dart';
+import '../../../core/theme/theme_provider.dart';
+import '../../../core/utils/responsive_breakpoints.dart';
+import '../../../shared/widgets/live_previews.dart';
+import '../../details/presentation/widgets/details_seasons_bar.dart';
 import '../../../core/account/animewitcher_account_models.dart';
 import '../../characters/presentation/characters_screen.dart';
 import '../../settings/presentation/account_screen.dart';
@@ -421,9 +426,8 @@ class _MoreTile extends StatelessWidget {
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: Theme.of(context).textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -464,21 +468,84 @@ class _SettingsGroupPane extends ConsumerWidget {
     // Settings rows are a label at one end and its value at the other. Left
     // to fill a 1600-point pane they put the two on opposite sides of the
     // desk, so they keep to the shared reading measure.
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(
-          maxWidth: LayoutConstants.contentMaxWidth,
+    final list = ConstrainedBox(
+      constraints: const BoxConstraints(
+        maxWidth: LayoutConstants.contentMaxWidth,
+      ),
+      child: ListView(
+        padding: EdgeInsets.fromLTRB(
+          8,
+          16,
+          8,
+          MediaQuery.viewPaddingOf(context).bottom + 96,
         ),
-        child: ListView(
-          padding: EdgeInsets.fromLTRB(
-            8,
-            16,
-            8,
-            MediaQuery.viewPaddingOf(context).bottom + 96,
-          ),
-          children: [groups[index]],
-        ),
+        children: [groups[index]],
       ),
     );
+
+    final previews = _previewsFor(context, ref, index);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // The preview sits beside the settings only where both fit; a
+        // narrower pane keeps the list alone rather than squeezing it.
+        if (previews.isEmpty || constraints.maxWidth < 900) {
+          return Center(child: list);
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Align(alignment: Alignment.topCenter, child: list),
+            ),
+            SizedBox(
+              width: (constraints.maxWidth * 0.36).clamp(320.0, 520.0),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 20, 24, 24),
+                child: Column(
+                  children: [
+                    for (final preview in previews) Expanded(child: preview),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Pictures of what this group changes, drawn from the saved settings so
+  /// they move as the rows beside them are changed: home and an anime page
+  /// for the general group. The player is pictured in the first-launch setup
+  /// only; its group, like the others, keeps the full width here.
+  List<Widget> _previewsFor(BuildContext context, WidgetRef ref, int index) {
+    final arabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final caption = arabic ? 'معاينة مباشرة' : 'Live preview';
+    final theme = ref.watch(appThemeStyleProvider);
+    switch (index) {
+      case 0:
+        final layout = effectiveAppLayout(
+          stored: ref.watch(appLayoutStyleProvider),
+          isDesktopPlatform: ResponsiveBreakpoints.isDesktopPlatform(),
+        );
+        return [
+          LivePreviewFrame(
+            followTheme: true,
+            caption: '$caption · ${arabic ? 'الرئيسية' : 'Home'}',
+            child: HomeLayoutPreview(layout: layout, theme: theme),
+          ),
+          LivePreviewFrame(
+            followTheme: true,
+            caption: arabic ? 'صفحة الأنمي' : 'Anime page',
+            child: SeasonsBarPagePreview(
+              style: ref.watch(seasonsBarStyleProvider),
+              theme: theme,
+            ),
+          ),
+        ];
+      default:
+        return const <Widget>[];
+    }
   }
 }

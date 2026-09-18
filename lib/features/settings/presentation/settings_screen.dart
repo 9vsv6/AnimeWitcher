@@ -28,8 +28,29 @@ import 'cache_provider.dart';
 
 import 'package:animewitcher/core/utils/localized_text.dart';
 
+import '../../../core/navigation/app_layout_style.dart';
+import '../../details/presentation/widgets/details_seasons_bar.dart';
+import '../../details/presentation/widgets/seasons_bar_style_picker.dart';
+import '../../../shared/widgets/app_layout_picker.dart';
 import '../../player/data/anime4k.dart';
 import 'widgets/anime4k_dialog.dart';
+
+/// Turns Anime4K on or off from its row. Turning it on with no shaders yet
+/// opens the dialog, which is where they are downloaded; turning it on with
+/// no model chosen picks A, the general-purpose one.
+Future<void> _setAnime4k(BuildContext context, WidgetRef ref, bool on) async {
+  final notifier = ref.read(playerSettingsProvider.notifier);
+  final settings =
+      ref.read(playerSettingsProvider).asData?.value ?? const PlayerSettings();
+  await notifier.setAnime4kEnabled(on);
+  if (!on) return;
+  if (settings.anime4kMode == Anime4kMode.off) {
+    await notifier.setAnime4kMode(Anime4kMode.a);
+  }
+  if (settings.anime4kShaderDirectory.trim().isEmpty && context.mounted) {
+    showAnime4kDialog(context, ref);
+  }
+}
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -150,7 +171,6 @@ class SettingsScreen extends ConsumerWidget {
     bool isTv,
   ) {
     final versionAsync = ref.watch(appVersionProvider);
-    final themeMode = ref.watch(appThemeModeProvider);
     final generalSettings = ref.watch(generalSettingsProvider);
     final animeDataSettings = ref.watch(animeDataSourceSettingsProvider);
 
@@ -170,10 +190,23 @@ class SettingsScreen extends ConsumerWidget {
           SettingsTile(
             icon: Icons.dark_mode_rounded,
             title: l10n.appTheme,
-            subtitle: themeMode == ThemeMode.system
-                ? l10n.system
-                : (themeMode == ThemeMode.dark ? l10n.dark : l10n.light),
-            onTap: () => showThemeDialog(context, ref, themeMode),
+            // Picked on the row: three themes, no dialog in between.
+            trailing: const SizedBox.shrink(),
+            below: SettingsChoices<AppThemeStyle>(
+              values: AppThemeStyle.values,
+              selected: ref.watch(appThemeStyleProvider),
+              label: (style) => style.label(arabic: isArabic),
+              onSelected: (style) =>
+                  ref.read(appThemeStyleProvider.notifier).select(style),
+            ),
+          ),
+          SettingsTile(
+            icon: Icons.view_carousel_rounded,
+            title: isArabic ? 'شريط المواسم' : 'Seasons bar',
+            subtitle: ref
+                .watch(seasonsBarStyleProvider)
+                .label(arabic: isArabic),
+            onTap: () => showSeasonsBarStylePicker(context, ref),
           ),
           SettingsTile(
             icon: Icons.home_rounded,
@@ -200,8 +233,18 @@ class SettingsScreen extends ConsumerWidget {
               generalSettings.taskbarOrder,
               generalSettings.hiddenTaskbarItems,
             ),
-            isLast: true,
+            isLast: !ResponsiveBreakpoints.isDesktopPlatform(),
           ),
+          if (ResponsiveBreakpoints.isDesktopPlatform())
+            SettingsTile(
+              icon: Icons.view_quilt_rounded,
+              title: isArabic ? 'شكل التطبيق' : 'App layout',
+              subtitle:
+                  (ref.watch(appLayoutStyleProvider) ?? AppLayoutStyle.dock)
+                      .label(arabic: isArabic),
+              onTap: () => showAppLayoutPicker(context, ref),
+              isLast: true,
+            ),
         ],
       ),
       const SizedBox(height: LayoutConstants.spacingLg),
@@ -418,11 +461,31 @@ class SettingsScreen extends ConsumerWidget {
             SettingsTile(
               icon: Icons.auto_awesome_rounded,
               title: 'Anime4K',
-              subtitle: !playerSettings.anime4kEnabled
-                  ? appText(context, english: 'Off', arabic: 'إيقاف')
-                  : '${playerSettings.anime4kMode.label} '
-                        '(${playerSettings.anime4kQuality.suffix})',
+              subtitle: appText(
+                context,
+                english: 'Upscales anime as it plays',
+                arabic: 'يرفع جودة الأنمي أثناء التشغيل',
+              ),
+              // On and off on the row, and the model under it once on. The
+              // dialog keeps the rest: the shader download and the size.
+              trailing: Switch(
+                value: playerSettings.anime4kEnabled,
+                onChanged: (on) => _setAnime4k(context, ref, on),
+              ),
               onTap: () => showAnime4kDialog(context, ref),
+              below: !playerSettings.anime4kEnabled
+                  ? null
+                  : SettingsChoices<Anime4kMode>(
+                      values: [
+                        for (final mode in Anime4kMode.values)
+                          if (mode != Anime4kMode.off) mode,
+                      ],
+                      selected: playerSettings.anime4kMode,
+                      label: (mode) => mode.label,
+                      onSelected: (mode) => ref
+                          .read(playerSettingsProvider.notifier)
+                          .setAnime4kMode(mode),
+                    ),
             ),
           SettingsTile(
             icon: Icons.tune_rounded,

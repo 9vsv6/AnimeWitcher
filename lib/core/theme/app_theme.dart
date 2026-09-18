@@ -138,6 +138,74 @@ class AppTheme {
     );
   }
 
+  // Amber theme: warm charcoal surfaces and an amber accent.
+  static const Color amberAccent = Color(0xFFEF9F27);
+  static const Color amberOnAccent = Color(0xFF412402);
+  static const Color amberBackground = Color(0xFF141412);
+  static const Color amberSurface = Color(0xFF1C1B19);
+  static const Color amberSurfaceHigh = Color(0xFF232322);
+  static const Color amberSurfaceHighest = Color(0xFF2C2C2A);
+  static const Color amberSelected = Color(0xFF633806);
+  static const Color amberOnSelected = Color(0xFFFAC775);
+  static const Color amberMuted = Color(0xFFB4B2A9);
+
+  /// The dark theme redrawn in warm charcoal with an amber accent.
+  ///
+  /// Built on [createDarkTheme] so it keeps every shape, font and component
+  /// setting that theme carries, and only the colours change.
+  static ThemeData createAmberTheme() {
+    final base = createDarkTheme(null);
+    final scheme = base.colorScheme.copyWith(
+      primary: amberAccent,
+      onPrimary: amberOnAccent,
+      primaryContainer: amberSelected,
+      onPrimaryContainer: amberOnSelected,
+      secondary: amberAccent,
+      onSecondary: amberOnAccent,
+      secondaryContainer: amberSelected,
+      onSecondaryContainer: amberOnSelected,
+      tertiary: amberAccent,
+      onTertiary: amberOnAccent,
+      surface: amberBackground,
+      surfaceDim: amberBackground,
+      surfaceBright: amberSurfaceHighest,
+      surfaceContainerLowest: amberBackground,
+      surfaceContainerLow: amberSurface,
+      surfaceContainer: amberSurface,
+      surfaceContainerHigh: amberSurfaceHigh,
+      surfaceContainerHighest: amberSurfaceHighest,
+      onSurfaceVariant: amberMuted,
+      outlineVariant: const Color(0xFF3A3936),
+    );
+    return base.copyWith(
+      colorScheme: scheme,
+      scaffoldBackgroundColor: amberBackground,
+      canvasColor: amberBackground,
+      iconTheme: base.iconTheme.copyWith(color: amberMuted),
+      dialogTheme: base.dialogTheme.copyWith(backgroundColor: amberSurface),
+      bottomSheetTheme: base.bottomSheetTheme.copyWith(
+        backgroundColor: amberSurface,
+        modalBackgroundColor: amberSurface,
+      ),
+      appBarTheme: base.appBarTheme.copyWith(
+        backgroundColor: amberBackground,
+        surfaceTintColor: Colors.transparent,
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? amberOnAccent
+              : amberMuted,
+        ),
+        trackColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? amberAccent
+              : amberSurfaceHighest,
+        ),
+      ),
+    );
+  }
+
   static ThemeData createDarkTheme(ColorScheme? _) {
     // Keep the official AnimeWitcher accent fixed instead of allowing Android
     // dynamic colors to replace it with a device-specific blue/purple palette.

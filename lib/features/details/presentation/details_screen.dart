@@ -47,6 +47,7 @@ import 'package:animewitcher/l10n/generated/app_localizations.dart';
 
 import 'package:animewitcher/core/utils/localized_text.dart';
 import 'package:animewitcher/core/services/notification_service.dart';
+import 'widgets/details_seasons_bar.dart';
 import 'widgets/details_hero_actions.dart';
 import 'widgets/episode_search.dart';
 import 'widgets/next_airing_chip.dart';
@@ -2117,6 +2118,11 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          DetailsSeasonsBar(
+            itemUrl: widget.item.url,
+            current: item,
+            onOpen: (child) => _openExtraAnime(item, child),
+          ),
           DetailsSeasonListWrapper(itemUrl: widget.item.url),
           const SizedBox(height: 16),
           DetailsDesktopEpisodeColumn(
@@ -2255,6 +2261,11 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              DetailsSeasonsBar(
+                itemUrl: widget.item.url,
+                current: item,
+                onOpen: (child) => _openExtraAnime(item, child),
+              ),
               DetailsSeasonListWrapper(itemUrl: widget.item.url),
               const SizedBox(height: 12),
             ],
