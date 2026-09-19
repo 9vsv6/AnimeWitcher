@@ -233,9 +233,9 @@ class SettingsScreen extends ConsumerWidget {
               generalSettings.taskbarOrder,
               generalSettings.hiddenTaskbarItems,
             ),
-            isLast: !ResponsiveBreakpoints.isDesktopPlatform(),
+            isLast: !appLayoutsAvailable(context),
           ),
-          if (ResponsiveBreakpoints.isDesktopPlatform())
+          if (appLayoutsAvailable(context))
             SettingsTile(
               icon: Icons.view_quilt_rounded,
               title: isArabic ? 'شكل التطبيق' : 'App layout',

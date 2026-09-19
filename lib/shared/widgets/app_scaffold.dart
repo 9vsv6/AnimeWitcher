@@ -85,9 +85,11 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
     final isAtDefaultHome = widget.navigationShell.currentIndex == defaultIndex;
 
     final isDesktopPlatform = ResponsiveBreakpoints.isDesktopPlatform();
+    // Desktops and tablets offer the rail and the top bar; phones keep the dock.
+    final layoutsAvailable = appLayoutsAvailable(context);
     final layout = effectiveAppLayout(
       stored: ref.watch(appLayoutStyleProvider),
-      isDesktopPlatform: isDesktopPlatform,
+      isDesktopPlatform: layoutsAvailable,
     );
 
     final bottomInset = CustomBottomNavBar.bottomInsetFor(context);
@@ -143,7 +145,7 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
               Positioned.fill(
                 child: Padding(
                   padding: EdgeInsets.only(
-                    top: overArtwork ? 0 : AppTopBar.height,
+                    top: overArtwork ? 0 : AppTopBar.totalHeight(context),
                   ),
                   child: widget.navigationShell,
                 ),
@@ -199,7 +201,7 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
                   destinations: taskbarDestinations,
                   onTap: (destination) =>
                       _onItemTapped(destination.branchIndex, context),
-                  onNews: isDesktopPlatform
+                  onNews: layoutsAvailable
                       ? () => openNewsScreen(context, ref)
                       : null,
                 ),

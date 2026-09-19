@@ -316,7 +316,13 @@ extension on _PlayerSettingsPanelState {
 
   Widget _choiceList(List<PlayerPanelChoice> list, Color accent) {
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxHeight: 260),
+      constraints: BoxConstraints(
+        // A phone on its side is short: the list scrolls within it.
+        maxHeight: (MediaQuery.sizeOf(context).height * 0.4).clamp(
+          120.0,
+          260.0,
+        ),
+      ),
       child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

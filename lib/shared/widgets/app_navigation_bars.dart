@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/navigation/taskbar_destination.dart';
+import '../../core/utils/responsive_breakpoints.dart';
 import '../../l10n/generated/app_localizations.dart';
 
 /// Room left at the window's right edge for the caption buttons
@@ -39,8 +40,14 @@ class AppSideRail extends StatelessWidget {
       width: width,
       // A step up from the page, in the theme's own colours.
       color: Theme.of(context).colorScheme.surfaceContainerLow,
-      // Clear of the title bar, which is where the window is dragged from.
-      padding: const EdgeInsets.only(top: 64, bottom: 16),
+      // Clear of the title bar on a desktop, where the window is dragged
+      // from, and of the status bar on a tablet.
+      padding: EdgeInsets.only(
+        top: ResponsiveBreakpoints.isDesktopPlatform()
+            ? 64
+            : MediaQuery.viewPaddingOf(context).top + 16,
+        bottom: 16,
+      ),
       child: Column(
         children: [
           ..._destinationItems(l10n, accent),
@@ -161,6 +168,14 @@ class AppTopBar extends StatelessWidget {
   /// with the caption buttons.
   static const double height = 56;
 
+  /// The bar's full height: [height], plus the status bar on a tablet,
+  /// which the bar sits below rather than behind.
+  static double totalHeight(BuildContext context) =>
+      height +
+      (ResponsiveBreakpoints.isDesktopPlatform()
+          ? 0
+          : MediaQuery.viewPaddingOf(context).top);
+
   final List<TaskbarDestination> destinations;
   final int currentBranchIndex;
   final bool overArtwork;
@@ -177,7 +192,8 @@ class AppTopBar extends StatelessWidget {
     final reserve = _captionButtonsReserve();
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
-      height: height,
+      height: totalHeight(context),
+      padding: EdgeInsets.only(top: totalHeight(context) - height),
       decoration: BoxDecoration(
         color: overArtwork
             ? Colors.black.withValues(alpha: 0.35)

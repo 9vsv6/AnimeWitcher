@@ -1023,7 +1023,8 @@ class AnimeWitcherPlayerControlsState
   }
 
   /// A desktop button with its keyboard key under it.
-  Widget _withKeyHint(Widget button, String keyName) => _showKeyHints
+  Widget _withKeyHint(Widget button, String keyName, {bool enabled = true}) =>
+      enabled && _showKeyHints
       ? Column(
           mainAxisSize: MainAxisSize.min,
           children: [button, PlayerKeyHint(keyName)],
@@ -1038,12 +1039,15 @@ class AnimeWitcherPlayerControlsState
       ) ??
       true;
 
-  /// The right end of the desktop bar: episodes (E), ⚙ (S) and fullscreen
-  /// (F). The ⚙ button is there only when its panel has something in it.
-  List<Widget> _desktopActions(
+  /// The right end of the bar: picture-in-picture and rotate on a phone or
+  /// tablet, then episodes (E), ⚙ (S) and, on a desktop, fullscreen (F).
+  /// Speed, Anime4K and the picture size are in the ⚙ panel, which is there
+  /// only when it has something in it. Key names show on a desktop only.
+  List<Widget> _compactActions(
     List<PlayerChromeAction> chromeActions,
-    AppLocalizations l10n,
-  ) {
+    AppLocalizations l10n, {
+    required bool keyHints,
+  }) {
     final hasPanel = PlayerSettingsPanel.hasContent(
       showAnime4k: chromeActions.contains(PlayerChromeAction.anime4k),
       showResize: chromeActions.contains(PlayerChromeAction.resize),
@@ -1051,6 +1055,21 @@ class AnimeWitcherPlayerControlsState
       hasQuality: ref.read(playerControllerProvider).currentStream != null,
     );
     return [
+      if (chromeActions.contains(PlayerChromeAction.pip))
+        PlayerIconButton(
+          key: const ValueKey<String>('playerPipButton'),
+          icon: LucideIcons.pictureInPicture2200,
+          tooltip: l10n.pip,
+          onPressed: () => unawaited(_enterPip()),
+        ),
+      if (chromeActions.contains(PlayerChromeAction.rotate))
+        PlayerIconButton(
+          icon: LucideIcons.rotateCw200,
+          iconBuilder: (color, size) =>
+              RotateScreenIcon(size: size, color: color),
+          tooltip: l10n.rotate,
+          onPressed: _toggleOrientation,
+        ),
       if (chromeActions.contains(PlayerChromeAction.episodes))
         _withKeyHint(
           PlayerIconButton(
@@ -1059,6 +1078,7 @@ class AnimeWitcherPlayerControlsState
             onPressed: openEpisodesPanel,
           ),
           'E',
+          enabled: keyHints,
         ),
       if (hasPanel)
         _withKeyHint(
@@ -1070,6 +1090,7 @@ class AnimeWitcherPlayerControlsState
             highlight: _settingsOpen,
           ),
           'S',
+          enabled: keyHints,
         ),
       if (chromeActions.contains(PlayerChromeAction.desktopFullscreen))
         _withKeyHint(
@@ -1081,6 +1102,7 @@ class AnimeWitcherPlayerControlsState
             onPressed: toggleFullscreen,
           ),
           'F',
+          enabled: keyHints,
         ),
     ];
   }
@@ -1610,7 +1632,10 @@ class AnimeWitcherPlayerControlsState
                   ),
                   Positioned(
                     right: 20,
-                    bottom: HotstarPlayerStyle.bottomChromeHeight + 8,
+                    // Above the bar: a phone's bar is much shorter.
+                    bottom: MediaQuery.sizeOf(context).shortestSide < 600
+                        ? 92
+                        : HotstarPlayerStyle.bottomChromeHeight + 8,
                     child: _buildSettingsPanel(
                       supportsPlaybackSpeed: supportsPlaybackSpeed,
                       playbackSpeed: playbackSpeed,
@@ -2116,9 +2141,16 @@ class AnimeWitcherPlayerControlsState
                     center: center,
                     // A desktop keeps episodes, ⚙ and fullscreen on the bar;
                     // speed, Anime4K and size live in the ⚙ panel.
-                    actions: isDesktop && !_isTv
-                        ? _desktopActions(chromeActions, l10n)
-                        : actions,
+                    // Desktop, phone and tablet share one bar: episodes, the
+                    // ⚙ panel and the window or screen controls. TV keeps its
+                    // own row, built for a remote.
+                    actions: _isTv
+                        ? actions
+                        : _compactActions(
+                            chromeActions,
+                            l10n,
+                            keyHints: isDesktop,
+                          ),
                   ),
                 ),
               ],

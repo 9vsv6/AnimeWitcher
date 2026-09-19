@@ -74,4 +74,28 @@ void main() {
     expect(find.text('شريط علوي'), findsOneWidget);
     expect(find.text('الشريط السفلي'), findsOneWidget);
   });
+
+  testWidgets('tablets get the layouts, phones keep the dock', (tester) async {
+    Future<bool> availableAt(Size size) async {
+      late bool available;
+      await tester.pumpWidget(
+        MediaQuery(
+          data: MediaQueryData(size: size),
+          child: Builder(
+            builder: (context) {
+              available = appLayoutsAvailable(context);
+              return const SizedBox();
+            },
+          ),
+        ),
+      );
+      return available;
+    }
+
+    // Tests run as Android: the size decides.
+    expect(await availableAt(const Size(390, 844)), isFalse); // phone
+    expect(await availableAt(const Size(844, 390)), isFalse); // on its side
+    expect(await availableAt(const Size(820, 1180)), isTrue); // tablet
+    expect(await availableAt(const Size(1180, 820)), isTrue); // on its side
+  });
 }

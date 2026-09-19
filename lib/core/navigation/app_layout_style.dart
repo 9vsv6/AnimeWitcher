@@ -1,11 +1,14 @@
-/// Where the app's navigation sits on a desktop window.
+/// Where the app's navigation sits on a desktop window or a tablet.
 ///
 /// Chosen once, on the first launch, from a picker; changeable later in
 /// settings. Phones keep the floating bar: a rail eats width a handset does
 /// not have, and a top bar sits under the thumb's least reachable edge.
 library;
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../utils/responsive_breakpoints.dart';
 
 import '../storage/storage_service.dart';
 
@@ -97,4 +100,13 @@ class AppLayoutStyleNotifier extends Notifier<AppLayoutStyle?> {
       // Worst case the picker is offered again on the next launch.
     }
   }
+}
+
+/// Whether this screen can use the side rail and the top bar: a desktop, or
+/// a tablet — a screen whose short side is at least 600 points, which a
+/// phone in either orientation is not. A tablet has the width a rail takes
+/// and still leaves a comfortable page; a phone does not.
+bool appLayoutsAvailable(BuildContext context) {
+  if (ResponsiveBreakpoints.isDesktopPlatform()) return true;
+  return MediaQuery.sizeOf(context).shortestSide >= 600;
 }

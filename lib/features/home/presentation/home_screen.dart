@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:animewitcher/shared/widgets/mouse_drag_refresh_indicator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:animewitcher/core/navigation/app_layout_style.dart';
 import 'package:animewitcher/core/navigation/taskbar_destination.dart';
 
 import 'home_provider.dart';
@@ -266,7 +267,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     // On a desktop every layout — dock, side rail, top bar — carries a news
     // button of its own, so home leaves the news row out rather than showing
     // it twice. Phones keep the row.
-    final newsHasItsOwnButton = ResponsiveBreakpoints.isDesktopPlatform();
+    final newsHasItsOwnButton = appLayoutsAvailable(context);
     List<NewsItem> newsFor(List<NewsItem> news) =>
         newsHasItsOwnButton ? const <NewsItem>[] : news;
 

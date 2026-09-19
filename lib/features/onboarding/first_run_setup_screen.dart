@@ -87,7 +87,8 @@ class _FirstRunSetupScreenState extends ConsumerState<FirstRunSetupScreen> {
   late FillerBehaviour _filler;
   int _index = 0;
 
-  bool get _isDesktop => ResponsiveBreakpoints.isDesktopPlatform();
+  /// Desktops and tablets choose a layout; phones always have the dock.
+  bool get _isDesktop => appLayoutsAvailable(context);
 
   List<_Step> get _steps => [
     _Step.appearance,

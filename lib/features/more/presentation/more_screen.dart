@@ -527,7 +527,7 @@ class _SettingsGroupPane extends ConsumerWidget {
       case 0:
         final layout = effectiveAppLayout(
           stored: ref.watch(appLayoutStyleProvider),
-          isDesktopPlatform: ResponsiveBreakpoints.isDesktopPlatform(),
+          isDesktopPlatform: appLayoutsAvailable(context),
         );
         return [
           LivePreviewFrame(
