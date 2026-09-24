@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:animewitcher/features/manga/presentation/widgets/manga_chapter_row.dart';
 import 'package:animewitcher/core/domain/entity/manga.dart';
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
 import 'package:animewitcher/core/extensions/base_provider.dart';
@@ -7,7 +8,6 @@ import 'package:animewitcher/core/extensions/extension_manager.dart';
 import 'package:animewitcher/core/services/artwork_fallback_service.dart';
 import 'package:animewitcher/core/storage/storage_service.dart';
 import 'package:animewitcher/core/storage/manga_reading_repository.dart';
-import 'package:animewitcher/core/storage/storage_service.dart';
 import 'package:animewitcher/features/manga/presentation/manga_details_screen.dart';
 import 'package:animewitcher/features/manga/reader/manga_reader_cover_provider.dart';
 import 'package:animewitcher/features/manga/reader/manga_reader_settings.dart';
@@ -32,6 +32,11 @@ final class _NoArtwork extends ArtworkFallbackService {
 }
 
 final class _MangaProvider extends AnimeWitcherProvider {
+  _MangaProvider({this.chapterCount});
+
+  /// Serves this many chapters instead of the single 12.5.
+  final int? chapterCount;
+
   int detailsCalls = 0;
   int chaptersCalls = 0;
   bool detailsFinished = false;
@@ -97,6 +102,19 @@ final class _MangaProvider extends AnimeWitcherProvider {
   Future<List<MangaChapter>> getMangaChapters(String url) async {
     chaptersCalls += 1;
     chaptersStartedBeforeDetailsFinished = !detailsFinished;
+    final count = chapterCount;
+    if (count != null) {
+      return <MangaChapter>[
+        for (var i = 1; i <= count; i++)
+          MangaChapter(
+            id: '$i',
+            mangaId: 'm1',
+            url: 'chapter://$i',
+            name: 'الفصل $i',
+            number: i.toDouble(),
+          ),
+      ];
+    }
     return const <MangaChapter>[
       MangaChapter(
         id: '12.5',
@@ -386,10 +404,17 @@ void main() {
       await _pumpUntil(
         tester,
         () => find
-            .byKey(const ValueKey<String>('manga-chapter-row-12.5'))
+            .byKey(const ValueKey<String>('manga-details-wide'))
             .evaluate()
             .isNotEmpty,
-        reason: 'the chapters did not appear on the wide page',
+        reason: 'the wide page did not appear',
+      );
+      // The rows are built as the page scrolls to them.
+      final page = find.byType(Scrollable).first;
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey<String>('manga-chapter-row-12.5')),
+        200,
+        scrollable: page,
       );
 
       expect(
@@ -406,9 +431,72 @@ void main() {
         ),
         findsOneWidget,
       );
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey<String>('manga-genre-Action')),
+        200,
+        scrollable: page,
+      );
       expect(
         find.byKey(const ValueKey<String>('manga-genre-Action')),
         findsOneWidget,
+      );
+    },
+  );
+  testWidgets(
+    'a long manga on a wide window builds only the chapters in view',
+    (tester) async {
+      tester.view.physicalSize = const Size(1400, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_app(_MangaProvider(chapterCount: 1500)));
+      await _pumpUntil(
+        tester,
+        () => find
+            .byKey(const ValueKey<String>('manga-details-wide'))
+            .evaluate()
+            .isNotEmpty,
+        reason: 'the wide page did not appear',
+      );
+      final page = find.byType(Scrollable).first;
+      // Down to the chapters, and a screen into them.
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey<String>('manga-chapter-range-menu')),
+        200,
+        scrollable: page,
+      );
+      await tester.drag(page, const Offset(0, -600));
+      await tester.pumpAndSettle();
+
+      final built = find.byType(MangaChapterRow).evaluate().length;
+      expect(built, greaterThan(0));
+      // A screenful, not all fifteen hundred.
+      expect(built, lessThan(60));
+
+      // "Go to" still reaches a chapter far from any built row.
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey<String>('manga-chapter-go-to')),
+        -200,
+        scrollable: page,
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('manga-chapter-go-to')),
+        '1200',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey<String>('manga-chapter-row-1200')),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .getRect(
+              find.byKey(const ValueKey<String>('manga-chapter-row-1200')),
+            )
+            .overlaps(Offset.zero & tester.view.physicalSize),
+        isTrue,
       );
     },
   );

@@ -84,6 +84,10 @@ class AccountAvatarButton extends ConsumerWidget {
                   : Image.network(
                       photo,
                       fit: BoxFit.cover,
+                      // Decoded at the size it is drawn, not the photo's.
+                      cacheWidth:
+                          (size * MediaQuery.devicePixelRatioOf(context))
+                              .ceil(),
                       errorBuilder: (_, _, _) => Center(child: fallback()),
                     ),
             ),

@@ -784,37 +784,51 @@ class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen>
                   ?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
-            state.chapters.when(
-              loading: () => const SizedBox(
+          ],
+        ),
+        // The chapters are built as they scroll into view.
+        slivers: <Widget>[
+          state.chapters.when(
+            loading: () => const SliverToBoxAdapter(
+              child: SizedBox(
                 height: 200,
                 child: Center(child: AppLoadingIndicator()),
               ),
-              error: (_, _) => SizedBox(
+            ),
+            error: (_, _) => SliverToBoxAdapter(
+              child: SizedBox(
                 height: 200,
                 child: _RetryPanel(onRetry: controller.retry),
-              ),
-              data: (chapters) => MangaChapterList(
-                embedded: true,
-                chapters: chapters,
-                downloads: downloads,
-                onDeleteDownload: (download) =>
-                    unawaited(confirmAndRemoveDownload(context, ref, download)),
-                onOpen: open,
-                onDownload:
-                    widget.onDownloadChapter ??
-                    (chapter) => unawaited(controller.downloadChapter(chapter)),
               ),
             ),
-            const SizedBox(height: 44),
-            if (state.details.hasError)
-              SizedBox(
-                height: 200,
-                child: _RetryPanel(onRetry: controller.retry),
-              )
-            else
-              MangaInformationSection(item: item),
-          ],
-        ),
+            data: (chapters) => MangaChapterList(
+              embedded: true,
+              chapters: chapters,
+              downloads: downloads,
+              onDeleteDownload: (download) =>
+                  unawaited(confirmAndRemoveDownload(context, ref, download)),
+              onOpen: open,
+              onDownload:
+                  widget.onDownloadChapter ??
+                  (chapter) => unawaited(controller.downloadChapter(chapter)),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                const SizedBox(height: 44),
+                if (state.details.hasError)
+                  SizedBox(
+                    height: 200,
+                    child: _RetryPanel(onRetry: controller.retry),
+                  )
+                else
+                  MangaInformationSection(item: item),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

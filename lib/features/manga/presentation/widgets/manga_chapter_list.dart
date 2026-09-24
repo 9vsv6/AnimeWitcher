@@ -1,5 +1,6 @@
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderAbstractViewport;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/domain/entity/manga.dart';
@@ -36,7 +37,8 @@ class MangaChapterList extends ConsumerStatefulWidget {
 
   /// Laid out as part of a longer page that does the scrolling — the wide
   /// details layout, where the chapters follow the synopsis the way the
-  /// episodes do for an anime — rather than as a list of its own.
+  /// episodes do for an anime — rather than as a list of its own. The list
+  /// is then a sliver, for that page's [CustomScrollView].
   final bool embedded;
 
   @override
@@ -63,6 +65,9 @@ class _MangaChapterListState extends ConsumerState<MangaChapterList> {
   /// Roughly one row's height, to bring an unbuilt row near the screen
   /// before scrolling it exactly into place.
   static const double _approxRowExtent = 72;
+
+  /// The toolbar above the rows, when embedded in a page's scroll.
+  final GlobalKey _headKey = GlobalKey();
 
   bool get _selecting => _selectedChapterIds.isNotEmpty;
 
@@ -93,7 +98,7 @@ class _MangaChapterListState extends ConsumerState<MangaChapterList> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToTarget());
   }
 
-  void _scrollToTarget({bool retried = false}) {
+  void _scrollToTarget({int attempt = 0}) {
     if (!mounted) return;
     final target = _targetKey.currentContext;
     if (target != null) {
@@ -105,18 +110,84 @@ class _MangaChapterListState extends ConsumerState<MangaChapterList> {
       );
       return;
     }
-    // A long list builds only the rows near the screen: move close to the
-    // target first, then place it exactly once it exists.
-    if (retried || widget.embedded || !_scrollController.hasClients) return;
+    // A long list builds only the rows near the screen: work out from the
+    // rows that are built where the target must be, jump there, and place
+    // it exactly once it exists. A second pass corrects rows that are not
+    // all the same height.
+    if (attempt >= 3) return;
     final index = _visible.indexWhere((c) => c.id == _targetId);
     if (index < 0) return;
-    final position = _scrollController.position;
-    _scrollController.jumpTo(
-      (index * _approxRowExtent).clamp(0.0, position.maxScrollExtent),
+    final built = _builtRows();
+    ScrollPosition? position;
+    double? offset;
+    if (built.isNotEmpty) {
+      final first = built.first;
+      final last = built.last;
+      final extent = last.index > first.index
+          ? (last.offset - first.offset) / (last.index - first.index)
+          : _approxRowExtent;
+      position = first.position;
+      offset = first.offset + (index - first.index) * extent;
+    } else if (widget.embedded) {
+      // Inside the page's own scroll, with no row built yet: the rows
+      // start below the toolbar, wherever the page has put it.
+      final headContext = _headKey.currentContext;
+      final head = headContext?.findRenderObject();
+      if (head is! RenderBox || !head.attached) return;
+      final viewport = RenderAbstractViewport.maybeOf(head);
+      position = Scrollable.maybeOf(headContext!)?.position;
+      if (viewport == null) return;
+      offset =
+          viewport.getOffsetToReveal(head, 0).offset +
+          head.size.height +
+          index * _approxRowExtent;
+    } else if (_scrollController.hasClients) {
+      position = _scrollController.position;
+      offset = index * _approxRowExtent;
+    }
+    if (position == null || offset == null) return;
+    position.jumpTo(
+      offset.clamp(position.minScrollExtent, position.maxScrollExtent),
     );
     WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _scrollToTarget(retried: true),
+      (_) => _scrollToTarget(attempt: attempt + 1),
     );
+  }
+
+  /// The rows built right now, in list order, each with where its scroll
+  /// puts it at the top of the screen.
+  List<({int index, double offset, ScrollPosition position})> _builtRows() {
+    final indexOf = <String, int>{
+      for (var i = 0; i < _visible.length; i++) _visible[i].id: i,
+    };
+    final rows = <({int index, double offset, ScrollPosition position})>[];
+    void visit(Element element) {
+      final widget = element.widget;
+      if (widget is MangaChapterRow) {
+        final index = indexOf[widget.chapter.id];
+        final box = element.renderObject;
+        final position = Scrollable.maybeOf(element)?.position;
+        if (index != null &&
+            box is RenderBox &&
+            box.attached &&
+            position != null) {
+          final viewport = RenderAbstractViewport.maybeOf(box);
+          if (viewport != null) {
+            rows.add((
+              index: index,
+              offset: viewport.getOffsetToReveal(box, 0).offset,
+              position: position,
+            ));
+          }
+        }
+        return;
+      }
+      element.visitChildren(visit);
+    }
+
+    (context as Element).visitChildren(visit);
+    rows.sort((a, b) => a.index.compareTo(b.index));
+    return rows;
   }
 
   void _goTo(String raw) {
@@ -695,11 +766,12 @@ class _MangaChapterListState extends ConsumerState<MangaChapterList> {
     final ascending = ref.watch(episodeSortAscendingProvider);
 
     if (widget.chapters.isEmpty) {
-      return Center(
+      final note = Center(
         child: Text(
           l10n?.mangaNoChapters ?? (isArabic ? 'لا توجد فصول' : 'No chapters'),
         ),
       );
+      return widget.embedded ? SliverToBoxAdapter(child: note) : note;
     }
 
     final ordered = ascending
@@ -795,17 +867,27 @@ class _MangaChapterListState extends ConsumerState<MangaChapterList> {
 
     if (widget.embedded) {
       // The page above already names this section, so the tools sit at its
-      // head; the selection actions take their place while choosing.
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          if (_selecting) _selectionBar(context) else toolbar,
-          const SizedBox(height: 8),
-          if (chapters.isEmpty) emptyNote(),
-          for (var i = 0; i < chapters.length; i++) ...<Widget>[
-            if (i > 0) const Divider(height: 1),
-            row(chapters[i]),
-          ],
+      // head; the selection actions take their place while choosing. The
+      // rows are built as they scroll into view: a long manga has well over
+      // a thousand of them.
+      return SliverMainAxisGroup(
+        slivers: <Widget>[
+          SliverToBoxAdapter(
+            child: Column(
+              key: _headKey,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                if (_selecting) _selectionBar(context) else toolbar,
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+          if (chapters.isEmpty) SliverToBoxAdapter(child: emptyNote()),
+          SliverList.separated(
+            itemCount: chapters.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (context, index) => row(chapters[index]),
+          ),
         ],
       );
     }
