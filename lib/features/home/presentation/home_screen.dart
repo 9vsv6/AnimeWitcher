@@ -14,6 +14,7 @@ import 'package:animewitcher/features/library/presentation/history_provider.dart
 
 import 'widgets/home_hero_carousel.dart';
 import 'widgets/home_hero_layout.dart';
+import 'widgets/latest_manga_chapters_section.dart';
 import 'widgets/media_horizontal_list.dart';
 import 'view_all_screen.dart';
 import '../../../shared/widgets/loading_indicator.dart';
@@ -37,6 +38,7 @@ import '../../../shared/widgets/taskbar_visibility.dart';
 
 import 'package:animewitcher/features/news/presentation/news_list_screen.dart';
 import 'package:animewitcher/features/news/presentation/news_utils.dart';
+import 'package:animewitcher/core/domain/entity/manga.dart';
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -117,9 +119,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         baseUrl + '/watch/' + Uri.encodeComponent(animeId),
       );
       if (!context.mounted) return;
-      DetailsRoute(
-        $extra: DetailsRouteExtra(item: details),
-      ).push<void>(context);
+      DetailsRoute($extra: DetailsRouteExtra(item: details))
+          .push<void>(context);
     } catch (_) {
       // The article remains usable even if its linked anime is unavailable.
     }
@@ -152,7 +153,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final homeDataAsync = ref.watch(homeDataProvider);
     final continueWatching = ref.watch(continueWatchingProvider);
     final profile = ref.watch(deviceProfileProvider).asData?.value;
-    final isWidescreen = profile?.isTv == true ||
+    final isWidescreen =
+        profile?.isTv == true ||
         context.isTv ||
         profile?.isLargeScreen == true ||
         context.isTabletOrLarger;
@@ -183,6 +185,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     BuildContext context,
     Map<String, List<MultimediaItem>> data,
     List<NewsItem> news,
+    List<MangaLatestChapter> latestManga,
     AnimeWitcherProvider provider,
   ) {
     final entries = visibleHomeRailEntries(data).toList(growable: false);
@@ -231,20 +234,40 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             limit: provider.viewAllPageSize,
           ),
           onTap: (item) {
-            DetailsRoute(
-              $extra: DetailsRouteExtra(item: item),
-            ).push<void>(context);
+            DetailsRoute($extra: DetailsRouteExtra(item: item))
+                .push<void>(context);
           },
           heroTagPrefix: 'home',
           forcePortrait: isLatestAddedSectionTitle(entry.key),
         ),
       );
+      if (latestManga.isNotEmpty && _isNewEpisodesSectionTitle(entry.key)) {
+        sections.add(
+          LatestMangaChaptersSection(
+            title: AppLocalizations.of(context)!.latestChapters,
+            items: latestManga,
+            onTap: (latest) {
+              MangaDetailsRoute(
+                $extra: MangaDetailsRouteExtra(item: latest.manga),
+              ).push<void>(context);
+            },
+          ),
+        );
+      }
       if (news.isNotEmpty && index == newsAfterIndex) {
         sections.add(buildNewsSection());
       }
     }
 
     return sections;
+  }
+
+  bool _isNewEpisodesSectionTitle(String title) {
+    final normalized = title.trim().toLowerCase();
+    return normalized.contains('الحلقات الجديدة') ||
+        normalized.contains('حلقات جديدة') ||
+        normalized.contains('new episodes') ||
+        normalized.contains('latest episodes');
   }
 
   Widget _buildBody(
@@ -295,62 +318,63 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       ),
       HomeOffline() => _buildErrorState(context, ref),
       HomeError() => _buildErrorState(context, ref),
-      HomeSuccess(:final data, news: final homeNews) => _withGradientEdgeHint(
-        MouseDragRefreshIndicator(
-          onRefresh: () async {
-            await Future.wait<void>([
-              ref.read(continueWatchingProvider.notifier).refreshFromServer(),
-              ref.read(homeDataProvider.notifier).fetch(keepCurrent: true),
-            ]);
-          },
-          child: CustomScrollView(
-            controller: _scrollController,
-            slivers: [
-              if (homeHeroMovies(data) != null)
-                SliverToBoxAdapter(
-                  child: HomeHeroCarousel(
-                    movies: homeHeroMovies(data)!,
-                    scrollController: _scrollController,
-                    onTap: (item) {
-                      DetailsRoute(
-                        $extra: DetailsRouteExtra(item: item),
-                      ).push<void>(context);
-                    },
+      HomeSuccess(:final data, news: final homeNews, :final latestManga) =>
+        _withGradientEdgeHint(
+          MouseDragRefreshIndicator(
+            onRefresh: () async {
+              await Future.wait<void>([
+                ref.read(continueWatchingProvider.notifier).refreshFromServer(),
+                ref.read(homeDataProvider.notifier).fetch(keepCurrent: true),
+              ]);
+            },
+            child: CustomScrollView(
+              controller: _scrollController,
+              slivers: [
+                if (homeHeroMovies(data) != null)
+                  SliverToBoxAdapter(
+                    child: HomeHeroCarousel(
+                      movies: homeHeroMovies(data)!,
+                      scrollController: _scrollController,
+                      onTap: (item) {
+                        DetailsRoute($extra: DetailsRouteExtra(item: item))
+                            .push<void>(context);
+                      },
+                    ),
+                  )
+                else if (!isWidescreen)
+                  // Keep content below the status area when no banner is present.
+                  SliverPadding(
+                    padding: EdgeInsets.only(
+                      top: MediaQuery.viewPaddingOf(context).top,
+                    ),
                   ),
-                )
-              else if (!isWidescreen)
-                // Keep content below the status area when no banner is present.
-                SliverPadding(
-                  padding: EdgeInsets.only(
-                    top: MediaQuery.viewPaddingOf(context).top,
+
+                if (continueWatching.isNotEmpty)
+                  SliverToBoxAdapter(
+                    child: ContinueWatchingSection(
+                      title: l10n.continueWatching,
+                      items: continueWatching,
+                      topPadding: isWidescreen ? 0 : null,
+                    ),
+                  ),
+
+                SliverList(
+                  delegate: SliverChildListDelegate(
+                    _buildProviderSectionsWithNews(
+                      context,
+                      data,
+                      newsFor(homeNews),
+                      latestManga,
+                      activeProvider,
+                    ),
                   ),
                 ),
 
-              if (continueWatching.isNotEmpty)
-                SliverToBoxAdapter(
-                  child: ContinueWatchingSection(
-                    title: l10n.continueWatching,
-                    items: continueWatching,
-                    topPadding: isWidescreen ? 0 : null,
-                  ),
-                ),
-
-              SliverList(
-                delegate: SliverChildListDelegate(
-                  _buildProviderSectionsWithNews(
-                    context,
-                    data,
-                    newsFor(homeNews),
-                    activeProvider,
-                  ),
-                ),
-              ),
-
-              const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
-            ],
+                const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
+              ],
+            ),
           ),
         ),
-      ),
     };
   }
 

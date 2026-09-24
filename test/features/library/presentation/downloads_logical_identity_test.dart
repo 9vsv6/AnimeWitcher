@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('DM-24 downloads UI logical identity', () {
+  group('V2 downloads UI logical identity', () {
     test('DownloadItem carries the canonical logical id', () {
       final source = File(
         'lib/features/library/presentation/downloads_provider.dart',
@@ -18,7 +18,7 @@ void main() {
       expect(body, contains('this.logicalId'));
     });
 
-    test('known different logical ids never fall through to URL/file matching', () {
+    test('known different logical ids do not fall through to fallback matching', () {
       final source = File(
         'lib/features/library/presentation/downloads_provider.dart',
       ).readAsStringSync();
@@ -28,16 +28,16 @@ void main() {
       expect(end, greaterThan(start));
       final body = source.substring(start, end);
 
-      expect(body, contains('a.logicalId'));
-      expect(body, contains('b.logicalId'));
-      expect(body, contains('return a.logicalId == b.logicalId'));
+      expect(body, contains('logicalA'));
+      expect(body, contains('logicalB'));
+      expect(body, contains('return logicalA == logicalB'));
       expect(
-        body.indexOf('return a.logicalId == b.logicalId'),
-        lessThan(body.indexOf('downloadTrackingUrl')),
+        body.indexOf('return logicalA == logicalB'),
+        lessThan(body.indexOf('trackingUrl')),
       );
     });
 
-    test('grouping uses legacy URL/file keys only when logical id is absent', () {
+    test('grouping uses tracking/file keys only when logical id is absent', () {
       final source = File(
         'lib/features/library/presentation/downloads_provider.dart',
       ).readAsStringSync();
@@ -50,6 +50,8 @@ void main() {
       expect(body, contains('byLogicalId'));
       expect(body, contains('if (logicalId != null && logicalId.isNotEmpty)'));
       expect(body, contains('continue;'));
+      expect(body, contains('trackingUrl'));
+      expect(body, contains('destinationPath'));
     });
   });
 }

@@ -53,10 +53,16 @@ void main() {
       );
     });
 
-    // The plan document this used to read, ANIME4K_PERFORMANCE_PLAN.md, was
-    // deleted upstream once the work it tracked shipped. The retired scope it
-    // checked — Eco/Auto, MetalFX — is still held by the benchmark evidence
-    // test above.
+    test('retired root performance plan stays removed', () {
+      expect(
+        File('ANIME4K_PERFORMANCE_PLAN.md').existsSync(),
+        isFalse,
+        reason:
+            'The finalized Anime4K plan was intentionally removed after scope '
+            'cleanup; the checked-in benchmark evidence remains the durable '
+            'physical-validation contract.',
+      );
+    });
 
     test('temporary one-shot preview workflow is removed before main merge', () {
       expect(

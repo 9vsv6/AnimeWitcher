@@ -8,8 +8,11 @@ import '../../features/library/presentation/library_screen.dart';
 import '../../features/library/presentation/downloads_screen.dart';
 import '../../features/more/presentation/more_screen.dart';
 import '../../features/details/presentation/details_screen.dart';
+import '../../features/manga/presentation/manga_details_screen.dart';
+import '../../features/manga/reader/manga_reader_screen.dart';
 import '../../features/player/presentation/player_screen.dart';
 import '../../features/home/presentation/view_all_screen.dart';
+import '../domain/entity/manga.dart';
 import '../domain/entity/multimedia_item.dart';
 import '../../shared/widgets/app_scaffold.dart';
 import '../storage/settings_repository.dart';
@@ -130,6 +133,26 @@ class DetailsRouteExtra {
   final int? resumeSeason;
 }
 
+class MangaDetailsRouteExtra {
+  const MangaDetailsRouteExtra({required this.item});
+
+  final MultimediaItem item;
+}
+
+class MangaReaderRouteExtra {
+  const MangaReaderRouteExtra({
+    required this.manga,
+    required this.chapter,
+    required this.chapters,
+    this.localChapterDirectory,
+  });
+
+  final MultimediaItem manga;
+  final MangaChapter chapter;
+  final List<MangaChapter> chapters;
+  final String? localChapterDirectory;
+}
+
 class PlayerRouteExtra {
   const PlayerRouteExtra({
     required this.item,
@@ -177,6 +200,35 @@ class DetailsRoute extends GoRouteData with $DetailsRoute {
       resumeEpisodeUrl: $extra.resumeEpisodeUrl,
       resumeEpisodeNumber: $extra.resumeEpisodeNumber,
       resumeSeason: $extra.resumeSeason,
+    );
+  }
+}
+
+@TypedGoRoute<MangaDetailsRoute>(path: '/manga-details')
+class MangaDetailsRoute extends GoRouteData with $MangaDetailsRoute {
+  const MangaDetailsRoute({required this.$extra});
+
+  final MangaDetailsRouteExtra $extra;
+
+  @override
+  Widget build(BuildContext context, GoRouterState state) {
+    return MangaDetailsScreen(item: $extra.item);
+  }
+}
+
+@TypedGoRoute<MangaReaderRoute>(path: '/manga-reader')
+class MangaReaderRoute extends GoRouteData with $MangaReaderRoute {
+  const MangaReaderRoute({required this.$extra});
+
+  final MangaReaderRouteExtra $extra;
+
+  @override
+  Widget build(BuildContext context, GoRouterState state) {
+    return MangaReaderScreen(
+      manga: $extra.manga,
+      chapter: $extra.chapter,
+      chapters: $extra.chapters,
+      localChapterDirectory: $extra.localChapterDirectory,
     );
   }
 }

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:html_unescape/html_unescape.dart';
 
 import '../../account/animewitcher_character_models.dart';
+import '../../domain/entity/manga.dart';
 import '../../domain/entity/multimedia_item.dart';
 import '../../network/bounded_batch_scheduler.dart';
 import '../../network/next_airing_timeout.dart';
@@ -15,6 +16,7 @@ import '../../utils/episode_label.dart';
 import '../../utils/artwork_host_fallback.dart';
 import '../../utils/safe_uri.dart';
 import '../base_provider.dart';
+import 'animewitcher_manga_mapping.dart';
 import 'mediafire_utils.dart';
 import 'server_extraction_utils.dart';
 
@@ -145,6 +147,17 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
   final Map<String, DateTime> _detailSourceExpiresAt = <String, DateTime>{};
   final Map<String, Future<Map<String, dynamic>>> _detailSourceRequests =
       <String, Future<Map<String, dynamic>>>{};
+  final Map<String, MultimediaItem> _mangaDetailsCache =
+      <String, MultimediaItem>{};
+  final Map<String, DateTime> _mangaDetailsExpiresAt = <String, DateTime>{};
+  final Map<String, List<MangaChapter>> _mangaChapterCache =
+      <String, List<MangaChapter>>{};
+  final Map<String, DateTime> _mangaChapterExpiresAt = <String, DateTime>{};
+  final Map<String, List<MangaPage>> _mangaPageCache =
+      <String, List<MangaPage>>{};
+  final Map<String, DateTime> _mangaPageExpiresAt = <String, DateTime>{};
+  List<MangaLatestChapter>? _latestMangaCache;
+  DateTime _latestMangaExpiresAt = DateTime.fromMillisecondsSinceEpoch(0);
   final Map<String, List<_EpisodeRecord>> _episodeRecordCache =
       <String, List<_EpisodeRecord>>{};
   final Map<String, DateTime> _episodeRecordExpiresAt = <String, DateTime>{};
@@ -174,6 +187,14 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       'AppleWebKit/537.36 (KHTML, like Gecko) '
       'Chrome/131.0.0.0 Safari/537.36';
 
+  static const List<String> _mangaLekMirrorHosts = <String>[
+    'manga-leko.net',
+    'mangalik.net',
+    'lekmanga.online',
+    'like-manga.net',
+    'lekmanga.site',
+    'manga-leko.site',
+  ];
   static const Duration _httpTimeout = Duration(seconds: 15);
   static const Duration _algoliaConnectTimeout = Duration(milliseconds: 2000);
   static const Duration _algoliaReadTimeout = Duration(milliseconds: 5000);
@@ -229,6 +250,7 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
   @override
   Set<ProviderType> get supportedTypes => const <ProviderType>{
     ProviderType.anime,
+    ProviderType.manga,
     ProviderType.movie,
   };
 
@@ -2455,6 +2477,789 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       items: items,
       nextOffset: (pageNumber + 1) * safeLimit,
       hasMore: hasMore,
+    );
+  }
+
+  @override
+  Future<ProviderMediaPage> searchAnimationPage(
+    String query,
+    ProviderSearchFilters filters, {
+    int offset = 0,
+    int limit = 30,
+    CancelToken? cancelToken,
+  }) async {
+    await _refreshRemoteConstants();
+    if (!_isSearchActive) {
+      throw const AnimeWitcherSearchDisabledException('لا يوجد بيانات');
+    }
+
+    final safeLimit = limit.clamp(10, 50).toInt();
+    final safeOffset = offset < 0 ? 0 : offset;
+    final pageNumber = safeOffset ~/ safeLimit;
+    final payload = await _algoliaQuery(
+      'all_animation',
+      query: query.trim(),
+      page: pageNumber,
+      hitsPerPage: safeLimit,
+      attributes: _searchAttributes,
+      cancelToken: cancelToken,
+      throwOnFailure: true,
+    );
+    final rawHits = _list(payload['hits']);
+    final items = await _dedupeHits(rawHits);
+    final nbPages = int.tryParse(_text(payload['nbPages'])) ?? 0;
+    final hasMore = nbPages > 0
+        ? pageNumber + 1 < nbPages
+        : rawHits.length >= safeLimit;
+    return ProviderMediaPage(
+      items: items,
+      nextOffset: (pageNumber + 1) * safeLimit,
+      hasMore: hasMore,
+    );
+  }
+
+  String _mangaSearchIndexForSort(String sort) {
+    // The live September 2026 backend currently exposes only this Manga sort
+    // index. Keep unsupported sort values on the verified index instead of
+    // issuing guaranteed-failing requests to stale APK-era replicas.
+    return 'manga_views_desc';
+  }
+
+  @override
+  Future<ProviderMediaPage> searchMangaPage(
+    String query,
+    ProviderSearchFilters filters, {
+    int offset = 0,
+    int limit = 30,
+    CancelToken? cancelToken,
+  }) async {
+    await _refreshRemoteConstants();
+    if (!_isSearchActive) {
+      throw const AnimeWitcherSearchDisabledException('لا يوجد بيانات');
+    }
+
+    final safeLimit = limit.clamp(10, 50).toInt();
+    final safeOffset = offset < 0 ? 0 : offset;
+    final pageNumber = safeOffset ~/ safeLimit;
+    final payload = await _algoliaQuery(
+      _mangaSearchIndexForSort(filters.sort),
+      query: query.trim(),
+      page: pageNumber,
+      hitsPerPage: safeLimit,
+      cancelToken: cancelToken,
+      throwOnFailure: true,
+    );
+    final rawHits = _list(payload['hits']);
+    final items = <MultimediaItem>[];
+    final seen = <String>{};
+    for (final raw in rawHits) {
+      final source = _map(raw);
+      if (source.isEmpty) continue;
+      final item = mapAnimeWitcherMangaHit(source);
+      if (item.title.isEmpty || item.url.endsWith('/manga/')) continue;
+      if (seen.add(item.url)) items.add(item);
+    }
+
+    final nbPages = int.tryParse(_text(payload['nbPages'])) ?? 0;
+    final hasMore = nbPages > 0
+        ? pageNumber + 1 < nbPages
+        : rawHits.length >= safeLimit;
+    return ProviderMediaPage(
+      items: items,
+      nextOffset: (pageNumber + 1) * safeLimit,
+      hasMore: hasMore,
+    );
+  }
+
+  String _mangaIdFromUrl(String url) {
+    final uri = safeTryParseUri(url.trim());
+    if (uri == null || uri.pathSegments.isEmpty) return '';
+    final segments = uri.pathSegments.where((value) => value.isNotEmpty).toList();
+    if (segments.length < 2 || segments[segments.length - 2] != 'manga') {
+      return '';
+    }
+    return segments.last.trim();
+  }
+
+  @override
+  Future<MultimediaItem> getMangaDetails(String url) async {
+    final id = _mangaIdFromUrl(url);
+    if (id.isEmpty) {
+      throw StateError('AnimeWitcher Manga id is missing.');
+    }
+
+    final cached = _mangaDetailsCache[id];
+    if (cached != null &&
+        _mangaDetailsExpiresAt[id]?.isAfter(DateTime.now()) == true) {
+      return cached;
+    }
+
+    final fields = await _firestoreDocumentFields('manga_list/$id');
+    if (fields.isEmpty) {
+      throw StateError('AnimeWitcher Manga was not found.');
+    }
+    final item = mapAnimeWitcherMangaHit(
+      <String, Object?>{'objectID': id, ...fields},
+    );
+    _mangaDetailsCache[id] = item;
+    _mangaDetailsExpiresAt[id] = DateTime.now().add(_detailDataTtl);
+    return item;
+  }
+
+  Future<String> _mangaHtml(
+    String url, {
+    String? referer,
+    CancelToken? cancelToken,
+    bool Function(String html)? acceptHtml,
+  }) async {
+    final original = safeTryParseUri(url.trim());
+    if (original == null ||
+        (original.scheme != 'https' && original.scheme != 'http') ||
+        original.host.isEmpty) {
+      throw StateError('AnimeWitcher Manga source URL is invalid.');
+    }
+
+    Object? lastError;
+    final hosts = <String>[
+      original.host,
+      for (final host in _mangaLekMirrorHosts)
+        if (host != original.host) host,
+    ];
+    for (final host in hosts) {
+      final uri = original.replace(scheme: 'https', host: host);
+      final parsedReferer = referer == null || referer.isEmpty
+          ? null
+          : safeTryParseUri(referer);
+      final effectiveReferer = parsedReferer == null
+          ? 'https://$host/'
+          : parsedReferer.replace(scheme: 'https', host: host).toString();
+      try {
+        final response = await _dio.get<dynamic>(
+          uri.toString(),
+          cancelToken: cancelToken,
+          options: Options(
+            responseType: ResponseType.plain,
+            headers: <String, String>{
+              'User-Agent':
+                  'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) '
+                  'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 '
+                  'Mobile/15E148 Safari/604.1',
+              'Accept': 'text/html,application/xhtml+xml',
+              'Referer': effectiveReferer,
+            },
+            connectTimeout: _httpTimeout,
+            receiveTimeout: _httpTimeout,
+            sendTimeout: _httpTimeout,
+            validateStatus: (status) =>
+                status != null && status >= 200 && status < 500,
+          ),
+        );
+        final status = response.statusCode ?? 0;
+        final html = response.data?.toString() ?? '';
+        if (status >= 200 && status < 300 && html.isNotEmpty) {
+          if (acceptHtml == null || acceptHtml(html)) return html;
+          lastError = StateError(
+            'AnimeWitcher Manga source returned unexpected content.',
+          );
+          continue;
+        }
+        lastError = StateError(
+          'AnimeWitcher Manga source request failed with status $status.',
+        );
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw StateError(
+      'AnimeWitcher Manga source failed on all mirrors: '
+      '${lastError.runtimeType}.',
+    );
+  }
+
+  String _mangaArchiveSlug(String sourceUrl) {
+    final uri = safeTryParseUri(sourceUrl.trim());
+    if (uri == null) return '';
+    final segments = uri.pathSegments
+        .where((segment) => segment.trim().isNotEmpty)
+        .toList();
+    for (var index = segments.length - 1; index >= 0; index--) {
+      final segment = segments[index].trim();
+      if (segment.isEmpty ||
+          segment == 'manga' ||
+          segment == 'tag' ||
+          segment == 'category' ||
+          segment == 'page' ||
+          RegExp(r'^[0-9]+$').hasMatch(segment)) {
+        continue;
+      }
+      return segment;
+    }
+    return '';
+  }
+
+  Future<List<MangaChapter>> _loadMangaArchiveChapters({
+    required String sourceUrl,
+    required String mangaId,
+    int maxPages = 50,
+  }) async {
+    final slug = _mangaArchiveSlug(sourceUrl);
+    if (slug.isEmpty) return const <MangaChapter>[];
+
+    final encodedSlug = Uri.encodeComponent(slug);
+    final roots = <String>[
+      'https://manga-leko.net/tag/' + encodedSlug + '/',
+      'https://manga-leko.net/category/' + encodedSlug + '/',
+    ];
+
+    for (final root in roots) {
+      final chaptersByKey = <String, MangaChapter>{};
+      var currentUrl = root;
+      final visited = <String>{};
+
+      for (var page = 0; page < maxPages; page++) {
+        if (!visited.add(currentUrl)) break;
+        try {
+          final html = await _mangaHtml(
+            currentUrl,
+            acceptHtml: (html) => parseMangaLekArchiveChapters(
+              html: html,
+              mangaId: mangaId,
+              documentUrl: currentUrl,
+            ).isNotEmpty,
+          );
+          final parsed = parseMangaLekArchiveChapters(
+            html: html,
+            mangaId: mangaId,
+            documentUrl: currentUrl,
+          );
+          for (final chapter in parsed) {
+            final key = chapter.number?.toString() ?? chapter.url;
+            chaptersByKey.putIfAbsent(key, () => chapter);
+          }
+
+          if (page + 1 >= maxPages) break;
+          final next = parseMangaLekArchiveNextPage(
+            html: html,
+            documentUrl: currentUrl,
+          );
+          if (next == null || next.isEmpty) break;
+          currentUrl = next;
+        } catch (_) {
+          break;
+        }
+      }
+
+      if (chaptersByKey.isNotEmpty) {
+        final chapters = chaptersByKey.values.toList()
+          ..sort(
+            (a, b) => (b.number ?? -1).compareTo(a.number ?? -1),
+          );
+        return List<MangaChapter>.unmodifiable(chapters);
+      }
+    }
+    return const <MangaChapter>[];
+  }
+
+  double? _firestoreMangaChapterNumber(String name, String docId) {
+    final label = RegExp(r'\d+(?:[.,]\d+)?').firstMatch(name)?.group(0);
+    final normalized = label?.replaceAll(',', '.');
+    return double.tryParse(normalized ?? '') ?? double.tryParse(docId);
+  }
+  MangaChapter? _mangaChapterFromFields(
+    Map<String, dynamic> fields, {
+    required String mangaId,
+    String documentId = '',
+  }) {
+    final docId = _text(fields['doc_id']);
+    final chapterId = documentId.isNotEmpty ? documentId : docId;
+    final name = _text(fields['name']);
+    if (chapterId.isEmpty || name.isEmpty) return null;
+    final publishedRaw =
+        fields['date'] ?? fields['published_at'] ?? fields['publishedAt'];
+    final publishedText = _text(publishedRaw);
+    return MangaChapter(
+      id: chapterId,
+      mangaId: mangaId,
+      url:
+          'https://animewitcher.com/manga/${Uri.encodeComponent(mangaId)}/chapters/${Uri.encodeComponent(chapterId)}',
+      name: name,
+      number: _firestoreMangaChapterNumber(name, docId),
+      publishedAt: publishedText.isEmpty ? null : DateTime.tryParse(publishedText),
+    );
+  }
+
+  MangaChapter? _firestoreMangaChapter(
+    dynamic raw, {
+    required String mangaId,
+  }) {
+    final document = _map(_map(raw)['document']);
+    if (document.isEmpty) return null;
+    final documentName = _text(document['name']);
+    final documentId = documentName.isEmpty ? '' : documentName.split('/').last;
+    return _mangaChapterFromFields(
+      _firestoreFields(document['fields']),
+      mangaId: mangaId,
+      documentId: documentId,
+    );
+  }
+
+  Future<List<MangaChapter>> _loadFirestoreMangaSummaryChapters(
+    String mangaId,
+  ) async {
+    final summary = await _firestoreDocumentFields(
+      'manga_list/$mangaId/chapters_summery/summery',
+    );
+    final chapters = <MangaChapter>[];
+    final seen = <String>{};
+    for (final raw in _list(summary['chapters'])) {
+      if (raw is! Map) continue;
+      final chapter = _mangaChapterFromFields(
+        Map<String, dynamic>.from(raw),
+        mangaId: mangaId,
+      );
+      if (chapter == null || !seen.add(chapter.id)) continue;
+      chapters.add(chapter);
+    }
+    return List<MangaChapter>.unmodifiable(chapters);
+  }
+
+  Future<List<MangaChapter>> _loadFirestoreMangaChapters(
+    String mangaId,
+  ) async {
+    final rows = await _firestoreRestRunQuery(
+      <String, dynamic>{
+        'from': const <Map<String, dynamic>>[
+          <String, dynamic>{'collectionId': 'chapters'},
+        ],
+      },
+      parent: 'manga_list/$mangaId',
+    );
+    final chapters = <MangaChapter>[];
+    final seen = <String>{};
+    for (final raw in rows) {
+      final chapter = _firestoreMangaChapter(raw, mangaId: mangaId);
+      if (chapter == null || !seen.add(chapter.id)) continue;
+      chapters.add(chapter);
+    }
+    chapters.sort((a, b) {
+      final byNumber = (b.number ?? double.negativeInfinity).compareTo(
+        a.number ?? double.negativeInfinity,
+      );
+      if (byNumber != 0) return byNumber;
+      return b.name.compareTo(a.name);
+    });
+    return List<MangaChapter>.unmodifiable(chapters);
+  }
+
+  ({String imageUrl, int order})? _firestoreMangaPageRow(
+    dynamic raw, {
+    required int fallbackOrder,
+  }) {
+    final fields = raw is Map && raw.containsKey('document')
+        ? _firestoreFields(_map(_map(raw)['document'])['fields'])
+        : raw is Map
+        ? Map<String, dynamic>.from(raw)
+        : const <String, dynamic>{};
+    if (fields.isEmpty) return null;
+    final imageUrl = _text(fields['image_url'] ?? fields['imageUrl']);
+    if (imageUrl.isEmpty) return null;
+    final orderRaw =
+        fields['order'] ?? fields['page_number'] ?? fields['pageNumber'] ?? fields['name'];
+    final order = orderRaw is num
+        ? orderRaw.toInt()
+        : int.tryParse(_text(orderRaw)) ?? fallbackOrder;
+    return (imageUrl: imageUrl, order: order);
+  }
+
+  List<MangaPage> _mapFirestoreMangaPages(Iterable<dynamic> rows) {
+    final mapped = <({String imageUrl, int order})>[];
+    var fallbackOrder = 1;
+    for (final raw in rows) {
+      final page = _firestoreMangaPageRow(
+        raw,
+        fallbackOrder: fallbackOrder++,
+      );
+      if (page != null) mapped.add(page);
+    }
+    mapped.sort((a, b) => a.order.compareTo(b.order));
+    return List<MangaPage>.generate(
+      mapped.length,
+      (index) => MangaPage(index: index, imageUrl: mapped[index].imageUrl),
+      growable: false,
+    );
+  }
+
+  Future<List<MangaPage>> _loadFirestoreMangaPages(
+    String mangaId,
+    String chapterId,
+  ) async {
+    // v1.4.9 first checks:
+    // manga_list/{manga}/chapters/{chapter}/summary_pages/summery.pages
+    // and falls back to the chapter's pages subcollection.
+    final summary = await _firestoreDocumentFields(
+      'manga_list/$mangaId/chapters/$chapterId/summary_pages/summery',
+    );
+    final summaryPages = _list(summary['pages']);
+    if (summaryPages.isNotEmpty) {
+      final pages = _mapFirestoreMangaPages(summaryPages);
+      if (pages.isNotEmpty) return pages;
+    }
+
+    final rows = await _firestoreRestRunQuery(
+      <String, dynamic>{
+        'from': const <Map<String, dynamic>>[
+          <String, dynamic>{'collectionId': 'pages'},
+        ],
+      },
+      parent: 'manga_list/$mangaId/chapters/$chapterId',
+    );
+    final pages = _mapFirestoreMangaPages(rows);
+    return pages;
+  }
+
+  @override
+  Future<List<MangaChapter>> getMangaChapters(String url) async {
+    final mangaId = _mangaIdFromUrl(url);
+    if (mangaId.isEmpty) return const <MangaChapter>[];
+
+    final cached = _mangaChapterCache[mangaId];
+    if (cached != null &&
+        _mangaChapterExpiresAt[mangaId]?.isAfter(DateTime.now()) == true) {
+      return List<MangaChapter>.unmodifiable(cached);
+    }
+
+    // v1.4.9 first reads manga_list/{id}/chapters_summery/summery.
+    // The direct chapters collection is its pagination/fallback path.
+    final summaryChapters = await _loadFirestoreMangaSummaryChapters(mangaId);
+    if (summaryChapters.isNotEmpty) {
+      _mangaChapterCache[mangaId] = summaryChapters;
+      _mangaChapterExpiresAt[mangaId] = DateTime.now().add(_episodeDataTtl);
+      return summaryChapters;
+    }
+
+    final firestoreChapters = await _loadFirestoreMangaChapters(mangaId);
+    if (firestoreChapters.isNotEmpty) {
+      _mangaChapterCache[mangaId] = firestoreChapters;
+      _mangaChapterExpiresAt[mangaId] = DateTime.now().add(_episodeDataTtl);
+      return firestoreChapters;
+    }
+
+    final details = await getMangaDetails(url);
+    final sourceUrl = details.syncData?['mangalekPageUrl']?.trim() ?? '';
+    if (sourceUrl.isEmpty) return const <MangaChapter>[];
+
+    try {
+      final html = await _mangaHtml(
+        sourceUrl,
+        acceptHtml: (html) => RegExp(
+          r'wp-manga-chapter',
+          caseSensitive: false,
+        ).hasMatch(html),
+      );
+      final chapters = parseMangaLekChapters(
+        html: html,
+        mangaId: mangaId,
+        documentUrl: sourceUrl,
+      );
+      if (chapters.isNotEmpty) {
+        _mangaChapterCache[mangaId] = chapters;
+        _mangaChapterExpiresAt[mangaId] = DateTime.now().add(_episodeDataTtl);
+        return List<MangaChapter>.unmodifiable(chapters);
+      }
+    } catch (_) {
+      // Fall through to the current WordPress archive shape.
+    }
+
+    final archiveChapters = await _loadMangaArchiveChapters(
+      sourceUrl: sourceUrl,
+      mangaId: mangaId,
+    );
+    _mangaChapterCache[mangaId] = archiveChapters;
+    _mangaChapterExpiresAt[mangaId] = DateTime.now().add(_episodeDataTtl);
+    return List<MangaChapter>.unmodifiable(archiveChapters);
+  }
+
+  MangaChapter? _matchingMangaSourceChapter(
+    List<MangaChapter> chapters,
+    MangaChapter target,
+  ) {
+    final targetNumber =
+        target.number ?? _firestoreMangaChapterNumber(target.name, target.id);
+    if (targetNumber != null) {
+      for (final chapter in chapters) {
+        final number = chapter.number;
+        if (number != null && (number - targetNumber).abs() < 0.000001) {
+          return chapter;
+        }
+      }
+    }
+
+    final targetId = target.id.trim().toLowerCase();
+    final targetName = target.name.trim().toLowerCase();
+    for (final chapter in chapters) {
+      if (targetId.isNotEmpty && chapter.id.trim().toLowerCase() == targetId) {
+        return chapter;
+      }
+      if (targetName.isNotEmpty &&
+          chapter.name.trim().toLowerCase() == targetName) {
+        return chapter;
+      }
+    }
+    return null;
+  }
+
+  Future<List<MangaPage>> _loadFreshMangaSourcePages(
+    String mangaUrl,
+    MangaChapter chapter,
+    String mangaId,
+  ) async {
+    final details = await getMangaDetails(mangaUrl);
+    final sourceUrl = details.syncData?['mangalekPageUrl']?.trim() ?? '';
+    if (sourceUrl.isEmpty) return const <MangaPage>[];
+
+    MangaChapter? sourceChapter;
+    try {
+      final html = await _mangaHtml(
+        sourceUrl,
+        acceptHtml: (html) => RegExp(
+          r'wp-manga-chapter',
+          caseSensitive: false,
+        ).hasMatch(html),
+      );
+      final parsed = parseMangaLekChapters(
+        html: html,
+        mangaId: mangaId,
+        documentUrl: sourceUrl,
+      );
+      sourceChapter = _matchingMangaSourceChapter(parsed, chapter);
+    } catch (_) {
+      // The current source may have moved to the archive layout.
+    }
+
+    if (sourceChapter == null) {
+      try {
+        final archived = await _loadMangaArchiveChapters(
+          sourceUrl: sourceUrl,
+          mangaId: mangaId,
+        );
+        sourceChapter = _matchingMangaSourceChapter(archived, chapter);
+      } catch (_) {
+        sourceChapter = null;
+      }
+    }
+    if (sourceChapter == null) return const <MangaPage>[];
+
+    try {
+      final chapterUrl = sourceChapter.url;
+      final html = await _mangaHtml(
+        chapterUrl,
+        referer: sourceUrl,
+        acceptHtml: (html) => RegExp(
+          r'page-break|reading-content|entry-content|post-content|td-post-content',
+          caseSensitive: false,
+        ).hasMatch(html),
+      );
+      final pages = parseMangaLekPages(html: html, chapterUrl: chapterUrl);
+      return pages;
+    } catch (_) {
+      return const <MangaPage>[];
+    }
+  }
+
+  @override
+  Future<List<MangaPage>> refreshMangaChapterPages(
+    String mangaUrl,
+    MangaChapter chapter,
+  ) async {
+    final mangaId = chapter.mangaId.trim().isNotEmpty
+        ? chapter.mangaId.trim()
+        : _mangaIdFromUrl(mangaUrl);
+    final chapterId = chapter.id.trim();
+    if (mangaId.isEmpty || chapterId.isEmpty) {
+      return const <MangaPage>[];
+    }
+
+    final key = '$mangaId|$chapterId';
+    _mangaPageCache.remove(key);
+    _mangaPageExpiresAt.remove(key);
+
+    // Download generations need a genuinely fresh source. Firestore page URLs
+    // can outlive the CDN authorization behind them, which otherwise creates
+    // a 403 -> retry -> new-generation loop at 0%. Resolve the current
+    // AnimeWitcher MangaLek pointer first, then fall back to Firestore if that
+    // source is unavailable.
+    final freshPages = await _loadFreshMangaSourcePages(
+      mangaUrl,
+      chapter,
+      mangaId,
+    );
+    if (freshPages.isNotEmpty) {
+      _mangaPageCache[key] = freshPages;
+      _mangaPageExpiresAt[key] = DateTime.now().add(_episodeDataTtl);
+      return List<MangaPage>.unmodifiable(freshPages);
+    }
+
+    return getMangaChapterPages(mangaUrl, chapter);
+  }
+
+  @override
+  Future<List<MangaPage>> getMangaChapterPages(
+    String mangaUrl,
+    MangaChapter chapter,
+  ) async {
+    final mangaId = chapter.mangaId.trim().isNotEmpty
+        ? chapter.mangaId.trim()
+        : _mangaIdFromUrl(mangaUrl);
+    final chapterId = chapter.id.trim();
+    if (mangaId.isEmpty || chapterId.isEmpty) {
+      return const <MangaPage>[];
+    }
+
+    final key = '$mangaId|$chapterId';
+    final cached = _mangaPageCache[key];
+    if (cached != null &&
+        _mangaPageExpiresAt[key]?.isAfter(DateTime.now()) == true) {
+      return List<MangaPage>.unmodifiable(cached);
+    }
+
+    final firestorePages = await _loadFirestoreMangaPages(mangaId, chapterId);
+    if (firestorePages.isNotEmpty) {
+      _mangaPageCache[key] = firestorePages;
+      _mangaPageExpiresAt[key] = DateTime.now().add(_episodeDataTtl);
+      return firestorePages;
+    }
+
+    final freshPages = await _loadFreshMangaSourcePages(
+      mangaUrl,
+      chapter,
+      mangaId,
+    );
+    if (freshPages.isNotEmpty) {
+      _mangaPageCache[key] = freshPages;
+      _mangaPageExpiresAt[key] = DateTime.now().add(_episodeDataTtl);
+      return List<MangaPage>.unmodifiable(freshPages);
+    }
+
+    final chapterUrl = chapter.url.trim();
+    final parsedChapterUri = safeTryParseUri(chapterUrl);
+    if (parsedChapterUri == null ||
+        (parsedChapterUri.scheme != 'https' &&
+            parsedChapterUri.scheme != 'http') ||
+        parsedChapterUri.host.isEmpty ||
+        parsedChapterUri.host == 'animewitcher.com') {
+      return const <MangaPage>[];
+    }
+
+    final details = await getMangaDetails(mangaUrl);
+    final referer = details.syncData?['mangalekPageUrl'];
+    final html = await _mangaHtml(
+      chapterUrl,
+      referer: referer,
+      acceptHtml: (html) => RegExp(
+        r'page-break|reading-content|entry-content|post-content|td-post-content',
+        caseSensitive: false,
+      ).hasMatch(html),
+    );
+    final pages = parseMangaLekPages(html: html, chapterUrl: chapterUrl);
+    _mangaPageCache[key] = pages;
+    _mangaPageExpiresAt[key] = DateTime.now().add(_episodeDataTtl);
+    return List<MangaPage>.unmodifiable(pages);
+  }
+
+  @override
+  Future<MangaLatestChapterPage> getLatestMangaPage({
+    int offset = 0,
+    int limit = 30,
+  }) async {
+    final safeOffset = offset < 0 ? 0 : offset;
+    final safeLimit = limit.clamp(1, 30).toInt();
+    final needed = safeOffset + safeLimit;
+    final now = DateTime.now();
+
+    var cached = _latestMangaCache;
+    if (cached == null ||
+        !_latestMangaExpiresAt.isAfter(now) ||
+        cached.length < needed) {
+      final sections = await _fetchOfficialHomeSections();
+      _OfficialHomeSection? recentMangaSection;
+      for (final section in sections) {
+        final type = section.type.trim().toLowerCase();
+        final text =
+            '${section.title} ${section.type} ${section.indexName}'
+                .toLowerCase();
+        if (type == 'manga_recent' ||
+            text.contains('manga_recent') ||
+            text.contains('فصول المانجا') ||
+            text.contains('فصول جديدة')) {
+          recentMangaSection = section;
+          break;
+        }
+      }
+      if (recentMangaSection == null ||
+          recentMangaSection.indexName.trim().isEmpty) {
+        throw StateError(
+          'AnimeWitcher Manga recent home section is unavailable.',
+        );
+      }
+
+      // v1.4.9 does not read a Firestore manga_recent collection here.
+      // HomeFragment.setupRecentMangaSection passes the remote home section's
+      // index_name to the normal Algolia search path and requests these fields.
+      final fetchLimit = (needed + 1)
+          .clamp(1, recentMangaSection.hitsPerPage.clamp(1, 100))
+          .toInt();
+      final payload = await _algoliaQuery(
+        recentMangaSection.indexName,
+        query: '',
+        page: 0,
+        hitsPerPage: fetchLimit,
+        maxHitsPerPage: 100,
+        attributes: const <String>[
+          'poster_url',
+          'poster_url_aniList',
+          'date',
+          'objectID',
+          'manga_id',
+          'manga_name',
+          'chapter_id',
+          'chapter_name',
+          'type',
+        ],
+        throwOnFailure: true,
+      );
+
+      final items = <MangaLatestChapter>[];
+      final seen = <String>{};
+      for (final raw in _list(payload['hits'])) {
+        final hit = _map(raw);
+        if (hit.isEmpty) continue;
+        final latest = mapAnimeWitcherRecentMangaHit(
+          Map<String, Object?>.from(hit),
+        );
+        if (latest == null) continue;
+        final key = '${latest.manga.url}|${latest.chapter.id}';
+        if (seen.add(key)) items.add(latest);
+      }
+
+      cached = List<MangaLatestChapter>.unmodifiable(items);
+      _latestMangaCache = cached;
+      _latestMangaExpiresAt = now.add(_episodeDataTtl);
+    }
+
+    if (safeOffset >= cached.length) {
+      return MangaLatestChapterPage(
+        items: const <MangaLatestChapter>[],
+        nextOffset: safeOffset,
+        hasMore: false,
+      );
+    }
+    final end = (safeOffset + safeLimit).clamp(0, cached.length).toInt();
+    return MangaLatestChapterPage(
+      items: List<MangaLatestChapter>.unmodifiable(
+        cached.sublist(safeOffset, end),
+      ),
+      nextOffset: end,
+      hasMore: end < cached.length,
     );
   }
 

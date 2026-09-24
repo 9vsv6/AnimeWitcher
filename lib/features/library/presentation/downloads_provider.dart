@@ -1,14 +1,17 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:background_downloader/background_downloader.dart';
+import 'package:path/path.dart' as p;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../core/domain/entity/manga.dart';
 import '../../../core/domain/entity/multimedia_item.dart';
 import '../../../core/services/download_concurrency.dart';
-import '../../../core/services/download_job_state.dart';
-import '../../../core/services/download_logical_identity.dart';
-import '../../../core/services/download_service.dart';
-import '../../../core/utils/download_cleanup.dart';
+import '../../../core/services/download_v2/download_v2_identity.dart';
+import '../../../core/services/download_v2/download_v2_models.dart';
+import '../../../core/services/download_v2/download_v2_provider.dart';
+import '../../../core/storage/storage_service.dart';
 import 'download_episode_artwork.dart';
 
 part 'downloads_provider.g.dart';
@@ -19,8 +22,17 @@ class DownloadItem {
   final double progress;
   final MultimediaItem item;
   final Episode? episode;
+  final MangaChapter? chapter;
+  final DownloadMediaKind mediaKind;
   final String? logicalId;
   final int timestamp;
+  final String trackingUrl;
+  final String destinationPath;
+  final int parallelChunks;
+  final int? transferredBytes;
+  final int? totalBytes;
+  final double networkSpeedMBps;
+  final Duration timeRemaining;
 
   DownloadItem({
     required this.task,
@@ -28,9 +40,21 @@ class DownloadItem {
     required this.progress,
     required this.item,
     this.episode,
+    this.chapter,
+    this.mediaKind = DownloadMediaKind.videoEpisode,
     this.logicalId,
     required this.timestamp,
-  });
+    String? trackingUrl,
+    String? destinationPath,
+    int? parallelChunks,
+    this.transferredBytes,
+    this.totalBytes,
+    this.networkSpeedMBps = -1,
+    this.timeRemaining = Duration.zero,
+  }) : trackingUrl = trackingUrl ?? task.metaData,
+       destinationPath = destinationPath ?? '',
+       parallelChunks = parallelChunks ??
+           (task is ParallelDownloadTask ? task.chunks : 1);
 
   String get id => task.taskId;
 }
@@ -43,21 +67,81 @@ bool downloadsPointAtSameTarget(DownloadItem a, DownloadItem b) {
       logicalA.isNotEmpty &&
       logicalB != null &&
       logicalB.isNotEmpty) {
-    return a.logicalId == b.logicalId;
+    return logicalA == logicalB;
   }
-  // Pre-logical-identity migration fallback: only incomplete legacy evidence
-  // may fall through to mutable URL/file heuristics.
-  final trackA = downloadTrackingUrl(a.task);
-  final trackB = downloadTrackingUrl(b.task);
+
+  // Defensive fallback for malformed/incomplete presentation rows.
+  final trackA = a.trackingUrl.trim();
+  final trackB = b.trackingUrl.trim();
   if (trackA.isNotEmpty && trackA == trackB) return true;
+  final chapterA = a.chapter?.url.trim() ?? '';
+  final chapterB = b.chapter?.url.trim() ?? '';
+  if (chapterA.isNotEmpty && chapterA == chapterB) return true;
   final episodeA = a.episode?.url.trim() ?? '';
   final episodeB = b.episode?.url.trim() ?? '';
   if (episodeA.isNotEmpty && episodeA == episodeB) return true;
   if (trackA.isNotEmpty && trackA == episodeB) return true;
   if (trackB.isNotEmpty && trackB == episodeA) return true;
-  final fileA = downloadTaskFileKey(a.task);
-  final fileB = downloadTaskFileKey(b.task);
+  final fileA = a.destinationPath.trim();
+  final fileB = b.destinationPath.trim();
   return fileA.isNotEmpty && fileA == fileB;
+}
+
+DownloadItem? completedMangaChapterDownload(
+  List<DownloadItem> downloads,
+  MangaChapter chapter,
+) {
+  final mangaId = chapter.mangaId.trim();
+  final chapterId = chapter.id.trim();
+  final logicalId = mangaId.isNotEmpty && chapterId.isNotEmpty
+      ? logicalDownloadIdForMangaChapter(
+          mangaId: mangaId,
+          chapterId: chapterId,
+        ).value
+      : null;
+  final chapterUrl = chapter.url.trim();
+
+  for (final item in downloads) {
+    if (item.status != TaskStatus.complete ||
+        item.mediaKind != DownloadMediaKind.mangaChapter) {
+      continue;
+    }
+    if (logicalId != null && item.logicalId?.trim() == logicalId) return item;
+    final downloadedChapter = item.chapter;
+    if (downloadedChapter != null &&
+        downloadedChapter.mangaId.trim() == mangaId &&
+        downloadedChapter.id.trim() == chapterId) {
+      return item;
+    }
+    if (chapterUrl.isNotEmpty &&
+        (item.trackingUrl.trim() == chapterUrl ||
+            downloadedChapter?.url.trim() == chapterUrl)) {
+      return item;
+    }
+  }
+  return null;
+}
+
+DownloadItem? completedEpisodeDownload(
+  List<DownloadItem> downloads,
+  MultimediaItem parentItem,
+  Episode episode,
+) {
+  final parentUrl = parentItem.url.trim();
+  final episodeUrl = episode.url.trim();
+  for (final item in downloads) {
+    if (item.status != TaskStatus.complete ||
+        item.mediaKind != DownloadMediaKind.videoEpisode) {
+      continue;
+    }
+    if (parentUrl.isNotEmpty && item.item.url.trim() != parentUrl) continue;
+    if (episodeUrl.isNotEmpty &&
+        (item.trackingUrl.trim() == episodeUrl ||
+            item.episode?.url.trim() == episodeUrl)) {
+      return item;
+    }
+  }
+  return null;
 }
 
 int _statusRank(TaskStatus status) {
@@ -88,6 +172,7 @@ List<List<DownloadItem>> groupDownloadsByEpisodeOrFile(
 ) {
   if (items.isEmpty) return const [];
   final parent = List<int>.generate(items.length, (i) => i);
+
   int find(int i) {
     var current = i;
     while (parent[current] != current) {
@@ -106,6 +191,7 @@ List<List<DownloadItem>> groupDownloadsByEpisodeOrFile(
   final byLogicalId = <String, int>{};
   final byTracking = <String, int>{};
   final byFile = <String, int>{};
+
   void unionKey(Map<String, int> map, String key, int i) {
     if (key.isEmpty) return;
     final previous = map[key];
@@ -122,10 +208,9 @@ List<List<DownloadItem>> groupDownloadsByEpisodeOrFile(
       unionKey(byLogicalId, logicalId, i);
       continue;
     }
-    // Pre-logical-identity migration fallback.
-    unionKey(byTracking, downloadTrackingUrl(items[i].task), i);
+    unionKey(byTracking, items[i].trackingUrl.trim(), i);
     unionKey(byTracking, items[i].episode?.url.trim() ?? '', i);
-    unionKey(byFile, downloadTaskFileKey(items[i].task), i);
+    unionKey(byFile, items[i].destinationPath.trim(), i);
   }
 
   final groups = <int, List<DownloadItem>>{};
@@ -141,15 +226,10 @@ class CollapsedDownloads {
     required this.extraCompleteRecords,
   });
 
-  /// One row per episode / file, newest active preferred over complete.
   final List<DownloadItem> visible;
-
-  /// Extra complete FileDownloader records to drop from DB+metadata only.
   final List<DownloadItem> extraCompleteRecords;
 }
 
-/// Keep one UI row per episode/file. Extra complete records are listed so
-/// callers can delete them from the downloader DB without touching the file.
 CollapsedDownloads collapseDuplicateDownloads(List<DownloadItem> items) {
   if (items.length <= 1) {
     return CollapsedDownloads(visible: items, extraCompleteRecords: const []);
@@ -170,13 +250,10 @@ CollapsedDownloads collapseDuplicateDownloads(List<DownloadItem> items) {
     visible.add(kept);
     keptIds.add(kept.id);
     for (final extra in ranked.skip(1)) {
-      if (extra.status == TaskStatus.complete) {
-        extraComplete.add(extra);
-      }
+      if (extra.status == TaskStatus.complete) extraComplete.add(extra);
     }
   }
 
-  // Keep the caller's order (FIFO by enqueue timestamp).
   final originalIndex = <String, int>{};
   for (var i = 0; i < items.length; i++) {
     originalIndex.putIfAbsent(items[i].id, () => i);
@@ -192,94 +269,165 @@ CollapsedDownloads collapseDuplicateDownloads(List<DownloadItem> items) {
   );
 }
 
-/// Build a Downloads row from Hive metadata so tapping تنزيل can show
-/// **في الانتظار** before FileDownloader's record exists.
-DownloadItem? downloadItemFromTaskMetadata({
-  required Task task,
-  required TaskStatus status,
-  required Map<String, dynamic> metadata,
-  DownloadJobState? logicalState,
-  double progress = 0,
-}) {
-  final rawItem = metadata['item'];
-  if (rawItem is! Map) return null;
-  var storedProgress = progress;
-  if (storedProgress < 0 || storedProgress > 1) {
-    storedProgress = status == TaskStatus.complete ? 1.0 : 0.0;
-  }
-  return DownloadItem(
-    task: task,
-    status: logicalState != null
-        ? downloadJobDisplayStatus(logicalState)
-        : displayDownloadStatus(
-            persisted: status,
-            queueWaiting: isQueueWaitingMetadata(metadata),
-          ),
-    progress: storedProgress,
-    item: MultimediaItem.fromJson(Map<String, dynamic>.from(rawItem)),
-    episode: metadata['episode'] != null
-        ? Episode.fromJson(
-            Map<String, dynamic>.from(metadata['episode'] as Map),
-          )
-        : null,
-    logicalId: logicalDownloadIdFromMetadata(metadata),
-    timestamp: (metadata['timestamp'] as int?) ?? 0,
-  );
-}
-
 @Riverpod(keepAlive: true)
 class DownloadsNotifier extends _$DownloadsNotifier {
-  static const Duration _listProgressUiInterval = Duration(seconds: 1);
+  static const Duration _refreshInterval = Duration(seconds: 1);
+  static const Duration _durableRefreshInterval = Duration(seconds: 30);
+
   final Set<String> _deletingIds = <String>{};
-  final Map<String, DateTime> _lastProgressUiUpdate = <String, DateTime>{};
+  final Set<String> _artworkScheduledIds = <String>{};
+  List<LogicalDownloadRecordV2> _records = const <LogicalDownloadRecordV2>[];
+  Map<String, Map<String, dynamic>> _metadataByTaskId =
+      const <String, Map<String, dynamic>>{};
+  StreamSubscription<List<LogicalDownloadRecordV2>>? _recordsSubscription;
+  Timer? _refreshTimer;
+  Timer? _durableRefreshTimer;
+  Future<void>? _durableReloadInFlight;
 
   @override
   Future<List<DownloadItem>> build() async {
-    // Listen to updates from DownloadService (broadcast) instead of FileDownloader (single)
-    final subscription = ref.read(downloadServiceProvider).updates.listen((
-      update,
-    ) {
-      _handleUpdate(update);
+    final manager = ref.read(downloadManagerV2Provider);
+    await manager.initialize();
+
+    _records = await ref.read(logicalDownloadStoreV2Provider).all();
+    _metadataByTaskId = await ref
+        .read(storageServiceProvider)
+        .getAllDownloadMetadata();
+
+    _recordsSubscription = manager.records.listen((records) {
+      _records = records;
+      unawaited(_reloadMetadataAndRefresh());
+    });
+
+    // Progress is ephemeral manager state. Project it from memory every second;
+    // do not scan both Hive boxes on the UI isolate for every progress tick.
+    _refreshTimer = Timer.periodic(_refreshInterval, (_) {
+      _refreshPresentationState();
+    });
+    // Keep a much slower durable reconciliation as a lifecycle/race safety net.
+    _durableRefreshTimer = Timer.periodic(_durableRefreshInterval, (_) {
+      unawaited(_reloadDurableState());
     });
 
     ref.onDispose(() {
-      subscription.cancel();
+      unawaited(_recordsSubscription?.cancel());
+      _refreshTimer?.cancel();
+      _durableRefreshTimer?.cancel();
     });
 
-    return _refreshList();
+    return _projectList();
   }
 
-  Future<List<DownloadItem>> _refreshList() async {
-    final downloadService = ref.read(downloadServiceProvider);
-    final snapshots = await downloadService.logicalDownloadSnapshots();
-    final items = <DownloadItem>[];
+  void _refreshPresentationState() {
+    state = AsyncData(_projectList());
+  }
 
-    for (final snapshot in snapshots) {
-      final item = downloadItemFromTaskMetadata(
-        task: snapshot.task,
-        status: snapshot.status,
-        metadata: snapshot.metadata,
-        logicalState: snapshot.logicalState,
-        progress: snapshot.progress,
+  Future<void> _reloadMetadataAndRefresh() async {
+    _metadataByTaskId = await ref
+        .read(storageServiceProvider)
+        .getAllDownloadMetadata();
+    _refreshPresentationState();
+  }
+
+  Future<void> _reloadDurableState() {
+    final existing = _durableReloadInFlight;
+    if (existing != null) return existing;
+
+    final task = () async {
+      _records = await ref.read(logicalDownloadStoreV2Provider).all();
+      _metadataByTaskId = await ref
+          .read(storageServiceProvider)
+          .getAllDownloadMetadata();
+      _refreshPresentationState();
+    }();
+    _durableReloadInFlight = task;
+    return task.whenComplete(() {
+      if (identical(_durableReloadInFlight, task)) {
+        _durableReloadInFlight = null;
+      }
+    });
+  }
+
+  List<DownloadItem> _projectList() {
+    final manager = ref.read(downloadManagerV2Provider);
+    final metadataByTaskId = _metadataByTaskId;
+    final metadataByLogicalId = <String, Map<String, dynamic>>{};
+
+    for (final metadata in metadataByTaskId.values) {
+      final logicalId = (metadata['logicalId'] as String?)?.trim();
+      if (logicalId == null || logicalId.isEmpty) continue;
+      final previous = metadataByLogicalId[logicalId];
+      final previousTimestamp = (previous?['timestamp'] as int?) ?? -1;
+      final timestamp = (metadata['timestamp'] as int?) ?? 0;
+      if (previous == null || timestamp >= previousTimestamp) {
+        metadataByLogicalId[logicalId] = metadata;
+      }
+    }
+
+    final items = <DownloadItem>[];
+    for (final record in _records) {
+      if (record.intent == DownloadUserIntent.canceled) continue;
+      final metadata = metadataByTaskId[record.taskId] ??
+          metadataByLogicalId[record.logicalId.value];
+      if (metadata == null || metadata['item'] is! Map) continue;
+
+      final item = MultimediaItem.fromJson(
+        Map<String, dynamic>.from(metadata['item'] as Map),
       );
-      if (item == null) continue;
-      items.add(item);
-      if (snapshot.status == TaskStatus.complete) {
+      final episode = metadata['episode'] is Map
+          ? Episode.fromJson(
+              Map<String, dynamic>.from(metadata['episode'] as Map),
+            )
+          : null;
+      final taskSnapshot = metadata['taskSnapshot'] is Map
+          ? Map<String, dynamic>.from(metadata['taskSnapshot'] as Map)
+          : const <String, dynamic>{};
+      final chapter = MangaChapter.fromJson(taskSnapshot['chapter']);
+      final trackingUrl = _trackingUrlFor(
+        metadata,
+        item,
+        episode,
+        chapter,
+      );
+      final snapshot = manager.snapshotFor(record.logicalId);
+      final task = _presentationTaskFor(
+        record,
+        trackingUrl: trackingUrl,
+      );
+      final projected = DownloadItem(
+        task: task,
+        status: _taskStatusFor(record, snapshot),
+        progress: _progressFor(record, snapshot),
+        item: item,
+        episode: episode,
+        chapter: chapter,
+        mediaKind: record.mediaKind,
+        logicalId: record.logicalId.value,
+        timestamp: (metadata['timestamp'] as int?) ?? record.updatedAtMillis,
+        trackingUrl: trackingUrl,
+        destinationPath: record.destinationPath,
+        parallelChunks: record.parallelChunks,
+        transferredBytes: snapshot?.transferredBytes,
+        totalBytes: snapshot?.totalBytes ?? record.expectedBytes,
+        networkSpeedMBps: snapshot?.networkSpeedMBps ?? -1,
+        timeRemaining: snapshot?.timeRemaining ?? Duration.zero,
+      );
+      items.add(projected);
+      if (projected.status == TaskStatus.complete &&
+          projected.mediaKind == DownloadMediaKind.videoEpisode &&
+          _artworkScheduledIds.add(projected.id)) {
         unawaited(
           ensureDownloadedEpisodeArtwork(
-            taskId: item.id,
-            episode: item.episode,
+            taskId: projected.id,
+            episode: projected.episode,
           ),
         );
       }
     }
 
-    // A user-deleted task is a session tombstone until its service-owned
-    // cleanup has settled. Never let an unrelated refresh resurrect it.
     items.removeWhere((item) => _deletingIds.contains(item.id));
     items.sort((a, b) => a.timestamp.compareTo(b.timestamp));
-    final collapsed = collapseDuplicateDownloads(items);
-    return _orderDownloads(collapsed.visible);
+    return _orderDownloads(collapseDuplicateDownloads(items).visible);
   }
 
   List<DownloadItem> _orderDownloads(List<DownloadItem> items) {
@@ -294,148 +442,18 @@ class DownloadsNotifier extends _$DownloadsNotifier {
     }
     active.sort((a, b) => a.timestamp.compareTo(b.timestamp));
     completed.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-    return [...active, ...completed];
-  }
-
-  Future<void> _handleUpdate(TaskUpdate update) async {
-    if (state.value == null || _deletingIds.contains(update.task.taskId))
-      return;
-
-    final logicalState = await ref
-        .read(downloadServiceProvider)
-        .logicalJobStateForTask(update.task.taskId);
-
-    // DownloadService already exposes sampled live metrics. Keep the durable
-    // list snapshot to the same one-second cadence so the whole downloads page
-    // does not rebuild for every native didWriteData packet.
-    if (update is TaskProgressUpdate &&
-        update.progress >= 0 &&
-        update.progress < 1) {
-      final now = DateTime.now();
-      final last = _lastProgressUiUpdate[update.task.taskId];
-      if (last != null && now.difference(last) < _listProgressUiInterval) {
-        return;
-      }
-      _lastProgressUiUpdate[update.task.taskId] = now;
-    }
-
-    final List<DownloadItem> currentList = state.value!;
-    final index = currentList.indexWhere(
-      (item) => item.id == update.task.taskId,
-    );
-
-    if (index != -1) {
-      final existing = currentList[index];
-      double newProgress = existing.progress;
-      TaskStatus newStatus = existing.status;
-
-      if (update is TaskProgressUpdate) {
-        if (update.progress >= 0 && update.progress <= 1) {
-          newProgress = update.progress;
-        }
-        if (logicalState != null) {
-          newStatus = downloadJobDisplayStatus(logicalState);
-        }
-      } else if (update is TaskStatusUpdate) {
-        if (logicalState != null) {
-          newStatus = downloadJobDisplayStatus(logicalState);
-          if (logicalState == DownloadJobState.completed) newProgress = 1.0;
-        } else {
-          // Pre-JobStore migration fallback: raw executor status remains the
-          // projection only until a durable logical job exists.
-          newStatus = update.status;
-          if (update.status == TaskStatus.complete) newProgress = 1.0;
-        }
-      }
-
-      if (newStatus == TaskStatus.canceled) {
-        // User delete and enqueue rollback already drop metadata. A canceled
-        // event must not leave a ghost row.
-        final newList = List<DownloadItem>.from(currentList)..removeAt(index);
-        state = AsyncData(newList);
-      } else {
-        // Failures are remapped to paused by DownloadService before broadcast,
-        // but keep this guard so a raw failed event can never wipe the row.
-        if (newStatus == TaskStatus.failed ||
-            newStatus == TaskStatus.notFound) {
-          newStatus = TaskStatus.paused;
-        }
-        final updatedItem = DownloadItem(
-          task: existing.task,
-          status: newStatus,
-          progress: newProgress.clamp(0.0, 1.0),
-          item: existing.item,
-          episode: existing.episode,
-          logicalId: existing.logicalId,
-          timestamp: existing.timestamp,
-        );
-
-        if (newStatus == TaskStatus.complete) {
-          unawaited(
-            ensureDownloadedEpisodeArtwork(
-              taskId: updatedItem.id,
-              episode: updatedItem.episode,
-            ),
-          );
-        }
-
-        final newList = List<DownloadItem>.from(currentList);
-        newList[index] = updatedItem;
-        if (isActiveDownloadStatus(existing.status) &&
-            !isActiveDownloadStatus(newStatus)) {
-          state = AsyncData(_orderDownloads(newList));
-        } else {
-          state = AsyncData(newList);
-        }
-      }
-    } else {
-      // New download: show the row as soon as Hive metadata exists, even if
-      // FileDownloader has not written the record yet (HQ overflow).
-      final projectedStatus = logicalState != null
-          ? downloadJobDisplayStatus(logicalState)
-          : (update is TaskStatusUpdate ? update.status : null);
-      if (update is TaskStatusUpdate &&
-          update.task is DownloadTask &&
-          projectedStatus != null &&
-          isActiveDownloadStatus(projectedStatus)) {
-        final snapshot = await ref
-            .read(downloadServiceProvider)
-            .logicalDownloadSnapshotForTask(
-              update.task,
-              executorStatus: projectedStatus,
-            );
-        final incoming = snapshot == null
-            ? null
-            : downloadItemFromTaskMetadata(
-                task: snapshot.task,
-                status: snapshot.status,
-                metadata: snapshot.metadata,
-                logicalState: snapshot.logicalState,
-                progress: snapshot.progress,
-              );
-        if (incoming != null) {
-          final collapsed = collapseDuplicateDownloads([
-            ...currentList,
-            incoming,
-          ]);
-          state = AsyncData(_orderDownloads(collapsed.visible));
-          return;
-        }
-      }
-      state = AsyncData(await _refreshList());
-    }
+    return <DownloadItem>[...active, ...completed];
   }
 
   Future<void> removeDownload(DownloadItem item) async {
-    await removeDownloads([item]);
+    await removeDownloads(<DownloadItem>[item]);
   }
 
   Future<void> removeDownloads(List<DownloadItem> items) async {
     if (items.isEmpty) return;
-    final downloadService = ref.read(downloadServiceProvider);
     final current = List<DownloadItem>.from(state.value ?? items);
-
     final toRemove = <String, DownloadItem>{};
+
     for (final requested in items) {
       toRemove[requested.id] = requested;
       for (final candidate in current) {
@@ -445,114 +463,163 @@ class DownloadsNotifier extends _$DownloadsNotifier {
       }
     }
 
-    // Presentation submits a delete command only. Tombstone persistence,
-    // ownership settlement and DB/metadata/video destruction are service-owned.
+    final manager = ref.read(downloadManagerV2Provider);
+    final storage = ref.read(storageServiceProvider);
     for (final item in toRemove.values) {
-      final outcome = await downloadService
-          .deleteDownloadOutcome(
-            item.task,
-            item.item,
-            episode: item.episode,
-            notifyContinuedProcessing: false,
-          )
-          .timeout(
-            const Duration(seconds: 3),
-            onTimeout: () => DownloadCommandOutcome.settlingOwnership,
-          );
-      final safeToHide = switch (outcome) {
-        DownloadCommandOutcome.terminal ||
-        DownloadCommandOutcome.alreadyComplete ||
-        DownloadCommandOutcome.missingState => true,
-        _ => false,
-      };
-      if (!safeToHide) {
-        state = AsyncData(await _refreshList());
-        return;
+      final logical = item.logicalId?.trim();
+      if (logical != null && logical.isNotEmpty) {
+        await manager.delete(DownloadLogicalId(logical));
+        final metadata = await storage.getAllDownloadMetadata();
+        for (final entry in metadata.entries) {
+          if ((entry.value['logicalId'] as String?)?.trim() == logical) {
+            await storage.removeDownloadMetadata(entry.key);
+          }
+        }
+      } else {
+        final path = item.destinationPath.trim();
+        if (path.isNotEmpty) {
+          try {
+            final file = File(path);
+            if (await file.exists()) await file.delete();
+          } catch (_) {}
+        }
+        await storage.removeDownloadMetadata(item.id);
       }
     }
 
     final droppedIds = toRemove.keys.toSet();
     _deletingIds.addAll(droppedIds);
-    for (final id in droppedIds) {
-      _lastProgressUiUpdate.remove(id);
-    }
     if (state.value != null) {
       state = AsyncData(
         state.value!.where((item) => !droppedIds.contains(item.id)).toList(),
       );
     }
-
-    for (final item in toRemove.values) {
-      final trackingUrl = downloadTrackingUrl(item.task);
-      ref.read(activeDownloadsProvider.notifier).remove(trackingUrl);
-      ref.read(downloadProgressProvider.notifier).remove(trackingUrl);
-      ref.read(downloadChunkProgressProvider.notifier).remove(item.id);
-    }
-  }
-
-  void _setOptimisticStatus(String taskId, TaskStatus status) {
-    final current = state.value;
-    if (current == null) return;
-    final index = current.indexWhere((item) => item.id == taskId);
-    if (index < 0) return;
-
-    final existing = current[index];
-    final trackingUrl = downloadTrackingUrl(existing.task);
-    final live = ref.read(downloadProgressProvider)[trackingUrl];
-    final progress = live?.progress ?? existing.progress;
-    final updated = DownloadItem(
-      task: existing.task,
-      status: status,
-      progress: progress,
-      item: existing.item,
-      episode: existing.episode,
-      timestamp: existing.timestamp,
-    );
-    final next = List<DownloadItem>.from(current)..[index] = updated;
-    state = AsyncData(next);
-
-    ref
-        .read(downloadProgressProvider.notifier)
-        .update(
-          trackingUrl,
-          DownloadProgressData(
-            taskId: taskId,
-            progress: progress,
-            networkSpeed: status == TaskStatus.running
-                ? (live?.networkSpeed ?? 0)
-                : 0,
-            timeRemaining: status == TaskStatus.running
-                ? (live?.timeRemaining ?? Duration.zero)
-                : Duration.zero,
-            totalSize: live?.totalSize ?? -1,
-            status: status,
-          ),
-        );
   }
 
   Future<void> pauseDownload(String taskId) async {
-    final outcome = await ref
-        .read(downloadServiceProvider)
-        .pauseDownloadOutcome(taskId);
-    if (outcome == DownloadCommandOutcome.paused) {
-      _setOptimisticStatus(taskId, TaskStatus.paused);
-      return;
-    }
-    state = AsyncData(await _refreshList());
+    final item = state.value?.where((item) => item.id == taskId).firstOrNull;
+    final logical = item?.logicalId?.trim();
+    if (logical == null || logical.isEmpty) return;
+    await ref.read(downloadManagerV2Provider).pause(DownloadLogicalId(logical));
+    await _reloadDurableState();
   }
 
   Future<void> resumeDownload(String taskId) async {
-    final outcome = await ref
-        .read(downloadServiceProvider)
-        .resumeDownloadOutcome(taskId);
-    switch (outcome) {
-      case DownloadCommandOutcome.running:
-      case DownloadCommandOutcome.attached:
-        _setOptimisticStatus(taskId, TaskStatus.running);
-      case DownloadCommandOutcome.queued:
-        _setOptimisticStatus(taskId, TaskStatus.enqueued);
-      default:
-        state = AsyncData(await _refreshList());
-    }
+    final item = state.value?.where((item) => item.id == taskId).firstOrNull;
+    final logical = item?.logicalId?.trim();
+    if (logical == null || logical.isEmpty) return;
+    await ref.read(downloadManagerV2Provider).resume(DownloadLogicalId(logical));
+    await _reloadDurableState();
+  }
+}
+
+String _trackingUrlFor(
+  Map<String, dynamic> metadata,
+  MultimediaItem item,
+  Episode? episode,
+  MangaChapter? chapter,
+) {
+  final stored = (metadata['trackingUrl'] as String?)?.trim();
+  if (stored != null && stored.isNotEmpty) return stored;
+  final chapterUrl = chapter?.url.trim();
+  if (chapterUrl != null && chapterUrl.isNotEmpty) return chapterUrl;
+  final episodeUrl = episode?.url.trim();
+  if (episodeUrl != null && episodeUrl.isNotEmpty) return episodeUrl;
+  return item.url.trim();
+}
+
+TaskStatus _taskStatusFor(
+  LogicalDownloadRecordV2 record,
+  DownloadTransportSnapshot? snapshot,
+) {
+  if (record.completedAtMillis != null) return TaskStatus.complete;
+  if (record.intent == DownloadUserIntent.canceled) return TaskStatus.canceled;
+  if (record.intent == DownloadUserIntent.paused) return TaskStatus.paused;
+
+  return switch (snapshot?.status) {
+    DownloadTransportStatus.queued => TaskStatus.enqueued,
+    DownloadTransportStatus.running => TaskStatus.running,
+    DownloadTransportStatus.held => TaskStatus.waitingToRetry,
+    DownloadTransportStatus.paused => TaskStatus.paused,
+    DownloadTransportStatus.failed || DownloadTransportStatus.missing =>
+      TaskStatus.paused,
+    DownloadTransportStatus.canceled => TaskStatus.canceled,
+    // Package completion is not a logical completion until the V2 integrity
+    // gate persists completedAtMillis.
+    DownloadTransportStatus.complete => TaskStatus.running,
+    null => TaskStatus.enqueued,
+  };
+}
+
+double _progressFor(
+  LogicalDownloadRecordV2 record,
+  DownloadTransportSnapshot? snapshot,
+) {
+  if (record.completedAtMillis != null) return 1;
+  final progress = snapshot?.progress ?? 0;
+  return progress.clamp(0.0, 1.0).toDouble();
+}
+
+Task _presentationTaskFor(
+  LogicalDownloadRecordV2 record, {
+  required String trackingUrl,
+}) {
+  return _presentationTask(
+    taskId: record.taskId,
+    destinationPath: record.destinationPath,
+    trackingUrl: trackingUrl,
+    parallelChunks: record.parallelChunks,
+  );
+}
+
+Task _presentationTask({
+  required String taskId,
+  required String destinationPath,
+  required String trackingUrl,
+  required int parallelChunks,
+}) {
+  final absolute = p.isAbsolute(destinationPath);
+  final directory = p.dirname(destinationPath) == '.'
+      ? ''
+      : p.dirname(destinationPath);
+  final filename = p.basename(destinationPath);
+  final url = trackingUrl.isNotEmpty
+      ? trackingUrl
+      : 'https://animewitcher.invalid/$taskId';
+  final baseDirectory = absolute
+      ? BaseDirectory.root
+      : BaseDirectory.applicationDocuments;
+
+  if (parallelChunks > 1) {
+    return ParallelDownloadTask(
+      taskId: taskId,
+      url: url,
+      filename: filename,
+      directory: directory,
+      baseDirectory: baseDirectory,
+      chunks: parallelChunks,
+      metaData: trackingUrl,
+      updates: Updates.none,
+      allowPause: true,
+      retries: 0,
+    );
+  }
+  return DownloadTask(
+    taskId: taskId,
+    url: url,
+    filename: filename,
+    directory: directory,
+    baseDirectory: baseDirectory,
+    metaData: trackingUrl,
+    updates: Updates.none,
+    allowPause: true,
+    retries: 0,
+  );
+}
+
+extension _FirstOrNull<T> on Iterable<T> {
+  T? get firstOrNull {
+    final iterator = this.iterator;
+    return iterator.moveNext() ? iterator.current : null;
   }
 }

@@ -55,6 +55,9 @@ class SettingsRepository {
   Future<void> setDownloadConcurrency(int value) =>
       _storageService.setDownloadConcurrency(value);
 
+  Future<void> setDownloadDiagnosticLog(bool enabled) =>
+      _storageService.setDownloadDiagnosticLog(enabled);
+
   bool getDownloadDiagnosticLog() => _storageService.getDownloadDiagnosticLog();
 
   int getDownloadConcurrency() => _storageService.getDownloadConcurrency();
@@ -94,8 +97,7 @@ class SettingsRepository {
   Future<void> setHighQualityPostersEnabled(bool enabled) =>
       _storageService.setHighQualityPostersEnabled(enabled);
 
-  bool isHighQualityPostersEnabled() =>
-      _storageService.isHighQualityPostersEnabled();
+  bool isHighQualityPostersEnabled() => _storageService.isHighQualityPostersEnabled();
 
   Future<void> setCustomBaseUrl(String packageName, String? url) =>
       _storageService.setCustomBaseUrl(packageName, url);
@@ -153,6 +155,33 @@ class SettingsRepository {
 
   T? getPlayerSetting<T>(String key, {T? defaultValue}) {
     return _storageService.getPlayerSetting<T>(key, defaultValue: defaultValue);
+  }
+
+  static const String _kMangaReaderSettings =
+      'manga_reader_settings_json';
+
+  Future<void> saveMangaReaderSettings(Map<String, dynamic> value) =>
+      _writeJsonMap(_kMangaReaderSettings, value);
+
+  Map<String, dynamic> getMangaReaderSettings() =>
+      _readJsonMap(_kMangaReaderSettings);
+
+  static const String _kMangaReaderCustomCovers =
+      'manga_reader_custom_covers_json';
+
+  Future<void> saveMangaReaderCustomCovers(Map<String, String> value) =>
+      _writeJsonMap(
+        _kMangaReaderCustomCovers,
+        <String, dynamic>{...value},
+      );
+
+  Map<String, String> getMangaReaderCustomCovers() {
+    final raw = _readJsonMap(_kMangaReaderCustomCovers);
+    return <String, String>{
+      for (final entry in raw.entries)
+        if (entry.value != null && entry.value.toString().trim().isNotEmpty)
+          entry.key: entry.value.toString(),
+    };
   }
 
   /// Cached AnimeWitcher `Settings/constants.search_settings`.
