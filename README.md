@@ -55,6 +55,20 @@
   <img src="screenshots/desktop/settings.png" width="800" />
 </p>
 
+#### 📖 المانجا
+
+<p align="center">
+  <img src="screenshots/desktop/manga.png" width="800" />
+</p>
+
+<p align="center">
+  <img src="screenshots/desktop/manga-details.png" width="800" />
+</p>
+
+<p align="center">
+  <img src="screenshots/desktop/manga-chapters.png" width="800" />
+</p>
+
 ## المميزات
 
 ### 🏠 التصفّح والاكتشاف
