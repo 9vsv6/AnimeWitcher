@@ -8,7 +8,6 @@ import 'package:animewitcher/core/account/animewitcher_account_config.dart';
 import 'package:animewitcher/core/navigation/app_layout_style.dart';
 import 'package:animewitcher/core/storage/storage_service.dart';
 import 'package:animewitcher/core/theme/theme_provider.dart';
-import 'package:animewitcher/core/utils/responsive_breakpoints.dart';
 import 'package:animewitcher/features/details/presentation/widgets/details_seasons_bar.dart';
 import 'package:animewitcher/features/player/data/anime4k.dart';
 import 'package:animewitcher/features/player/data/anime4k_download.dart';
@@ -95,7 +94,8 @@ class _FirstRunSetupScreenState extends ConsumerState<FirstRunSetupScreen> {
 
   List<_Step> get _steps => [
     _Step.appearance,
-    _Step.details,
+    // The seasons bar belongs to the wide anime page; phones never show it.
+    if (_isDesktop) _Step.details,
     _Step.player,
     // Always: a build without the account service says so here, rather
     // than the step silently not being there.
@@ -464,8 +464,11 @@ class _FirstRunSetupScreenState extends ConsumerState<FirstRunSetupScreen> {
       },
     );
 
+    // A phone sees its own home: upright, with the dock.
+    final phoneHome = !_isDesktop && step == _Step.appearance;
     final preview = LivePreviewFrame(
       caption: arabic ? 'معاينة مباشرة' : 'Live preview',
+      designSize: phoneHome ? LivePreviewFrame.phoneSize : null,
       note: step == _Step.player && _skipSegments && _skipIntro
           ? (arabic
                 ? 'مع التخطي التلقائي لا يظهر زر: تبدأ الحلقة بعد المقدمة مباشرة.'
@@ -477,8 +480,9 @@ class _FirstRunSetupScreenState extends ConsumerState<FirstRunSetupScreen> {
           key: ValueKey(step),
           child: switch (step) {
             _Step.appearance => HomeLayoutPreview(
-              layout: _layout,
+              layout: phoneHome ? AppLayoutStyle.dock : _layout,
               theme: themeStyle,
+              phone: phoneHome,
             ),
             _Step.details => SeasonsBarPagePreview(
               style: _seasons,
@@ -550,7 +554,10 @@ class _FirstRunSetupScreenState extends ConsumerState<FirstRunSetupScreen> {
                     options,
                     Padding(
                       padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                      child: AspectRatio(aspectRatio: 1.2, child: preview),
+                      child: AspectRatio(
+                        aspectRatio: phoneHome ? 0.8 : 1.2,
+                        child: preview,
+                      ),
                     ),
                   ],
                 ),

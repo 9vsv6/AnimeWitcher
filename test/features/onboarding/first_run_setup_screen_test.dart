@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:animewitcher/shared/widgets/live_previews.dart';
 
 import '../../support/memory_storage_service.dart';
 
@@ -112,8 +113,14 @@ void main() {
     tester,
   ) async {
     await pumpAt(tester, const Size(390, 844));
+    // Home is drawn as an upright phone, not a wide window.
+    final home = tester.getSize(find.byType(HomeLayoutPreview));
+    expect(home.height, greaterThan(home.width));
+
     final seen = await walkSteps(tester);
-    expect(seen, containsAllInOrder(['المظهر', 'صفحة الأنمي', 'المشغل']));
+    expect(seen, containsAllInOrder(['المظهر', 'المشغل', 'الحساب']));
+    // The seasons bar is only on the wide anime page.
+    expect(seen, isNot(contains('صفحة الأنمي')));
   });
 
   testWidgets('a desktop starts with the layout step, all three drawn', (

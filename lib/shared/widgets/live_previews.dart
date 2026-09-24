@@ -26,10 +26,18 @@ class LivePreviewFrame extends StatelessWidget {
     required this.child,
     this.note,
     this.followTheme = false,
+    this.designSize,
   });
+
+  /// An upright phone screen, for a preview of the phone's own layout.
+  static const phoneSize = Size(390, 780);
 
   final String caption;
   final Widget child;
+
+  /// The size the preview is drawn at before scaling; a wide window unless
+  /// given.
+  final Size? designSize;
 
   /// A line under the frame for what a still picture cannot show.
   final String? note;
@@ -59,11 +67,13 @@ class LivePreviewFrame extends StatelessWidget {
             child: FittedBox(
               fit: BoxFit.contain,
               child: Container(
-                width: _designWidth,
-                height: _designHeight,
+                width: designSize?.width ?? _designWidth,
+                height: designSize?.height ?? _designHeight,
                 decoration: BoxDecoration(
                   color: Colors.black,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(
+                    designSize == null ? 14 : 36,
+                  ),
                   border: Border.all(color: edge, width: 2),
                 ),
                 clipBehavior: Clip.antiAlias,
@@ -193,12 +203,17 @@ class HomeLayoutPreview extends StatelessWidget {
     super.key,
     required this.layout,
     required this.theme,
+    this.phone = false,
   });
 
   final AppLayoutStyle layout;
 
   /// The theme to draw in.
   final AppThemeStyle theme;
+
+  /// Drawn as an upright phone: fewer cards to a row. Pair it with
+  /// [LivePreviewFrame.phoneSize].
+  final bool phone;
 
   static const _icons = <IconData>[
     Icons.home_rounded,
@@ -232,7 +247,7 @@ class HomeLayoutPreview extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                for (var i = 0; i < p.wide.length; i++) ...[
+                for (var i = 0; i < (phone ? 2 : p.wide.length); i++) ...[
                   if (i > 0) const SizedBox(width: 12),
                   Expanded(child: _block(p.wide[i])),
                 ],
@@ -245,7 +260,7 @@ class HomeLayoutPreview extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                for (var i = 0; i < 6; i++) ...[
+                for (var i = 0; i < (phone ? 3 : 6); i++) ...[
                   if (i > 0) const SizedBox(width: 12),
                   Expanded(child: _block(p.poster)),
                 ],
