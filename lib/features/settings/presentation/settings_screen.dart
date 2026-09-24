@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:animewitcher/core/navigation/taskbar_destination.dart';
 
 import 'widgets/download_log_dialog.dart';
 
@@ -152,6 +153,11 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
+  /// Marks the reader group, whose one row opens a screen of its own. A pane
+  /// wide enough to show a group alone shows that screen's options in it
+  /// instead, rather than a link to them.
+  static const readerGroupKey = ValueKey<String>('settings-reader-group');
+
   /// Every group on this screen, in order, for a shell that lists them
   /// separately. Public so the More sidebar can offer each one by name.
   List<Widget> settingsSections(
@@ -221,6 +227,29 @@ class SettingsScreen extends ConsumerWidget {
               ref,
               generalSettings.defaultHomeScreen,
             ),
+          ),
+          SettingsTile(
+            key: const ValueKey<String>('settings-manga-tab'),
+            icon: Icons.menu_book_rounded,
+            title: isArabic ? 'قسم المانجا منفصل' : 'Manga as its own tab',
+            subtitle: isArabic
+                ? 'المانجا في الشريط بقسم خاص بدل الصفحة الرئيسية'
+                : 'Manga gets a tab in the bar instead of rows on home',
+            trailing: Switch(
+              value: !generalSettings.hiddenTaskbarItems.contains(
+                TaskbarDestination.manga.id,
+              ),
+              onChanged: (show) => ref
+                  .read(generalSettingsProvider.notifier)
+                  .setMangaTab(show),
+            ),
+            onTap: () => ref
+                .read(generalSettingsProvider.notifier)
+                .setMangaTab(
+                  generalSettings.hiddenTaskbarItems.contains(
+                    TaskbarDestination.manga.id,
+                  ),
+                ),
           ),
           SettingsTile(
             icon: Icons.dashboard_customize_rounded,
@@ -499,6 +528,7 @@ class SettingsScreen extends ConsumerWidget {
       ),
       const SizedBox(height: LayoutConstants.spacingLg),
       SettingsGroup(
+        key: SettingsScreen.readerGroupKey,
         title: appText(context, english: 'Reader', arabic: 'القارئ'),
         children: [
           SettingsTile(

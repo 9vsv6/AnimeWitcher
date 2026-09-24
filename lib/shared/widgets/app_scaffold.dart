@@ -6,6 +6,7 @@ import 'package:animewitcher/core/navigation/taskbar_destination.dart';
 import 'package:animewitcher/core/storage/storage_service.dart';
 import 'package:animewitcher/features/news/presentation/open_news.dart';
 import 'package:animewitcher/features/onboarding/first_run_setup_screen.dart';
+import 'package:animewitcher/shared/widgets/account_avatar_button.dart';
 import 'package:animewitcher/shared/widgets/app_navigation_bars.dart';
 import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:animewitcher/shared/widgets/custom_bottom_nav.dart';
@@ -123,6 +124,7 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
                 currentBranchIndex: currentIndex,
                 onTap: onDestination,
                 onNews: () => openNewsScreen(context, ref),
+                onAccount: () => openAccountScreen(context),
               ),
               Expanded(child: widget.navigationShell),
             ],
@@ -135,8 +137,7 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
       // Home runs its artwork up under the bar; every other page starts
       // below it. Only the padding changes between them, so the shell keeps
       // its place in the tree and no branch loses its state on a switch.
-      final overArtwork =
-          currentIndex == TaskbarDestination.home.branchIndex;
+      final overArtwork = currentIndex == TaskbarDestination.home.branchIndex;
       return withShellPopScope(
         Scaffold(
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -160,6 +161,7 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
                   overArtwork: overArtwork,
                   onTap: onDestination,
                   onNews: () => openNewsScreen(context, ref),
+                  onAccount: () => openAccountScreen(context),
                 ),
               ),
             ],
@@ -203,6 +205,11 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
                       _onItemTapped(destination.branchIndex, context),
                   onNews: layoutsAvailable
                       ? () => openNewsScreen(context, ref)
+                      : null,
+                  // A phone reaches the account through More; a wider
+                  // dock has room for it beside the news.
+                  onAccount: layoutsAvailable
+                      ? () => openAccountScreen(context)
                       : null,
                 ),
               ),

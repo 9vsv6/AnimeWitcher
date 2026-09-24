@@ -4,6 +4,8 @@ import 'package:animewitcher/core/domain/entity/manga.dart';
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
 import 'package:animewitcher/core/extensions/base_provider.dart';
 import 'package:animewitcher/core/extensions/extension_manager.dart';
+import 'package:animewitcher/core/services/artwork_fallback_service.dart';
+import 'package:animewitcher/core/storage/storage_service.dart';
 import 'package:animewitcher/core/storage/manga_reading_repository.dart';
 import 'package:animewitcher/core/storage/storage_service.dart';
 import 'package:animewitcher/features/manga/presentation/manga_details_screen.dart';
@@ -16,6 +18,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+/// Answers every artwork lookup at once with nothing, so a page that asks
+/// for a manga's banner leaves no batch timer behind and makes no request.
+final class _NoArtwork extends ArtworkFallbackService {
+  _NoArtwork() : super(Dio(), StorageService());
+
+  @override
+  Future<({String? cover, String? banner})> mangaArtwork({
+    int? malId,
+    String title = '',
+  }) async => (cover: null, banner: null);
+}
 
 final class _MangaProvider extends AnimeWitcherProvider {
   int detailsCalls = 0;
@@ -149,6 +163,7 @@ final class _Manager extends ExtensionManager {
 Widget _app(AnimeWitcherProvider provider) => ProviderScope(
   overrides: [
     extensionManagerProvider.overrideWith(() => _Manager(provider)),
+    artworkFallbackServiceProvider.overrideWithValue(_NoArtwork()),
     storageServiceProvider.overrideWithValue(_MangaDetailsReadingStorage()),
     mangaReaderSettingsProvider.overrideWith(
       _MangaDetailsReaderSettingsNotifier.new,
@@ -171,10 +186,7 @@ Widget _app(AnimeWitcherProvider provider) => ProviderScope(
         posterUrl: '',
         contentType: MultimediaContentType.manga,
         provider: provider.packageName,
-        syncData: const <String, String>{
-          'mangaId': 'm1',
-          'awScore': '9.2',
-        },
+        syncData: const <String, String>{'mangaId': 'm1', 'awScore': '9.2'},
       ),
     ),
   ),
@@ -193,6 +205,14 @@ Future<void> _pumpUntil(
     }
   }
   fail(reason);
+}
+
+/// The two tabs are the phone layout; a window this narrow keeps them.
+void _usePhoneWindow(WidgetTester tester) {
+  tester.view.physicalSize = const Size(390, 844);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
 }
 
 void main() {
@@ -231,6 +251,7 @@ void main() {
   testWidgets('manga details keeps horizontal tab swiping enabled', (
     tester,
   ) async {
+    _usePhoneWindow(tester);
     await tester.pumpWidget(_app(_MangaProvider()));
     await _pumpUntil(
       tester,
@@ -245,14 +266,15 @@ void main() {
   testWidgets('long pressing manga title copies it like anime details', (
     tester,
   ) async {
+    _usePhoneWindow(tester);
     String? clipboardText;
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
       SystemChannels.platform,
       (call) async {
         if (call.method == 'Clipboard.setData' && call.arguments is Map) {
-          clipboardText = Map<Object?, Object?>.from(
-            call.arguments as Map,
-          )['text'] as String?;
+          clipboardText =
+              Map<Object?, Object?>.from(call.arguments as Map)['text']
+                  as String?;
         }
         return null;
       },
@@ -307,6 +329,7 @@ void main() {
   testWidgets('manga details renders only details and chapters tabs', (
     tester,
   ) async {
+    _usePhoneWindow(tester);
     await tester.pumpWidget(_app(_MangaProvider()));
     await _pumpUntil(
       tester,
@@ -350,4 +373,43 @@ void main() {
     expect(find.text('متشابهة'), findsNothing);
     expect(find.text('ذات صلة'), findsNothing);
   });
+
+  testWidgets(
+    'a wide window gets the anime page layout, chapters on the page',
+    (tester) async {
+      tester.view.physicalSize = const Size(1400, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_app(_MangaProvider()));
+      await _pumpUntil(
+        tester,
+        () => find
+            .byKey(const ValueKey<String>('manga-chapter-row-12.5'))
+            .evaluate()
+            .isNotEmpty,
+        reason: 'the chapters did not appear on the wide page',
+      );
+
+      expect(
+        find.byKey(const ValueKey<String>('manga-details-wide')),
+        findsOneWidget,
+      );
+      // One page, not the phone's two tabs.
+      expect(find.byType(TabBarView), findsNothing);
+      // Nothing read yet, so the white pill starts the manga.
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('manga-read-pill')),
+          matching: find.text('ابدأ القراءة'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('manga-genre-Action')),
+        findsOneWidget,
+      );
+    },
+  );
 }

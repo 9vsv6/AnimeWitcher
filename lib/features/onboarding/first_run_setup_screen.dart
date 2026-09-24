@@ -14,6 +14,7 @@ import 'package:animewitcher/features/player/data/anime4k.dart';
 import 'package:animewitcher/features/player/data/anime4k_download.dart';
 import 'package:animewitcher/features/player/presentation/widgets/anime4k_player_sheet.dart';
 import 'package:animewitcher/features/settings/presentation/account_screen.dart';
+import 'package:animewitcher/features/settings/presentation/general_settings_provider.dart';
 import 'package:animewitcher/features/settings/presentation/player_settings_provider.dart';
 import 'package:animewitcher/shared/widgets/live_previews.dart';
 
@@ -23,7 +24,8 @@ import 'package:animewitcher/shared/widgets/live_previews.dart';
 /// is shown once, and each answer is also stored by its own setting, which
 /// settings can change later.
 class FirstRunSetup {
-  static const String storageKey = 'first_run_setup_v7';
+  // v8: the manga choice and an account step in every build.
+  static const String storageKey = 'first_run_setup_v8';
 
   static bool isDone(StorageService storage) {
     try {
@@ -85,6 +87,7 @@ class _FirstRunSetupScreenState extends ConsumerState<FirstRunSetupScreen> {
   late bool _skipIntro;
   late bool _skipCredits;
   late FillerBehaviour _filler;
+  late bool _mangaTab;
   int _index = 0;
 
   /// Desktops and tablets choose a layout; phones always have the dock.
@@ -94,8 +97,9 @@ class _FirstRunSetupScreenState extends ConsumerState<FirstRunSetupScreen> {
     _Step.appearance,
     _Step.details,
     _Step.player,
-    // Only where there is an account service to sign in to.
-    if (AnimeWitcherAccountConfig.firebaseConfigured) _Step.account,
+    // Always: a build without the account service says so here, rather
+    // than the step silently not being there.
+    _Step.account,
   ];
 
   @override
@@ -114,6 +118,7 @@ class _FirstRunSetupScreenState extends ConsumerState<FirstRunSetupScreen> {
     _skipIntro = player.autoSkipIntro;
     _skipCredits = player.autoSkipCredits;
     _filler = player.fillerBehaviour;
+    _mangaTab = ref.read(mangaHasOwnTabProvider);
   }
 
   Future<void> _finish() async {
@@ -122,6 +127,9 @@ class _FirstRunSetupScreenState extends ConsumerState<FirstRunSetupScreen> {
     final container = ProviderScope.containerOf(context, listen: false);
     if (_isDesktop) ref.read(appLayoutStyleProvider.notifier).select(_layout);
     ref.read(seasonsBarStyleProvider.notifier).select(_seasons);
+    if (_mangaTab != ref.read(mangaHasOwnTabProvider)) {
+      await ref.read(generalSettingsProvider.notifier).setMangaTab(_mangaTab);
+    }
 
     final settings = ref.read(playerSettingsProvider.notifier);
     final player =
@@ -251,6 +259,33 @@ class _FirstRunSetupScreenState extends ConsumerState<FirstRunSetupScreen> {
                 onTap: () => setState(() => _layout = style),
               ),
           ],
+          // One compact row rather than two tiles: the step already holds
+          // the colours and the layouts, and must still fit with its Next.
+          // Its own Material, so the row's ink shows over the panel.
+          Material(
+            type: MaterialType.transparency,
+            child: SwitchListTile(
+              key: const ValueKey<String>('setup-manga-own-tab'),
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              secondary: const Icon(Icons.menu_book_rounded),
+              title: Text(
+                arabic ? 'قسم خاص للمانجا في الشريط' : 'Manga as its own tab',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              subtitle: Text(
+                arabic
+                    ? 'وإلا تبقى فصولها الجديدة في الرئيسية مع الأنمي.'
+                    : 'Otherwise its new chapters stay on home with anime.',
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.55)),
+              ),
+              value: _mangaTab,
+              onChanged: (value) => setState(() => _mangaTab = value),
+            ),
+          ),
         ],
         _Step.details => [
           for (final style in SeasonsBarStyle.values)
@@ -381,7 +416,18 @@ class _FirstRunSetupScreenState extends ConsumerState<FirstRunSetupScreen> {
           ),
         ],
         _Step.account => [
-          if (profile != null)
+          if (!AnimeWitcherAccountConfig.firebaseConfigured)
+            Text(
+              key: const ValueKey<String>('setup-account-unavailable'),
+              arabic
+                  ? 'تسجيل الدخول غير متاح في هذه النسخة من التطبيق: بُنيت بدون مفتاح خدمة الحساب. النسخ من GitHub فيها تسجيل الدخول.'
+                  : 'Sign-in is not available in this copy of the app: it was built without the account service key. Builds from GitHub have it.',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.7),
+                height: 1.5,
+              ),
+            )
+          else if (profile != null)
             _OptionTile(
               selected: true,
               icon: Icons.account_circle_rounded,
@@ -458,6 +504,16 @@ class _FirstRunSetupScreenState extends ConsumerState<FirstRunSetupScreen> {
       canPop: false,
       child: Scaffold(
         backgroundColor: const Color(0xFF0E0E0D),
+        // On a narrow screen the page scrolls; Back and Next stay at its foot.
+        bottomNavigationBar: wide
+            ? null
+            : SafeArea(
+                child: Container(
+                  color: const Color(0xFF161615),
+                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
+                  child: options.buttons(),
+                ),
+              ),
         body: SafeArea(
           child: wide
               ? Row(
@@ -465,7 +521,20 @@ class _FirstRunSetupScreenState extends ConsumerState<FirstRunSetupScreen> {
                   children: [
                     SizedBox(
                       width: 400,
-                      child: SingleChildScrollView(child: options),
+                      child: ColoredBox(
+                        color: const Color(0xFF161615),
+                        child: Column(
+                          children: [
+                            Expanded(
+                              child: SingleChildScrollView(child: options),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(28, 8, 28, 24),
+                              child: options.buttons(),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                     Expanded(
                       child: Padding(
@@ -515,6 +584,45 @@ class _StepPanel extends StatelessWidget {
   final VoidCallback? onBack;
   final VoidCallback onNext;
   final String nextLabel;
+
+  /// Back and Next, kept apart from the choices so the screen can pin them
+  /// to its foot: a long step must never push Next out of sight.
+  Widget buttons() {
+    return Row(
+      children: [
+        if (onBack != null) ...[
+          OutlinedButton(
+            onPressed: onBack,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.white,
+              side: BorderSide(color: Colors.white.withValues(alpha: 0.25)),
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(99),
+              ),
+            ),
+            child: Text(arabic ? 'رجوع' : 'Back'),
+          ),
+          const SizedBox(width: 10),
+        ],
+        Expanded(
+          child: FilledButton(
+            onPressed: onNext,
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(99),
+              ),
+            ),
+            child: Text(
+              nextLabel,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -576,49 +684,6 @@ class _StepPanel extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           for (final child in children) ...[child, const SizedBox(height: 10)],
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              if (onBack != null) ...[
-                OutlinedButton(
-                  onPressed: onBack,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.25),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 22,
-                      vertical: 14,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(99),
-                    ),
-                  ),
-                  child: Text(arabic ? 'رجوع' : 'Back'),
-                ),
-                const SizedBox(width: 10),
-              ],
-              Expanded(
-                child: FilledButton(
-                  onPressed: onNext,
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(99),
-                    ),
-                  ),
-                  child: Text(
-                    nextLabel,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
         ],
       ),
     );
@@ -692,6 +757,7 @@ class _Choices<T> extends StatelessWidget {
 
 class _OptionTile extends StatelessWidget {
   const _OptionTile({
+    super.key,
     required this.selected,
     required this.icon,
     required this.title,

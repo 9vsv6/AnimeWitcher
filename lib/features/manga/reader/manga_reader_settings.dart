@@ -85,6 +85,7 @@ class MangaReaderSettings {
     this.flashInterval = 1,
     this.flashColor = 0,
     this.showNavigationOverlayOnStart = false,
+    this.verticalPageBar = false,
     this.webtoonDisableZoomOut = false,
     this.webtoonDoubleTapZoomEnabled = true,
     this.readerHideThreshold = 1,
@@ -129,6 +130,9 @@ class MangaReaderSettings {
   final int flashInterval;
   final int flashColor;
   final bool showNavigationOverlayOnStart;
+
+  /// The page bar down the side of the window instead of across its foot.
+  final bool verticalPageBar;
   final bool webtoonDisableZoomOut;
   final bool webtoonDoubleTapZoomEnabled;
   final int readerHideThreshold;
@@ -227,6 +231,7 @@ class MangaReaderSettings {
     int? flashInterval,
     int? flashColor,
     bool? showNavigationOverlayOnStart,
+    bool? verticalPageBar,
     bool? webtoonDisableZoomOut,
     bool? webtoonDoubleTapZoomEnabled,
     int? readerHideThreshold,
@@ -276,6 +281,7 @@ class MangaReaderSettings {
       flashColor: flashColor ?? this.flashColor,
       showNavigationOverlayOnStart:
           showNavigationOverlayOnStart ?? this.showNavigationOverlayOnStart,
+      verticalPageBar: verticalPageBar ?? this.verticalPageBar,
       webtoonDisableZoomOut:
           webtoonDisableZoomOut ?? this.webtoonDisableZoomOut,
       webtoonDoubleTapZoomEnabled:
@@ -327,6 +333,7 @@ class MangaReaderSettings {
     'flashInterval': flashInterval,
     'flashColor': flashColor,
     'showNavigationOverlayOnStart': showNavigationOverlayOnStart,
+    'verticalPageBar': verticalPageBar,
     'webtoonDisableZoomOut': webtoonDisableZoomOut,
     'webtoonDoubleTapZoomEnabled': webtoonDoubleTapZoomEnabled,
     'readerHideThreshold': readerHideThreshold,
@@ -436,6 +443,7 @@ class MangaReaderSettings {
       flashColor: integer('flashColor', 0).clamp(0, 2).toInt(),
       showNavigationOverlayOnStart:
           boolean('showNavigationOverlayOnStart', false),
+      verticalPageBar: boolean('verticalPageBar', false),
       webtoonDisableZoomOut: boolean('webtoonDisableZoomOut', false),
       webtoonDoubleTapZoomEnabled:
           boolean('webtoonDoubleTapZoomEnabled', true),

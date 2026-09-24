@@ -1,9 +1,10 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
+import 'package:animewitcher/core/navigation/taskbar_destination.dart';
+import '../../settings/presentation/general_settings_provider.dart';
 import 'package:animewitcher/shared/widgets/mouse_drag_refresh_indicator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animewitcher/core/navigation/app_layout_style.dart';
-import 'package:animewitcher/core/navigation/taskbar_destination.dart';
 
 import 'home_provider.dart';
 import 'home_section_titles.dart';
@@ -189,6 +190,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     AnimeWitcherProvider provider,
   ) {
     final entries = visibleHomeRailEntries(data).toList(growable: false);
+    final mangaHasOwnTab = ref.watch(mangaHasOwnTabProvider);
     var newsAfterIndex = entries.indexWhere(
       (entry) => isMostWatchedAnimationSectionTitle(entry.key),
     );
@@ -241,7 +243,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           forcePortrait: isLatestAddedSectionTitle(entry.key),
         ),
       );
-      if (latestManga.isNotEmpty && _isNewEpisodesSectionTitle(entry.key)) {
+      // With manga on a tab of its own, its new chapters live there.
+      if (latestManga.isNotEmpty &&
+          !mangaHasOwnTab &&
+          _isNewEpisodesSectionTitle(entry.key)) {
         sections.add(
           LatestMangaChaptersSection(
             title: AppLocalizations.of(context)!.latestChapters,

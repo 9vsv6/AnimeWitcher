@@ -7,6 +7,7 @@ import '../../../core/theme/theme_provider.dart';
 import '../../../core/utils/responsive_breakpoints.dart';
 import '../../../shared/widgets/live_previews.dart';
 import '../../details/presentation/widgets/details_seasons_bar.dart';
+import '../../manga/reader/manga_reader_settings_screen.dart';
 import '../../../core/account/animewitcher_account_models.dart';
 import '../../characters/presentation/characters_screen.dart';
 import '../../settings/presentation/account_screen.dart';
@@ -33,6 +34,9 @@ class MoreScreen extends ConsumerWidget {
     const icons = <IconData>[
       Icons.tune_rounded,
       Icons.play_circle_outline_rounded,
+      // The reader group, which arrived after this list was written and
+      // shifted every icon below it one row down.
+      Icons.chrome_reader_mode_rounded,
       Icons.download_rounded,
       Icons.image_outlined,
       Icons.storage_rounded,
@@ -452,6 +456,36 @@ class _MoreTile extends StatelessWidget {
   }
 }
 
+/// The reader group as the pane shows it: every reader option under the
+/// group's title, on the card the other settings sit on, where the phone's
+/// list has one row that opens them on a screen of their own.
+class _ReaderGroupInline extends StatelessWidget {
+  const _ReaderGroupInline({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return SettingsGroup(
+      title: title,
+      children: [
+        // A Material rather than a coloured box, so the rows' ink shows.
+        Material(
+          key: const ValueKey<String>('settings-reader-inline'),
+          color: settingsTileColor(colors),
+          borderRadius: BorderRadius.circular(14),
+          clipBehavior: Clip.antiAlias,
+          child: const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: MangaReaderSettingsOptions(showReset: true),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _SettingsGroupPane extends ConsumerWidget {
   const _SettingsGroupPane({required this.index});
 
@@ -479,7 +513,12 @@ class _SettingsGroupPane extends ConsumerWidget {
           8,
           MediaQuery.viewPaddingOf(context).bottom + 96,
         ),
-        children: [groups[index]],
+        children: [
+          if (groups[index].key == SettingsScreen.readerGroupKey)
+            _ReaderGroupInline(title: groups[index].title)
+          else
+            groups[index],
+        ],
       ),
     );
 

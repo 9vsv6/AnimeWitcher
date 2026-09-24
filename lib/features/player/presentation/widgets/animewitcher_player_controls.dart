@@ -1649,33 +1649,42 @@ class AnimeWitcherPlayerControlsState
                 // Hidden, not removed, while the ⚙ panel is open: both sit at
                 // the bottom right. Taking it out of the tree lost track of the
                 // segment it was in, and closing the panel left the button gone
-                // for the rest of the opening.
+                // for the rest of the opening. The overlay places itself with
+                // a Positioned, so it keeps a Stack of its own to sit in:
+                // wrapped directly, release builds paint the grey error box
+                // over the whole player and it swallows every tap.
                 if (!showNextEpOverlay && skipSegments.isNotEmpty)
-                  Visibility(
-                    visible: !_settingsOpen,
-                    maintainState: true,
-                    maintainAnimation: true,
-                    child: SkipSegmentOverlay(
-                      focusNode: _skipFocusNode,
-                      onActiveSegmentChanged: (active) {
-                        if (mounted) {
-                          setState(() {
-                            _isSkipActive = active;
-                          });
-                        }
-                      },
-                      player: widget.player,
-                      videoViewController: widget.videoViewController,
-                      skipSegments: skipSegments,
-                      isTv: _isTv,
-                      controlsVisible: _isVisible,
-                      onFocusReturned: () {
-                        if (_isVisible) {
-                          _playFocusNode.requestFocus();
-                        } else {
-                          _returnFocusToRoot();
-                        }
-                      },
+                  Positioned.fill(
+                    child: Visibility(
+                      visible: !_settingsOpen,
+                      maintainState: true,
+                      maintainAnimation: true,
+                      child: Stack(
+                        children: [
+                          SkipSegmentOverlay(
+                            focusNode: _skipFocusNode,
+                            onActiveSegmentChanged: (active) {
+                              if (mounted) {
+                                setState(() {
+                                  _isSkipActive = active;
+                                });
+                              }
+                            },
+                            player: widget.player,
+                            videoViewController: widget.videoViewController,
+                            skipSegments: skipSegments,
+                            isTv: _isTv,
+                            controlsVisible: _isVisible,
+                            onFocusReturned: () {
+                              if (_isVisible) {
+                                _playFocusNode.requestFocus();
+                              } else {
+                                _returnFocusToRoot();
+                              }
+                            },
+                          ),
+                        ],
+                      ),
                     ),
                   ),
 

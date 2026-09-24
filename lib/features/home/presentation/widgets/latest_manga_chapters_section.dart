@@ -109,6 +109,7 @@ class _LatestMangaChaptersSectionState
                         'latest_manga_${manga.url}_${entry.chapter.id}_$index',
                     lookupTitle: manga.artworkLookupTitle,
                     malId: manga.artworkLookupMalId,
+                    manga: true,
                     onTap: () => widget.onTap(entry),
                   ),
                 );

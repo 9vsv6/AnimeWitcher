@@ -1,5 +1,6 @@
 import 'package:animewitcher/core/storage/storage_service.dart';
 import 'package:animewitcher/features/onboarding/first_run_setup_screen.dart';
+import 'package:animewitcher/features/settings/presentation/general_settings_provider.dart';
 import 'package:animewitcher/features/player/presentation/widgets/skip_segment_overlay.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -9,8 +10,58 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/memory_storage_service.dart';
 
+/// Remembers the taskbar lists, with manga hidden until the saved order
+/// places it, as the real storage does.
+class _TaskbarStorage extends MemoryStorageService {
+  List<String> order = <String>[];
+  Set<String> hidden = <String>{};
+
+  @override
+  List<String> getTaskbarOrder() => order;
+
+  @override
+  Set<String> getHiddenTaskbarItems() =>
+      order.contains('manga') ? hidden : <String>{...hidden, 'manga'};
+
+  @override
+  Future<void> setTaskbarOrder(List<String> value) async =>
+      order = List<String>.of(value);
+
+  @override
+  Future<void> setHiddenTaskbarItems(Set<String> value) async =>
+      hidden = Set<String>.of(value);
+
+  // Finishing the setup saves every choice, not only the tab.
+  final Map<String, String> strings = <String, String>{};
+  final Map<String, Object?> player = <String, Object?>{};
+
+  @override
+  String? getString(String key) => strings[key];
+
+  @override
+  Future<void> setString(String key, String? value) async {
+    if (value == null) {
+      strings.remove(key);
+    } else {
+      strings[key] = value;
+    }
+  }
+
+  @override
+  T? getPlayerSetting<T>(String key, {T? defaultValue}) =>
+      (player[key] ?? defaultValue) as T?;
+
+  @override
+  Future<void> setPlayerSetting(String key, dynamic value) async =>
+      player[key] = value;
+}
+
 void main() {
-  Future<void> pumpAt(WidgetTester tester, Size size) async {
+  Future<void> pumpAt(
+    WidgetTester tester,
+    Size size, {
+    StorageService? storage,
+  }) async {
     // The window itself, not only the drawing surface: the screen decides
     // between its wide and narrow layouts from the window's size.
     tester.view.physicalSize = size;
@@ -19,7 +70,9 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          storageServiceProvider.overrideWithValue(MemoryStorageService()),
+          storageServiceProvider.overrideWithValue(
+            storage ?? MemoryStorageService(),
+          ),
         ],
         child: const MaterialApp(
           locale: Locale('ar'),
@@ -135,5 +188,40 @@ void main() {
     expect(find.byType(SkipPill), findsNothing);
     expect(find.textContaining('مع التخطي التلقائي'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the account step is always there, last', (tester) async {
+    await pumpAt(tester, const Size(1280, 800));
+    final seen = await walkSteps(tester);
+    expect(seen.last, 'الحساب');
+  });
+
+  testWidgets('the manga switch in setup takes effect when setup finishes', (
+    tester,
+  ) async {
+    await pumpAt(tester, const Size(1280, 800), storage: _TaskbarStorage());
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(FirstRunSetupScreen)),
+    );
+    final before = container.read(mangaHasOwnTabProvider);
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey<String>('setup-manga-own-tab')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('setup-manga-own-tab')));
+    await tester.pumpAndSettle();
+    // Nothing changes until the setup is finished.
+    expect(container.read(mangaHasOwnTabProvider), before);
+
+    for (var guard = 0; guard < 5; guard++) {
+      if (find.text('ابدأ المشاهدة').evaluate().isNotEmpty) break;
+      await tester.tap(find.text('التالي'));
+      await tester.pumpAndSettle();
+    }
+    await tester.tap(find.text('ابدأ المشاهدة'));
+    await tester.pumpAndSettle();
+
+    expect(container.read(mangaHasOwnTabProvider), !before);
   });
 }

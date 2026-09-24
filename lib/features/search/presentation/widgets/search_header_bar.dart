@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
+
 import '../search_domain.dart';
 import '../search_provider.dart';
 import '../search_text_direction.dart';
@@ -28,8 +29,6 @@ class SearchHeaderBar extends ConsumerStatefulWidget {
   final String sortTooltip;
   final int activeFilterCount;
   final bool isFilterLoading;
-  final SearchDomain domain;
-  final ValueChanged<SearchDomain> onDomainSelected;
   final bool showSort;
   final bool showFilter;
   final bool isCompact;
@@ -50,8 +49,6 @@ class SearchHeaderBar extends ConsumerStatefulWidget {
     required this.sortTooltip,
     required this.activeFilterCount,
     required this.isFilterLoading,
-    required this.domain,
-    required this.onDomainSelected,
     required this.showSort,
     required this.showFilter,
     this.isCompact = false,
@@ -70,12 +67,13 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
     final isCompact = widget.isCompact;
     final isDark = theme.brightness == Brightness.dark;
     // The same wording the home bar uses, so the two read as one control.
-    final searchHint = l10n.searchHint;
+    // Names what is being searched, so a manga search does not read as an
+    // anime one.
+    final searchHint = searchDomainHint(context, ref.watch(searchDomainProvider));
 
     final actionWidth = SearchActionButtons.groupWidthForHeight(
       SearchGlassSurface.height,
-      visibleControls:
-          1 + (widget.showSort ? 1 : 0) + (widget.showFilter ? 1 : 0),
+      visibleControls: (widget.showSort ? 1 : 0) + (widget.showFilter ? 1 : 0),
     );
     return Padding(
       padding: EdgeInsets.symmetric(
@@ -265,8 +263,6 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                   if (!isCompact) ...[
                     const SizedBox(width: 4),
                     SearchActionButtons(
-                      domain: widget.domain,
-                      onDomainSelected: widget.onDomainSelected,
                       showSort: widget.showSort,
                       showFilter: widget.showFilter,
                       filterCount: widget.showFilter

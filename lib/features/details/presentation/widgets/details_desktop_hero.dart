@@ -36,6 +36,8 @@ class DetailsDesktopHero extends ConsumerWidget {
     this.heroActions,
     this.story,
     this.nextAiring,
+    this.manga = false,
+    this.showPoster = false,
     // Kept for backwards compatibility with callers that still pass it,
     // but it's no longer used now that [DetailsActionButtons] is removed
     // from the desktop layout.
@@ -83,6 +85,15 @@ class DetailsDesktopHero extends ConsumerWidget {
   /// When the next episode lands, for a series still airing.
   final Widget? nextAiring;
 
+  /// A manga: its artwork is looked up as a manga, and since the catalog
+  /// keeps no banner for one, the banner AniList has is asked for before the
+  /// poster is stretched across the window in its place.
+  final bool manga;
+
+  /// The poster beside the title. The anime page leaves it out; a manga,
+  /// whose banner is often missing, keeps its cover in view.
+  final bool showPoster;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
@@ -104,7 +115,7 @@ class DetailsDesktopHero extends ConsumerWidget {
         ) ??
         '';
     final backdrop = storyblokAtStoredWidth(
-      backdropUrl,
+      manga && providedBannerUrl == null ? '' : backdropUrl,
       maxWidth: storyblokBannerWidth,
     );
 
@@ -113,7 +124,11 @@ class DetailsDesktopHero extends ConsumerWidget {
         // How far down the actions sit. Enough of the picture is left above
         // them to read as a frame from the show rather than a header image,
         // and enough room below for the synopsis to start on the same screen.
-        final heroBand = (constraints.maxHeight * 0.56).clamp(300.0, 560.0);
+        // With the poster beside the name the block is taller, so it starts
+        // higher and the synopsis still begins on the first screen.
+        final heroBand = showPoster
+            ? (constraints.maxHeight * 0.56 - 150).clamp(160.0, 410.0)
+            : (constraints.maxHeight * 0.56).clamp(300.0, 560.0);
 
         return MouseDragRefreshIndicator(
           onRefresh: onRefresh,
@@ -142,6 +157,7 @@ class DetailsDesktopHero extends ConsumerWidget {
                               // other sources: AniList's banner, then what
                               // AniZip knows of TheTVDB and Kitsu.
                               preferBanner: true,
+                              manga: manga,
                               malId: displayItem.artworkLookupMalId,
                               title: displayItem.artworkLookupTitle,
                               fit: BoxFit.cover,
@@ -153,7 +169,9 @@ class DetailsDesktopHero extends ConsumerWidget {
                                     theme.colorScheme.surfaceContainerHighest,
                               ),
                               errorWidget: (_) {
-                                if (providedBannerUrl != null &&
+                                // A manga with no banner anywhere keeps its
+                                // poster behind the title, as before.
+                                if ((providedBannerUrl != null || manga) &&
                                     posterUrl != null &&
                                     providedBannerUrl != posterUrl) {
                                   return CachedNetworkImage(
@@ -231,49 +249,62 @@ class DetailsDesktopHero extends ConsumerWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              // The poster is no longer in the hero, so the
-                              // name carries the way into the artwork viewer
-                              // rather than leaving it unreachable here.
-                              onTap: onPosterTap,
-                              onLongPress: () => _copyAnimeTitle(context),
-                              child: displayItem.logoUrl != null
-                                  ? ArtworkDecode(
-                                      paintedWidth: 420,
-                                      builder:
-                                          (
-                                            BuildContext context,
-                                            int? decodeWidth,
-                                          ) => CachedNetworkImage(
-                                            imageUrl: displayItem.logoUrl!,
-                                            height: 96,
-                                            // This widget takes a resolved
-                                            // alignment, so the start edge is
-                                            // worked out here.
-                                            alignment:
-                                                Directionality.of(context) ==
-                                                    TextDirection.rtl
-                                                ? Alignment.centerRight
-                                                : Alignment.centerLeft,
-                                            fit: BoxFit.contain,
-                                            memCacheWidth: decodeWidth,
-                                            placeholder: (_, _) =>
-                                                _buildTitle(textColor),
-                                            errorWidget: (_, _, _) =>
-                                                _buildTitle(textColor),
-                                          ),
-                                    )
-                                  : _buildTitle(textColor),
-                            ),
-                            const SizedBox(height: 16),
-                            // The scores ride with the metadata, in the same
-                            // compact form the phone header uses: one line of
-                            // "★ 7.34 · MAL 6.37" reads faster than two pills,
-                            // and it keeps both layouts saying it one way.
-                            MetadataBar(
-                              item: displayItem,
-                              isLoading: detailsState is AsyncLoading,
+                            _withPoster(
+                              context,
+                              posterUrl,
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  GestureDetector(
+                                    behavior: HitTestBehavior.opaque,
+                                    // The poster is no longer in the hero, so the
+                                    // name carries the way into the artwork viewer
+                                    // rather than leaving it unreachable here.
+                                    onTap: onPosterTap,
+                                    onLongPress: () => _copyAnimeTitle(context),
+                                    child: displayItem.logoUrl != null
+                                        ? ArtworkDecode(
+                                            paintedWidth: 420,
+                                            builder:
+                                                (
+                                                  BuildContext context,
+                                                  int? decodeWidth,
+                                                ) => CachedNetworkImage(
+                                                  imageUrl:
+                                                      displayItem.logoUrl!,
+                                                  height: 96,
+                                                  // This widget takes a resolved
+                                                  // alignment, so the start edge is
+                                                  // worked out here.
+                                                  alignment:
+                                                      Directionality.of(
+                                                            context,
+                                                          ) ==
+                                                          TextDirection.rtl
+                                                      ? Alignment.centerRight
+                                                      : Alignment.centerLeft,
+                                                  fit: BoxFit.contain,
+                                                  memCacheWidth: decodeWidth,
+                                                  placeholder: (_, _) =>
+                                                      _buildTitle(textColor),
+                                                  errorWidget: (_, _, _) =>
+                                                      _buildTitle(textColor),
+                                                ),
+                                          )
+                                        : _buildTitle(textColor),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  // The scores ride with the metadata, in the same
+                                  // compact form the phone header uses: one line of
+                                  // "★ 7.34 · MAL 6.37" reads faster than two pills,
+                                  // and it keeps both layouts saying it one way.
+                                  MetadataBar(
+                                    item: displayItem,
+                                    isLoading: detailsState is AsyncLoading,
+                                  ),
+                                ],
+                              ),
                             ),
                             if (heroActions != null) ...[
                               const SizedBox(height: 24),
@@ -314,6 +345,62 @@ class DetailsDesktopHero extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+
+  static const double _posterWidth = 170;
+  static const double _posterHeight = 245;
+
+  /// The name and its details, with the poster beside them at the start
+  /// edge when [showPoster] asks for it, their bottoms lined up.
+  Widget _withPoster(BuildContext context, String? posterUrl, Widget title) {
+    if (!showPoster) return title;
+    final colors = Theme.of(context).colorScheme;
+    final poster = GestureDetector(
+      key: const ValueKey<String>('details-hero-poster'),
+      behavior: HitTestBehavior.opaque,
+      onTap: onPosterTap,
+      child: Container(
+        width: _posterWidth,
+        height: _posterHeight,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: colors.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: colors.onSurface.withValues(alpha: 0.12)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x66000000),
+              blurRadius: 24,
+              offset: Offset(0, 10),
+            ),
+          ],
+        ),
+        child: ArtworkDecode(
+          paintedWidth: _posterWidth,
+          builder: (BuildContext context, int? decodeWidth) =>
+              FallbackPosterImage(
+                imageUrl: posterUrl ?? '',
+                malId: displayItem.artworkLookupMalId,
+                title: displayItem.artworkLookupTitle,
+                manga: manga,
+                fit: BoxFit.cover,
+                memCacheWidth: decodeWidth,
+                placeholder: (_) =>
+                    ColoredBox(color: colors.surfaceContainerHighest),
+                errorWidget: (_) =>
+                    ThumbnailErrorPlaceholder(label: displayItem.title),
+              ),
+        ),
+      ),
+    );
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        poster,
+        const SizedBox(width: 28),
+        Expanded(child: title),
+      ],
     );
   }
 

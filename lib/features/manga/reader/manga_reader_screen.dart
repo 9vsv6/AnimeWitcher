@@ -10,6 +10,7 @@ import '../../../core/domain/entity/multimedia_item.dart';
 import '../../../core/extensions/base_provider.dart';
 import '../../../core/extensions/extension_manager.dart';
 import '../../../core/storage/manga_reading_repository.dart';
+import '../../../core/utils/window_controls_inset.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../../shared/widgets/apple_liquid_glass.dart';
 import '../../../shared/widgets/loading_indicator.dart';
@@ -26,7 +27,7 @@ import 'widgets/manga_reader_auto_scroll_button.dart';
 import 'widgets/manga_reader_image_actions_sheet.dart';
 import 'widgets/manga_reader_navigation_overlay.dart';
 import 'widgets/manga_reader_page_indicator.dart';
-import 'widgets/manga_reader_quick_settings.dart';
+import 'widgets/manga_reader_settings_panel.dart';
 import 'widgets/manga_paged_reader.dart';
 import 'widgets/manga_webtoon_reader.dart';
 import 'widgets/manga_zoomable_page.dart';
@@ -69,6 +70,7 @@ class _MangaReaderScreenState extends ConsumerState<MangaReaderScreen>
   bool? _keepAwakeApplied;
   bool? _fullScreenApplied;
   bool _chapterNavigationInProgress = false;
+  bool _settingsPanelOpen = false;
 
   String get _readerMangaId {
     final chapterId = widget.chapter.mangaId.trim();
@@ -223,9 +225,7 @@ class _MangaReaderScreenState extends ConsumerState<MangaReaderScreen>
       speed: speed,
     );
     setState(() => _autoScrollRunning = enabled);
-    unawaited(
-      ref.read(mangaReaderSettingsProvider.notifier).setSettings(next),
-    );
+    unawaited(ref.read(mangaReaderSettingsProvider.notifier).setSettings(next));
     _syncAutoScroll(next);
   }
 
@@ -237,9 +237,7 @@ class _MangaReaderScreenState extends ConsumerState<MangaReaderScreen>
   void _setMode(MangaReaderMode mode, MangaReaderSettings settings) {
     _controller.setMode(mode);
     final next = settings.withMangaMode(_readerMangaId, mode);
-    unawaited(
-      ref.read(mangaReaderSettingsProvider.notifier).setSettings(next),
-    );
+    unawaited(ref.read(mangaReaderSettingsProvider.notifier).setSettings(next));
     setState(() {
       _readerEpoch++;
       if (!mode.isContinuous) _autoScrollRunning = false;
@@ -251,9 +249,7 @@ class _MangaReaderScreenState extends ConsumerState<MangaReaderScreen>
     final nextValue = !_forceDoublePage;
     final next = settings.withMangaDoublePage(_readerMangaId, nextValue);
     setState(() => _forceDoublePage = nextValue);
-    unawaited(
-      ref.read(mangaReaderSettingsProvider.notifier).setSettings(next),
-    );
+    unawaited(ref.read(mangaReaderSettingsProvider.notifier).setSettings(next));
   }
 
   void _onPageChanged(int index, MangaReaderSettings settings) {
@@ -268,12 +264,9 @@ class _MangaReaderScreenState extends ConsumerState<MangaReaderScreen>
     }
     _flashTimer?.cancel();
     setState(() => _flashVisible = true);
-    _flashTimer = Timer(
-      Duration(milliseconds: settings.flashDurationMs),
-      () {
-        if (mounted) setState(() => _flashVisible = false);
-      },
-    );
+    _flashTimer = Timer(Duration(milliseconds: settings.flashDurationMs), () {
+      if (mounted) setState(() => _flashVisible = false);
+    });
   }
 
   void _jumpToPage(int index) {
@@ -293,15 +286,11 @@ class _MangaReaderScreenState extends ConsumerState<MangaReaderScreen>
   }) {
     if (_controller.mode.isContinuous && _continuousController.hasClients) {
       final position = _continuousController.position;
-      if (forward &&
-          position.extentAfter <= 0.5 &&
-          _controller.canNext) {
+      if (forward && position.extentAfter <= 0.5 && _controller.canNext) {
         _openNextChapter();
         return;
       }
-      if (!forward &&
-          position.extentBefore <= 0.5 &&
-          _controller.canPrevious) {
+      if (!forward && position.extentBefore <= 0.5 && _controller.canPrevious) {
         _openPreviousChapter();
         return;
       }
@@ -349,8 +338,8 @@ class _MangaReaderScreenState extends ConsumerState<MangaReaderScreen>
   }
 
   VoidCallback _horizontalPrevious(MangaReaderSettings settings) {
-    final invert = settings.tappingInversion == 1 ||
-        settings.tappingInversion == 3;
+    final invert =
+        settings.tappingInversion == 1 || settings.tappingInversion == 3;
     final rtl = _controller.mode.isRtl;
     final previous = rtl
         ? () => _navigateReaderPage(forward: true, settings: settings)
@@ -362,8 +351,8 @@ class _MangaReaderScreenState extends ConsumerState<MangaReaderScreen>
   }
 
   VoidCallback _horizontalNext(MangaReaderSettings settings) {
-    final invert = settings.tappingInversion == 1 ||
-        settings.tappingInversion == 3;
+    final invert =
+        settings.tappingInversion == 1 || settings.tappingInversion == 3;
     final rtl = _controller.mode.isRtl;
     final previous = rtl
         ? () => _navigateReaderPage(forward: true, settings: settings)
@@ -375,7 +364,11 @@ class _MangaReaderScreenState extends ConsumerState<MangaReaderScreen>
   }
 
   void _toggleControls() {
-    setState(() => _controlsVisible = !_controlsVisible);
+    setState(() {
+      _controlsVisible = !_controlsVisible;
+      // The panel belongs to the bars: it goes when they do.
+      if (!_controlsVisible) _settingsPanelOpen = false;
+    });
   }
 
   void _handleTapZone(
@@ -438,7 +431,10 @@ class _MangaReaderScreenState extends ConsumerState<MangaReaderScreen>
         _controlsVisible &&
         (notification.scrollDelta ?? 0).abs() >
             mangaReaderHideThresholdPixels(settings.readerHideThreshold)) {
-      setState(() => _controlsVisible = false);
+      setState(() {
+        _controlsVisible = false;
+        _settingsPanelOpen = false;
+      });
     }
     return true;
   }
@@ -532,33 +528,64 @@ class _MangaReaderScreenState extends ConsumerState<MangaReaderScreen>
     if (mounted) setState(() => _readerEpoch++);
   }
 
-  Future<void> _showQuickSettings() async {
-    final readerContext = context;
-    await showModalBottomSheet<void>(
-      context: readerContext,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (sheetContext) => SafeArea(
-        child: MangaReaderQuickSettings(
-          currentMode: _controller.mode,
-          mangaId: _readerMangaId,
-          onModeChanged: (mode) {
-            _setMode(mode, ref.read(mangaReaderSettingsProvider));
-          },
-          onAutoScrollChanged: (enabled, speed) {
-            _setAutoScroll(enabled: enabled, speed: speed);
-          },
-          onOpenAllSettings: () {
-            Navigator.of(sheetContext).pop();
-            Navigator.of(readerContext).push<void>(
-              MaterialPageRoute<void>(
-                builder: (_) => const MangaReaderSettingsScreen(),
-              ),
-            );
-          },
+  void _toggleSettingsPanel() =>
+      setState(() => _settingsPanelOpen = !_settingsPanelOpen);
+
+  /// The panel the settings button opens, floating above the bottom bar,
+  /// with a scrim to close it by clicking anywhere else.
+  List<Widget> _settingsPanel(
+    BuildContext context,
+    MangaReaderSettings settings,
+  ) {
+    if (!_settingsPanelOpen || !_controlsVisible) return const <Widget>[];
+    final doublePage =
+        _forceDoublePage ||
+        shouldUseMangaDoublePage(
+          settings: settings,
+          viewport: MediaQuery.sizeOf(context),
+          mode: _controller.mode,
+        );
+    return <Widget>[
+      Positioned.fill(
+        child: GestureDetector(
+          key: const ValueKey<String>('manga-reader-settings-scrim'),
+          behavior: HitTestBehavior.opaque,
+          onTap: _toggleSettingsPanel,
         ),
       ),
-    );
+      Positioned(
+        left: 16,
+        // Clear of whichever bar the button is on: the foot, or the side.
+        right: settings.verticalPageBar ? 80 : 16,
+        bottom: settings.verticalPageBar
+            ? 24 + MediaQuery.paddingOf(context).bottom
+            : 72 + MediaQuery.paddingOf(context).bottom,
+        child: Center(
+          child: MangaReaderSettingsPanel(
+            settings: settings,
+            mode: _controller.mode,
+            doublePage: doublePage,
+            onMode: (mode) =>
+                _setMode(mode, ref.read(mangaReaderSettingsProvider)),
+            onDoublePage: (value) {
+              if (value != _forceDoublePage) {
+                _toggleDoublePage(ref.read(mangaReaderSettingsProvider));
+              }
+            },
+            onUpdate: (change) =>
+                ref.read(mangaReaderSettingsProvider.notifier).update(change),
+            onOpenAllSettings: () {
+              setState(() => _settingsPanelOpen = false);
+              Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder: (_) => const MangaReaderSettingsScreen(),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    ];
   }
 
   Future<void> _showImageActions() async {
@@ -641,16 +668,20 @@ class _MangaReaderScreenState extends ConsumerState<MangaReaderScreen>
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     try {
-      await ref.read(mangaReaderImageActionsProvider).sharePage(
-        page: page,
-        mangaTitle: widget.manga.title,
-        chapterName: _controller.currentChapter.name,
-      );
+      await ref
+          .read(mangaReaderImageActionsProvider)
+          .sharePage(
+            page: page,
+            mangaTitle: widget.manga.title,
+            chapterName: _controller.currentChapter.name,
+          );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(isArabic ? 'تعذرت مشاركة الصورة' : 'Could not share image'),
+          content: Text(
+            isArabic ? 'تعذرت مشاركة الصورة' : 'Could not share image',
+          ),
         ),
       );
     }
@@ -660,16 +691,20 @@ class _MangaReaderScreenState extends ConsumerState<MangaReaderScreen>
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     try {
-      final file = await ref.read(mangaReaderImageActionsProvider).savePage(
-        page: page,
-        mangaTitle: widget.manga.title,
-        chapterName: _controller.currentChapter.name,
-      );
+      final file = await ref
+          .read(mangaReaderImageActionsProvider)
+          .savePage(
+            page: page,
+            mangaTitle: widget.manga.title,
+            chapterName: _controller.currentChapter.name,
+          );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            isArabic ? 'تم حفظ الصورة: ${file.path}' : 'Image saved: ${file.path}',
+            isArabic
+                ? 'تم حفظ الصورة: ${file.path}'
+                : 'Image saved: ${file.path}',
           ),
         ),
       );
@@ -697,10 +732,7 @@ class _MangaReaderScreenState extends ConsumerState<MangaReaderScreen>
     onContinue: _controller.canNext ? _openNextChapter : null,
   );
 
-  Widget _readerBody(
-    BuildContext context,
-    MangaReaderSettings settings,
-  ) {
+  Widget _readerBody(BuildContext context, MangaReaderSettings settings) {
     if (_controller.isLoading) {
       return const Center(child: AppLoadingIndicator());
     }
@@ -847,11 +879,21 @@ class _MangaReaderScreenState extends ConsumerState<MangaReaderScreen>
       right: 0,
       top: _controlsVisible ? 0 : -120,
       child: Material(
-        color: Colors.black.withValues(alpha: 0.82),
+        key: const ValueKey<String>('manga-reader-top-chrome'),
+        color: _barColor(context),
         child: SafeArea(
           bottom: false,
-          child: SizedBox(
+          child: Container(
+            key: const ValueKey<String>('manga-reader-top-bar'),
             height: 64,
+            // The window paints its own buttons over this strip — on the
+            // right on Windows, the left on macOS — and in Arabic the back
+            // button and the title start at the right, under them. Kept
+            // clear on whichever side they are.
+            padding: EdgeInsets.only(
+              left: windowControlsLeadingInset,
+              right: windowControlsTrailingInset,
+            ),
             child: Row(
               children: <Widget>[
                 if (!appleUsesPersistentLiquidGlassHeader)
@@ -894,6 +936,29 @@ class _MangaReaderScreenState extends ConsumerState<MangaReaderScreen>
     );
   }
 
+  /// The bars' colours, from the theme rather than a fixed black, so they
+  /// match the rest of the app in every theme.
+  Color _barColor(BuildContext context) =>
+      Theme.of(context).colorScheme.surfaceContainerLow.withValues(alpha: 0.94);
+
+  /// The page slider in the theme's accent, whichever way it runs.
+  Widget _themedSlider(BuildContext context, Widget slider) {
+    final colors = Theme.of(context).colorScheme;
+    return SliderTheme(
+      data: SliderTheme.of(context).copyWith(
+        activeTrackColor: colors.primary,
+        inactiveTrackColor: colors.primary.withValues(alpha: 0.22),
+        thumbColor: colors.primary,
+        overlayColor: colors.primary.withValues(alpha: 0.12),
+        valueIndicatorColor: colors.primary,
+        valueIndicatorTextStyle: TextStyle(color: colors.onPrimary),
+        activeTickMarkColor: colors.onPrimary.withValues(alpha: 0.5),
+        inactiveTickMarkColor: colors.primary.withValues(alpha: 0.4),
+      ),
+      child: slider,
+    );
+  }
+
   Widget _bottomBar(BuildContext context, MangaReaderSettings settings) {
     final max = (_controller.pages.length - 1).clamp(0, 1 << 30).toInt();
     final doublePage = shouldUseMangaDoublePage(
@@ -908,127 +973,158 @@ class _MangaReaderScreenState extends ConsumerState<MangaReaderScreen>
       doublePage: doublePage,
       singleFirst: settings.doublePageSingleFirstPage,
     );
-    final readerDirection =
-        _controller.mode.isRtl ? TextDirection.rtl : TextDirection.ltr;
+    final readerDirection = _controller.mode.isRtl
+        ? TextDirection.rtl
+        : TextDirection.ltr;
+    final colors = Theme.of(context).colorScheme;
+    final vertical = settings.verticalPageBar;
+
+    final previous = IconButton(
+      tooltip: Localizations.localeOf(context).languageCode == 'ar'
+          ? 'الفصل السابق'
+          : 'Previous chapter',
+      onPressed: _controller.canPrevious
+          ? () async {
+              await _controller.previousChapter();
+              if (mounted) setState(() => _readerEpoch++);
+            }
+          : null,
+      icon: Icon(
+        vertical
+            ? Icons.keyboard_double_arrow_up_rounded
+            : Icons.skip_previous_rounded,
+      ),
+    );
+    final next = IconButton(
+      tooltip: Localizations.localeOf(context).languageCode == 'ar'
+          ? 'الفصل التالي'
+          : 'Next chapter',
+      onPressed: _controller.canNext
+          ? () async {
+              await _controller.nextChapter();
+              if (mounted) setState(() => _readerEpoch++);
+            }
+          : null,
+      icon: Icon(
+        vertical
+            ? Icons.keyboard_double_arrow_down_rounded
+            : Icons.skip_next_rounded,
+      ),
+    );
+    final slider = _themedSlider(
+      context,
+      Slider(
+        min: 0,
+        max: max.toDouble(),
+        divisions: max <= 0 ? null : max,
+        value: _controller.pageIndex.clamp(0, max).toDouble(),
+        label: currentLabel,
+        onChanged: max <= 0 ? null : (value) => _jumpToPage(value.toInt()),
+      ),
+    );
+    // One button for every reader setting, as Harbor has it: the mode,
+    // direction, fit and background are in the panel it opens rather than in
+    // a row of icons of their own.
+    final settingsButton = IconButton(
+      key: const ValueKey<String>('manga-reader-settings-button'),
+      tooltip: Localizations.localeOf(context).languageCode == 'ar'
+          ? 'إعدادات القارئ'
+          : 'Reader settings',
+      isSelected: _settingsPanelOpen,
+      onPressed: _toggleSettingsPanel,
+      icon: const Icon(Icons.settings_outlined),
+      selectedIcon: Icon(Icons.settings_rounded, color: colors.primary),
+    );
+    final labelStyle = TextStyle(color: colors.onSurface, fontSize: 13);
+
+    Widget bar(Widget child) => Material(
+      key: ValueKey<String>(
+        vertical ? 'manga-reader-page-bar-vertical' : 'manga-reader-page-bar',
+      ),
+      color: _barColor(context),
+      child: IconTheme(
+        data: IconThemeData(color: colors.onSurface),
+        child: child,
+      ),
+    );
+
+    if (vertical) {
+      // Down the right edge, under the top bar: the page runs top to bottom,
+      // and so does the slider that picks it.
+      return AnimatedPositioned(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.ease,
+        top: 64 + MediaQuery.paddingOf(context).top,
+        bottom: 0,
+        right: _controlsVisible ? 0 : -90,
+        width: 64,
+        child: bar(
+          SafeArea(
+            left: false,
+            top: false,
+            child: Column(
+              children: <Widget>[
+                const SizedBox(height: 6),
+                previous,
+                Text(currentLabel, style: labelStyle),
+                Expanded(child: RotatedBox(quarterTurns: 1, child: slider)),
+                Text(_controller.pages.length.toString(), style: labelStyle),
+                next,
+                const SizedBox(height: 4),
+                settingsButton,
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 300),
       curve: Curves.ease,
       left: 0,
       right: 0,
       bottom: _controlsVisible ? 0 : -150,
-      child: Material(
-        color: Colors.black.withValues(alpha: 0.86),
-        child: SafeArea(
+      child: bar(
+        SafeArea(
           top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+          child: Row(
             children: <Widget>[
-              Row(
-                textDirection: readerDirection,
-                children: <Widget>[
-                  IconButton(
-                    onPressed: _controller.canPrevious
-                        ? () async {
-                            await _controller.previousChapter();
-                            if (mounted) setState(() => _readerEpoch++);
-                          }
-                        : null,
-                    icon: const Icon(Icons.skip_previous_rounded),
-                  ),
-                  SizedBox(
-                    width: 52,
-                    child: Text(
-                      currentLabel,
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                  Expanded(
-                    child: Directionality(
-                      textDirection: readerDirection,
-                      child: Slider(
-                        min: 0,
-                        max: max.toDouble(),
-                        divisions: max <= 0 ? null : max,
-                        value: _controller.pageIndex.clamp(0, max).toDouble(),
-                        label: currentLabel,
-                        onChanged: max <= 0
-                            ? null
-                            : (value) => _jumpToPage(value.toInt()),
+              Expanded(
+                child: Row(
+                  textDirection: readerDirection,
+                  children: <Widget>[
+                    previous,
+                    SizedBox(
+                      width: 52,
+                      child: Text(
+                        currentLabel,
+                        textAlign: TextAlign.center,
+                        style: labelStyle,
                       ),
                     ),
-                  ),
-                  SizedBox(
-                    width: 52,
-                    child: Text(
-                      _controller.pages.length.toString(),
-                      textAlign: TextAlign.center,
+                    Expanded(
+                      child: Directionality(
+                        textDirection: readerDirection,
+                        child: slider,
+                      ),
                     ),
-                  ),
-                  IconButton(
-                    onPressed: _controller.canNext
-                        ? () async {
-                            await _controller.nextChapter();
-                            if (mounted) setState(() => _readerEpoch++);
-                          }
-                        : null,
-                    icon: const Icon(Icons.skip_next_rounded),
-                  ),
-                ],
+                    SizedBox(
+                      width: 52,
+                      child: Text(
+                        _controller.pages.length.toString(),
+                        textAlign: TextAlign.center,
+                        style: labelStyle,
+                      ),
+                    ),
+                    next,
+                  ],
+                ),
               ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: <Widget>[
-                  PopupMenuButton<MangaReaderMode>(
-                    tooltip: 'Reading mode',
-                    initialValue: _controller.mode,
-                    onSelected: (mode) => _setMode(mode, settings),
-                    itemBuilder: (context) => <PopupMenuEntry<MangaReaderMode>>[
-                      for (final mode in MangaReaderMode.values)
-                        PopupMenuItem<MangaReaderMode>(
-                          value: mode,
-                          child: Text(_readerModeLabel(context, mode)),
-                        ),
-                    ],
-                    icon: const Icon(Icons.chrome_reader_mode_rounded),
-                  ),
-                  IconButton(
-                    tooltip: 'Crop borders',
-                    onPressed: () => ref
-                        .read(mangaReaderSettingsProvider.notifier)
-                        .update(
-                          (s) => s.copyWith(cropBorders: !s.cropBorders),
-                        ),
-                    icon: Icon(
-                      settings.cropBorders
-                          ? Icons.crop_free_rounded
-                          : Icons.crop_rounded,
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Double page',
-                    onPressed:
-                        _controller.mode == MangaReaderMode.horizontalContinuous ||
-                                _controller.mode ==
-                                    MangaReaderMode.horizontalContinuousRtl
-                            ? null
-                            : () => _toggleDoublePage(settings),
-                    icon: Icon(
-                      _forceDoublePage ||
-                              shouldUseMangaDoublePage(
-                                settings: settings,
-                                viewport: MediaQuery.sizeOf(context),
-                                mode: _controller.mode,
-                              )
-                          ? Icons.menu_book_rounded
-                          : Icons.book_outlined,
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Reader settings',
-                    onPressed: _showQuickSettings,
-                    icon: const Icon(Icons.settings_rounded),
-                  ),
-                ],
+              Padding(
+                padding: const EdgeInsetsDirectional.only(end: 8),
+                child: settingsButton,
               ),
             ],
           ),
@@ -1049,86 +1145,91 @@ class _MangaReaderScreenState extends ConsumerState<MangaReaderScreen>
     final background = _backgroundColor(context, settings);
     final scaffold = Scaffold(
       backgroundColor: background,
-      body: MangaReaderKeyboardHandler(
-        onEscape: () => Navigator.of(context).maybePop(),
-        onFullScreen: () => _toggleFullScreen(settings),
-        onPreviousPage: () =>
-            _navigateReaderPage(forward: false, settings: settings),
-        onNextPage: () =>
-            _navigateReaderPage(forward: true, settings: settings),
-        onPreviousChapter: _openPreviousChapter,
-        onNextChapter: _openNextChapter,
-      ).wrapWithKeyboardListener(
-        focusNode: _keyboardFocusNode,
-        isReverseHorizontal: _controller.mode.isRtl,
-        child: NotificationListener<ScrollNotification>(
-          onNotification: (notification) =>
-              _handleReaderScrollNotification(notification, settings),
-          child: LayoutBuilder(
-            builder: (context, constraints) => Stack(
-              fit: StackFit.expand,
-              children: <Widget>[
-              ColoredBox(
-                color: background,
-                child: GestureDetector(
-                  key: const ValueKey<String>('manga-reader-image-actions-gesture'),
-                  behavior: HitTestBehavior.translucent,
-                  onTapUp: (details) => _handleTapZone(
-                    details,
-                    Size(constraints.maxWidth, constraints.maxHeight),
-                    settings,
-                  ),
-                  onDoubleTap: _toggleControls,
-                  onLongPress: _toggleControls,
-                  onSecondaryTap: _showImageActions,
-                  child: _readerBody(context, settings),
+      body:
+          MangaReaderKeyboardHandler(
+            onEscape: () => Navigator.of(context).maybePop(),
+            onFullScreen: () => _toggleFullScreen(settings),
+            onPreviousPage: () =>
+                _navigateReaderPage(forward: false, settings: settings),
+            onNextPage: () =>
+                _navigateReaderPage(forward: true, settings: settings),
+            onPreviousChapter: _openPreviousChapter,
+            onNextChapter: _openNextChapter,
+          ).wrapWithKeyboardListener(
+            focusNode: _keyboardFocusNode,
+            isReverseHorizontal: _controller.mode.isRtl,
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (notification) =>
+                  _handleReaderScrollNotification(notification, settings),
+              child: LayoutBuilder(
+                builder: (context, constraints) => Stack(
+                  fit: StackFit.expand,
+                  children: <Widget>[
+                    ColoredBox(
+                      color: background,
+                      child: GestureDetector(
+                        key: const ValueKey<String>(
+                          'manga-reader-image-actions-gesture',
+                        ),
+                        behavior: HitTestBehavior.translucent,
+                        onTapUp: (details) => _handleTapZone(
+                          details,
+                          Size(constraints.maxWidth, constraints.maxHeight),
+                          settings,
+                        ),
+                        onDoubleTap: _toggleControls,
+                        onLongPress: _toggleControls,
+                        onSecondaryTap: _showImageActions,
+                        child: _readerBody(context, settings),
+                      ),
+                    ),
+                    IgnorePointer(
+                      child: AnimatedOpacity(
+                        opacity: _flashVisible ? 1 : 0,
+                        duration: const Duration(milliseconds: 80),
+                        child: ColoredBox(
+                          color: settings.flashColor == 1
+                              ? Colors.white
+                              : settings.flashColor == 2
+                              ? Colors.white.withValues(alpha: 0.55)
+                              : Colors.black,
+                        ),
+                      ),
+                    ),
+                    _topBar(context),
+                    _bottomBar(context, settings),
+                    ..._settingsPanel(context, settings),
+                    MangaReaderPageIndicator(
+                      visible: !_controlsVisible && settings.showPageNumber,
+                      currentPage: _controller.pageIndex + 1,
+                      totalPages: _controller.pages.length,
+                    ),
+                    SafeArea(
+                      child: MangaReaderAutoScrollButton(
+                        isContinuousMode: _controller.mode.isContinuous,
+                        isUiVisible: _controlsVisible,
+                        enabled: settings
+                            .autoScrollForManga(_readerMangaId)
+                            .enabled,
+                        isPlaying: _autoScrollRunning,
+                        onToggle: () => _toggleAutoScroll(settings),
+                      ),
+                    ),
+                    if (_showNavigationOverlay)
+                      Positioned.fill(
+                        child: MangaReaderNavigationOverlay(
+                          navigationLayout: settings.navigationLayout,
+                          tappingInversion: settings.tappingInversion,
+                          isRtl: _controller.mode.isRtl,
+                          onClose: () =>
+                              setState(() => _showNavigationOverlay = false),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-              IgnorePointer(
-                child: AnimatedOpacity(
-                  opacity: _flashVisible ? 1 : 0,
-                  duration: const Duration(milliseconds: 80),
-                  child: ColoredBox(
-                    color: settings.flashColor == 1
-                        ? Colors.white
-                        : settings.flashColor == 2
-                        ? Colors.white.withValues(alpha: 0.55)
-                        : Colors.black,
-                  ),
-                ),
-              ),
-              _topBar(context),
-              _bottomBar(context, settings),
-              MangaReaderPageIndicator(
-                visible: !_controlsVisible && settings.showPageNumber,
-                currentPage: _controller.pageIndex + 1,
-                totalPages: _controller.pages.length,
-              ),
-              SafeArea(
-                child: MangaReaderAutoScrollButton(
-                  isContinuousMode: _controller.mode.isContinuous,
-                  isUiVisible: _controlsVisible,
-                  enabled:
-                      settings.autoScrollForManga(_readerMangaId).enabled,
-                  isPlaying: _autoScrollRunning,
-                  onToggle: () => _toggleAutoScroll(settings),
-                ),
-              ),
-              if (_showNavigationOverlay)
-                Positioned.fill(
-                  child: MangaReaderNavigationOverlay(
-                    navigationLayout: settings.navigationLayout,
-                    tappingInversion: settings.tappingInversion,
-                    isRtl: _controller.mode.isRtl,
-                    onClose: () =>
-                        setState(() => _showNavigationOverlay = false),
-                  ),
-                ),
-              ],
             ),
           ),
-        ),
-      ),
     );
 
     if (!appleUsesPersistentLiquidGlassHeader) return scaffold;

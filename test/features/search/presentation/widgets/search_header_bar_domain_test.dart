@@ -1,4 +1,3 @@
-import 'package:animewitcher/features/search/presentation/search_domain.dart';
 import 'package:animewitcher/features/search/presentation/search_provider.dart';
 import 'package:animewitcher/features/search/presentation/widgets/search_header_bar.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
@@ -15,7 +14,7 @@ final class _IdleSearchNotifier extends PagedSearchNotifier {
 }
 
 void main() {
-  testWidgets('iOS three-action glass matches details safe-area trailing coordinate', (
+  testWidgets('iOS action glass matches details safe-area trailing coordinate', (
     tester,
   ) async {
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -64,8 +63,6 @@ void main() {
                   sortTooltip: 'Sort',
                   activeFilterCount: 0,
                   isFilterLoading: false,
-                  domain: SearchDomain.anime,
-                  onDomainSelected: (_) {},
                   showSort: true,
                   showFilter: true,
                 ),
@@ -93,7 +90,7 @@ void main() {
     }
   });
 
-  testWidgets('character search header keeps only the domain action', (
+  testWidgets('character search header keeps only the filter action, which picks the category', (
     tester,
   ) async {
     final controller = TextEditingController();
@@ -130,10 +127,8 @@ void main() {
               sortTooltip: 'Sort',
               activeFilterCount: 2,
               isFilterLoading: false,
-              domain: SearchDomain.characters,
-              onDomainSelected: (_) {},
               showSort: false,
-              showFilter: false,
+              showFilter: true,
             ),
           ),
         ),
@@ -142,8 +137,8 @@ void main() {
 
     await tester.pump();
 
-    expect(find.byTooltip('Search domain'), findsOneWidget);
+    expect(find.byTooltip('Search domain'), findsNothing);
     expect(find.byTooltip('Sort'), findsNothing);
-    expect(find.byTooltip('الفلاتر'), findsNothing);
+    expect(find.byTooltip('الفلاتر'), findsOneWidget);
   });
 }

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:animewitcher/core/navigation/taskbar_destination.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
+import 'package:animewitcher/shared/widgets/account_avatar_button.dart';
 import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 
 class CustomBottomNavBar extends StatelessWidget {
@@ -17,12 +18,17 @@ class CustomBottomNavBar extends StatelessWidget {
   /// button of its own instead of a row on home. Null leaves it out.
   final VoidCallback? onNews;
 
+  /// The account picture at the end, where the news button is shown too.
+  /// Null leaves it out.
+  final VoidCallback? onAccount;
+
   const CustomBottomNavBar({
     super.key,
     required this.currentBranchIndex,
     required this.destinations,
     required this.onTap,
     this.onNews,
+    this.onAccount,
   });
 
   static const double height = 64;
@@ -53,8 +59,12 @@ class CustomBottomNavBar extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
-    // The news cell counts, so the highlight lands on the right tab.
-    final count = destinations.length + (onNews == null ? 0 : 1);
+    // The news and account cells count, so the highlight lands on the right
+    // tab.
+    final count =
+        destinations.length +
+        (onNews == null ? 0 : 1) +
+        (onAccount == null ? 0 : 1);
     final selectedIndex = destinations.indexWhere(
       (destination) => destination.branchIndex == currentBranchIndex,
     );
@@ -111,6 +121,12 @@ class CustomBottomNavBar extends StatelessWidget {
                 : 'News',
             isSelected: false,
             onTap: openNews,
+          ),
+        ),
+      if (onAccount case final openAccount?)
+        Expanded(
+          child: Center(
+            child: AccountAvatarButton(onTap: openAccount, size: 34),
           ),
         ),
     ];
@@ -273,6 +289,7 @@ String _appleTabSymbol(
       selected ? 'arrow.down.circle.fill' : 'arrow.down.circle',
     TaskbarDestination.settings =>
       selected ? 'ellipsis.circle.fill' : 'ellipsis.circle',
+    TaskbarDestination.manga => selected ? 'book.fill' : 'book',
   };
 }
 

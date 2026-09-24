@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../core/navigation/taskbar_destination.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 import '../../l10n/generated/app_localizations.dart';
+import 'account_avatar_button.dart';
 
 /// Room left at the window's right edge for the caption buttons
 /// (minimise, maximise, close), which the title bar draws over everything.
@@ -20,6 +21,7 @@ class AppSideRail extends StatelessWidget {
     required this.currentBranchIndex,
     required this.onTap,
     required this.onNews,
+    required this.onAccount,
   });
 
   static const double width = 76;
@@ -30,6 +32,9 @@ class AppSideRail extends StatelessWidget {
 
   /// Opens the news; this layout takes the news row off the home page.
   final VoidCallback onNews;
+
+  /// Opens the account, from the picture at the foot of the rail.
+  final VoidCallback onAccount;
 
   @override
   Widget build(BuildContext context) {
@@ -59,6 +64,9 @@ class AppSideRail extends StatelessWidget {
             accent: accent,
             onTap: onNews,
           ),
+          const SizedBox(height: 8),
+          // The account last, at the foot of the rail, as Harbor has it.
+          AccountAvatarButton(onTap: onAccount, size: 40),
         ],
       ),
     );
@@ -162,6 +170,7 @@ class AppTopBar extends StatelessWidget {
     required this.overArtwork,
     required this.onTap,
     required this.onNews,
+    required this.onAccount,
   });
 
   /// The same height as the title bar, so the page names sit on one line
@@ -181,6 +190,7 @@ class AppTopBar extends StatelessWidget {
   final bool overArtwork;
   final ValueChanged<TaskbarDestination> onTap;
   final VoidCallback onNews;
+  final VoidCallback onAccount;
 
   @override
   Widget build(BuildContext context) {
@@ -219,7 +229,10 @@ class AppTopBar extends StatelessWidget {
                       fontWeight: FontWeight.w800,
                     ),
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 10),
+                  // The account right after the name, then the news.
+                  AccountAvatarButton(onTap: onAccount, size: 32),
+                  const SizedBox(width: 4),
                   IconButton(
                     tooltip: l10n.localeName.toLowerCase().startsWith('ar')
                         ? 'الأخبار'
@@ -237,7 +250,7 @@ class AppTopBar extends StatelessWidget {
           ),
           // The pages centred on the window, clear of both corners.
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: 220 + reserve / 2),
+            padding: EdgeInsets.symmetric(horizontal: 260 + reserve / 2),
             child: Center(
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
