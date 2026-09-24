@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:collection/collection.dart';
@@ -20,6 +21,7 @@ import 'package:animewitcher/core/utils/image_fallbacks.dart';
 import 'package:animewitcher/core/utils/layout_constants.dart';
 import 'package:animewitcher/core/utils/responsive_breakpoints.dart';
 import '../../../../shared/widgets/thumbnail_error_placeholder.dart';
+import '../../../library/presentation/download_delete_confirmation.dart';
 import '../../../library/presentation/download_progress_v2_provider.dart';
 import '../../../library/presentation/downloads_provider.dart';
 import '../../../library/presentation/history_provider.dart';
@@ -81,6 +83,18 @@ class EpisodeCard extends HookConsumerWidget {
     this.vertical = false,
     this.showDescription = true,
   });
+
+  Future<void> _deleteCompletedDownload(
+    BuildContext context,
+    WidgetRef ref,
+    DownloadItem item,
+  ) async {
+    await confirmAndRemoveDownload(context, ref, item);
+    if (!context.mounted) return;
+    await ref
+        .read(downloadedFilesProvider.notifier)
+        .checkFile(parentItem, episode: episode);
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -152,6 +166,11 @@ class EpisodeCard extends HookConsumerWidget {
 
     final downloads =
         ref.watch(downloadsProvider).value ?? const <DownloadItem>[];
+    final completedDownload = completedEpisodeDownload(
+      downloads,
+      parentItem,
+      episode,
+    );
     final episodeTrackingUrl = episode.url.trim();
     final activeDownload = downloads.firstWhereOrNull((item) {
       final matchesEpisode =
@@ -214,7 +233,9 @@ class EpisodeCard extends HookConsumerWidget {
     );
 
     void triggerDownload() {
-      if (downloadedFile != null) {
+      if (completedDownload != null) {
+        unawaited(_deleteCompletedDownload(context, ref, completedDownload));
+      } else if (downloadedFile != null) {
         DownloadManagementDialog.show(
           context,
           details ?? parentItem,
@@ -453,6 +474,7 @@ class EpisodeCard extends HookConsumerWidget {
                       _buildActionButtons(
                         context,
                         ref,
+                        completedDownload,
                         downloadedFile,
                         isDownloading,
                         downloadProgress,
@@ -493,6 +515,7 @@ class EpisodeCard extends HookConsumerWidget {
   Widget _buildActionButtons(
     BuildContext context,
     WidgetRef ref,
+    DownloadItem? completedDownload,
     File? downloadedFile,
     bool isDownloading,
     double downloadProgress,
@@ -504,6 +527,7 @@ class EpisodeCard extends HookConsumerWidget {
     final rawDownload = _buildRawActionButton(
       context,
       ref,
+      completedDownload,
       downloadedFile,
       isDownloading,
       downloadProgress,
@@ -559,17 +583,35 @@ class EpisodeCard extends HookConsumerWidget {
   Widget? _buildRawActionButton(
     BuildContext context,
     WidgetRef ref,
+    DownloadItem? completedDownload,
     File? downloadedFile,
     bool isDownloading,
     double downloadProgress,
     DownloadProgressData? downloadProgressData,
     MultimediaItem? details,
   ) {
-    if (downloadedFile != null) {
+    if (completedDownload != null) {
       return EpisodeActionChip(
-        tooltip: appText(context, english: 'Downloaded', arabic: 'تم التنزيل'),
-        icon: Icons.download_done_rounded,
-        color: const Color(0xFF4CAF50),
+        tooltip: appText(
+          context,
+          english: 'Delete episode',
+          arabic: 'حذف الحلقة',
+        ),
+        icon: Icons.delete_outline_rounded,
+        color: Theme.of(context).colorScheme.error,
+        onPressed: () => unawaited(
+          _deleteCompletedDownload(context, ref, completedDownload),
+        ),
+      );
+    } else if (downloadedFile != null) {
+      return EpisodeActionChip(
+        tooltip: appText(
+          context,
+          english: 'Delete episode',
+          arabic: 'حذف الحلقة',
+        ),
+        icon: Icons.delete_outline_rounded,
+        color: Theme.of(context).colorScheme.error,
         onPressed: () {
           DownloadManagementDialog.show(
             context,

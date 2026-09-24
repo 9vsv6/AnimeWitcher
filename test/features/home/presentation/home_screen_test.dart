@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:animewitcher/core/domain/entity/manga.dart';
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
 import 'package:animewitcher/core/extensions/base_provider.dart';
 import 'package:animewitcher/core/extensions/extension_manager.dart';
@@ -46,7 +47,39 @@ class _FakeHomeSource extends AnimeWitcherProvider {
   List<String> get languages => const <String>['ar'];
 
   @override
-  Set<ProviderType> get supportedTypes => const {ProviderType.anime};
+  Set<ProviderType> get supportedTypes => const {
+    ProviderType.anime,
+    ProviderType.manga,
+  };
+
+  @override
+  Future<MangaLatestChapterPage> getLatestMangaPage({
+    int offset = 0,
+    int limit = 30,
+  }) async {
+    return MangaLatestChapterPage(
+      items: <MangaLatestChapter>[
+        MangaLatestChapter(
+          manga: MultimediaItem(
+            title: 'Latest Manga',
+            url: 'https://animewitcher.com/manga/latest',
+            posterUrl: '',
+            contentType: MultimediaContentType.manga,
+            provider: packageName,
+          ),
+          chapter: const MangaChapter(
+            id: '44',
+            mangaId: 'latest',
+            url: 'https://mangalik.net/manga/latest/chapter-44/',
+            name: 'الفصل 44',
+            number: 44,
+          ),
+        ),
+      ],
+      nextOffset: 1,
+      hasMore: false,
+    );
+  }
 
   @override
   Future<Map<String, List<MultimediaItem>>> getHome() async {
@@ -132,18 +165,20 @@ void main() {
     VisibilityDetectorController.instance.notifyNow();
   });
 
-  testWidgets('home does not render the فصول جديدة section', (tester) async {
+  testWidgets('home renders the new manga rail without legacy broken ids', (
+    tester,
+  ) async {
     const size = Size(390, 1800);
     await tester.binding.setSurfaceSize(size);
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await _loadHomeSuccess(tester);
 
-    expect(find.text('فصول جديدة'), findsNothing);
+    expect(find.text('فصول جديدة'), findsOneWidget);
+    expect(find.text('Latest Manga'), findsWidgets);
     expect(find.text(_brokenChapterId), findsNothing);
     expect(find.text('zQY3tAdwWaVZ5O31zMVd'), findsNothing);
     expect(find.text('ggsM4RzcTrOWXpJudOnj'), findsNothing);
-    expect(find.text('مانهوا'), findsNothing);
 
     expect(find.text('الحلقات الجديدة'), findsOneWidget);
     expect(find.text('آخر الأعمال المضافة'), findsOneWidget);
@@ -154,7 +189,29 @@ void main() {
     expect(find.byType(AppBar), findsNothing);
   });
 
-  testWidgets('home without New Chapters screenshot for walkthrough', (
+  testWidgets('latest manga chapters render directly below new episodes', (
+    tester,
+  ) async {
+    const size = Size(390, 2200);
+    await tester.binding.setSurfaceSize(size);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _loadHomeSuccess(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.text('الحلقات الجديدة'), findsOneWidget);
+    expect(find.text('فصول جديدة'), findsOneWidget);
+    expect(find.text('Latest Manga'), findsWidgets);
+    expect(find.text('آخر الأعمال المضافة'), findsOneWidget);
+
+    final episodesY = tester.getTopLeft(find.text('الحلقات الجديدة')).dy;
+    final chaptersY = tester.getTopLeft(find.text('فصول جديدة')).dy;
+    final addedY = tester.getTopLeft(find.text('آخر الأعمال المضافة')).dy;
+    expect(episodesY, lessThan(chaptersY));
+    expect(chaptersY, lessThan(addedY));
+  });
+
+  testWidgets('home with New Chapters screenshot for walkthrough', (
     tester,
   ) async {
     await tester.runAsync(TestFonts.loadWalkthroughFonts);
@@ -165,7 +222,7 @@ void main() {
 
     await _loadHomeSuccess(tester);
 
-    expect(find.text('فصول جديدة'), findsNothing);
+    expect(find.text('فصول جديدة'), findsOneWidget);
     expect(find.text('آخر الأعمال المضافة'), findsOneWidget);
 
     final artifacts = debugShotDirectory();

@@ -13,6 +13,7 @@ import 'package:animewitcher/features/library/presentation/history_provider.dart
 
 import 'widgets/home_hero_carousel.dart';
 import 'widgets/home_hero_layout.dart';
+import 'widgets/latest_manga_chapters_section.dart';
 import 'widgets/media_horizontal_list.dart';
 import 'view_all_screen.dart';
 import '../../../shared/widgets/loading_indicator.dart';
@@ -36,6 +37,7 @@ import '../../../shared/widgets/taskbar_visibility.dart';
 
 import 'package:animewitcher/features/news/presentation/news_list_screen.dart';
 import 'package:animewitcher/features/news/presentation/news_utils.dart';
+import 'package:animewitcher/core/domain/entity/manga.dart';
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -181,6 +183,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     BuildContext context,
     Map<String, List<MultimediaItem>> data,
     List<NewsItem> news,
+    List<MangaLatestChapter> latestManga,
     AnimeWitcherProvider provider,
   ) {
     final entries = visibleHomeRailEntries(data).toList(growable: false);
@@ -237,12 +240,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           forcePortrait: isLatestAddedSectionTitle(entry.key),
         ),
       );
+      if (latestManga.isNotEmpty && _isNewEpisodesSectionTitle(entry.key)) {
+        sections.add(
+          LatestMangaChaptersSection(
+            title: AppLocalizations.of(context)!.latestChapters,
+            items: latestManga,
+            onTap: (latest) {
+              MangaDetailsRoute(
+                $extra: MangaDetailsRouteExtra(item: latest.manga),
+              ).push<void>(context);
+            },
+          ),
+        );
+      }
       if (news.isNotEmpty && index == newsAfterIndex) {
         sections.add(buildNewsSection());
       }
     }
 
     return sections;
+  }
+
+  bool _isNewEpisodesSectionTitle(String title) {
+    final normalized = title.trim().toLowerCase();
+    return normalized.contains('الحلقات الجديدة') ||
+        normalized.contains('حلقات جديدة') ||
+        normalized.contains('new episodes') ||
+        normalized.contains('latest episodes');
   }
 
   Widget _buildBody(
@@ -286,7 +310,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       ),
       HomeOffline() => _buildErrorState(context, ref),
       HomeError() => _buildErrorState(context, ref),
-      HomeSuccess(:final data, :final news) => _withGradientEdgeHint(
+      HomeSuccess(:final data, :final news, :final latestManga) => _withGradientEdgeHint(
         MouseDragRefreshIndicator(
           onRefresh: () async {
             await Future.wait<void>([
@@ -332,6 +356,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     context,
                     data,
                     news,
+                    latestManga,
                     activeProvider,
                   ),
                 ),

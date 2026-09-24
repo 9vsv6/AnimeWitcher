@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:animewitcher/core/services/download_v2/background_downloader_gateway.dart';
 import 'package:animewitcher/core/services/download_v2/download_manager_v2.dart';
+import 'package:animewitcher/core/services/download_v2/download_v2_diagnostics.dart';
 import 'package:animewitcher/core/services/download_v2/download_v2_identity.dart';
 import 'package:animewitcher/core/services/download_v2/download_v2_models.dart';
 import 'package:animewitcher/core/services/download_v2/logical_download_store_v2.dart';
@@ -120,6 +121,76 @@ void main() {
     expect(snapshot?.networkSpeedMBps, 5);
     expect(snapshot?.configuredConnections, 16);
     expect(snapshot?.activeConnections, 8);
+  });
+
+  test('native speed telemetry is projected at most once per second', () async {
+    var now = 1000;
+    final id = logicalDownloadIdFor(
+      animeId: 'anime:1',
+      episodeKey: 'native-speed-coalesce',
+      variantKey: 'sub:1080p',
+    );
+    final taskId = taskIdForGeneration(id, 1);
+    final store = InMemoryLogicalDownloadStoreV2();
+    await store.put(
+      _record(
+        id: id,
+        destinationPath: 'downloads/native-speed-coalesce.mp4',
+        expectedBytes: 100,
+        parallelChunks: 16,
+      ),
+    );
+    final handle = _Handle(
+      taskId,
+      initial: DownloadTransportSnapshot(
+        taskId: taskId,
+        status: DownloadTransportStatus.running,
+        progress: .5,
+        transferredBytes: 50,
+        totalBytes: 100,
+        configuredConnections: 16,
+        activeConnections: 16,
+      ),
+    );
+    final diagnostics = InMemoryDownloadDiagnosticsV2();
+    final manager = DownloadManagerV2(
+      store: store,
+      gateway: _Gateway(rehydrated: <DownloadTransportHandle>[handle]),
+      sourceResolver: StaticSourceResolverV2(),
+      diagnostics: diagnostics,
+      nowMillis: () => now,
+    );
+    addTearDown(manager.dispose);
+
+    await manager.initialize();
+    final baseline = diagnostics.events.length;
+
+    manager.observeNativeNetworkSpeed(
+      taskId: taskId,
+      bytesPerSecond: 4 * 1000 * 1000,
+    );
+    manager.observeNativeNetworkSpeed(
+      taskId: taskId,
+      bytesPerSecond: 8 * 1000 * 1000,
+    );
+
+    expect(
+      diagnostics.events.length - baseline,
+      1,
+      reason:
+          '16 child callbacks can arrive in one burst; speed-only telemetry '
+          'must not create one parent snapshot and log flush per child.',
+    );
+    expect(manager.snapshotFor(id)?.networkSpeedMBps, 4);
+
+    now += 1000;
+    manager.observeNativeNetworkSpeed(
+      taskId: taskId,
+      bytesPerSecond: 8 * 1000 * 1000,
+    );
+
+    expect(diagnostics.events.length - baseline, 2);
+    expect(manager.snapshotFor(id)?.networkSpeedMBps, 8);
   });
 
   test('parallel zero-speed handoff keeps the last fresh positive speed', () async {
@@ -250,6 +321,83 @@ void main() {
       reason:
           'a new V2 row must be visible without killing/reopening the app even '
           'when start races the records stream initial snapshot',
+    );
+  });
+
+  test('reused active start republishes records for presentation refresh', () async {
+    final id = logicalDownloadIdFor(
+      animeId: 'anime:reuse',
+      episodeKey: '12',
+      variantKey: 'sub:1080p',
+    );
+    final taskId = taskIdForGeneration(id, 1);
+    final store = InMemoryLogicalDownloadStoreV2();
+    await store.put(
+      _record(
+        id: id,
+        destinationPath: 'downloads/reused-active.mp4',
+        expectedBytes: 100,
+        parallelChunks: 16,
+      ),
+    );
+    final handle = _Handle(
+      taskId,
+      initial: DownloadTransportSnapshot(
+        taskId: taskId,
+        status: DownloadTransportStatus.running,
+        progress: .25,
+        transferredBytes: 25,
+        totalBytes: 100,
+        configuredConnections: 16,
+        activeConnections: 16,
+      ),
+    );
+    final manager = DownloadManagerV2(
+      store: store,
+      gateway: _Gateway(rehydrated: <DownloadTransportHandle>[handle]),
+      sourceResolver: StaticSourceResolverV2(expectedBytes: 100),
+    );
+    addTearDown(manager.dispose);
+
+    await manager.initialize();
+
+    final emissions = <List<LogicalDownloadRecordV2>>[];
+    final subscription = manager.records.listen(emissions.add);
+    addTearDown(subscription.cancel);
+
+    for (var i = 0; i < 20 && emissions.isEmpty; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+    expect(emissions, isNotEmpty);
+    final baseline = emissions.length;
+
+    await manager.start(
+      DownloadStartRequestV2(
+        logicalId: id,
+        animeId: 'anime:reuse',
+        episodeKey: '12',
+        variantKey: 'sub:1080p',
+        destinationPath: 'downloads/reused-active.mp4',
+        sourceDescriptor: const <String, Object?>{
+          'providerId': 'provider.example',
+        },
+        expectedBytes: 100,
+        allowPause: true,
+        retries: 2,
+        parallelChunks: 16,
+      ),
+    );
+
+    for (var i = 0; i < 20 && emissions.length == baseline; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+
+    expect(
+      emissions.length,
+      greaterThan(baseline),
+      reason:
+          'a user start that reuses an active transport must still publish '
+          'records so Downloads can reload newly written presentation metadata',
     );
   });
 

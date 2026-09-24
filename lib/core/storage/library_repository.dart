@@ -28,21 +28,55 @@ class LibraryRepository {
   Future<void> addToLibrary(
     MultimediaItem item, {
     LibraryCategory? category,
+    VoidCallback? onLocalChanged,
   }) async {
     final target = category ?? getSelectedCategory();
     if (target == LibraryCategory.favorite) {
-      await setFavorite(item, true);
+      await setFavorite(
+        item,
+        true,
+        onLocalChanged: onLocalChanged,
+      );
       return;
     }
-    if (target == LibraryCategory.completed &&
+    final isManga = item.contentType == MultimediaContentType.manga;
+    if (!isManga &&
+        target == LibraryCategory.completed &&
         item.status != ShowStatus.completed) {
       return;
     }
-    if (target == LibraryCategory.watching && item.isNotYetAired) {
+    if (!isManga &&
+        target == LibraryCategory.watching &&
+        item.isNotYetAired) {
       return;
     }
 
+    final previousItem = isManga ? _findItem(item.url) : null;
+    final previousCategory = isManga ? getItemCategory(item.url) : null;
+    final previousFavorite = isManga ? isFavorite(item.url) : false;
+    if (isManga) _requireMangaCloudSession();
+
     await _storageService.addToLibrary(item, category: target.storageKey);
+    onLocalChanged?.call();
+    if (isManga) {
+      try {
+        await _accountService.saveMangaLibraryItem(
+          item,
+          target,
+          favorite: _storageService.isLibraryItemFavorite(item.url),
+        );
+      } catch (_) {
+        await _restoreMangaLocal(
+          item: previousItem ?? item,
+          existed: previousItem != null,
+          category: previousCategory,
+          favorite: previousFavorite,
+        );
+        onLocalChanged?.call();
+        rethrow;
+      }
+      return;
+    }
     _syncInBackground(
       _accountService.saveLibraryItem(
         item,
@@ -53,25 +87,62 @@ class LibraryRepository {
     );
   }
 
-  Future<void> moveToCategory(String url, LibraryCategory category) async {
+  Future<void> moveToCategory(
+    String url,
+    LibraryCategory category, {
+    VoidCallback? onLocalChanged,
+  }) async {
     if (category == LibraryCategory.favorite) {
       final item = _findItem(url);
-      if (item != null) await setFavorite(item, true);
+      if (item != null) {
+        await setFavorite(
+          item,
+          true,
+          onLocalChanged: onLocalChanged,
+        );
+      }
       return;
     }
 
     final item = _findItem(url);
-    if (category == LibraryCategory.completed &&
+    final isManga = item?.contentType == MultimediaContentType.manga;
+    if (!isManga &&
+        category == LibraryCategory.completed &&
         item != null &&
         item.status != ShowStatus.completed) {
       return;
     }
-    if (category == LibraryCategory.watching &&
+    if (!isManga &&
+        category == LibraryCategory.watching &&
         item != null &&
         item.isNotYetAired) {
       return;
     }
+    final previousCategory = isManga ? getItemCategory(url) : null;
+    final previousFavorite = isManga ? isFavorite(url) : false;
+    if (isManga) _requireMangaCloudSession();
+
     await _storageService.setLibraryItemCategory(url, category.storageKey);
+    onLocalChanged?.call();
+    if (item != null && isManga) {
+      try {
+        await _accountService.saveMangaLibraryItem(
+          item,
+          category,
+          favorite: _storageService.isLibraryItemFavorite(url),
+        );
+      } catch (_) {
+        await _restoreMangaLocal(
+          item: item,
+          existed: true,
+          category: previousCategory,
+          favorite: previousFavorite,
+        );
+        onLocalChanged?.call();
+        rethrow;
+      }
+      return;
+    }
     if (item != null) {
       _syncInBackground(
         _accountService.saveLibraryItem(
@@ -84,11 +155,42 @@ class LibraryRepository {
     }
   }
 
-  Future<void> clearCategory(String url) async {
+  Future<void> clearCategory(
+    String url, {
+    VoidCallback? onLocalChanged,
+  }) async {
     final item = _findItem(url);
     final favorite = _storageService.isLibraryItemFavorite(url);
+    final previousCategory = getItemCategory(url);
+    final isManga = item?.contentType == MultimediaContentType.manga;
+    if (isManga) _requireMangaCloudSession();
+
     await _storageService.setLibraryItemCategory(url, null);
+    onLocalChanged?.call();
     if (item == null) return;
+    if (isManga) {
+      try {
+        if (favorite) {
+          await _accountService.saveMangaLibraryItem(
+            item,
+            null,
+            favorite: true,
+          );
+        } else {
+          await _accountService.removeMangaLibraryItem(url);
+        }
+      } catch (_) {
+        await _restoreMangaLocal(
+          item: item,
+          existed: true,
+          category: previousCategory,
+          favorite: favorite,
+        );
+        onLocalChanged?.call();
+        rethrow;
+      }
+      return;
+    }
     if (favorite) {
       _syncInBackground(
         _accountService.saveLibraryItem(item, null, favorite: true),
@@ -102,9 +204,42 @@ class LibraryRepository {
     }
   }
 
-  Future<void> setFavorite(MultimediaItem item, bool favorite) async {
+  Future<void> setFavorite(
+    MultimediaItem item,
+    bool favorite, {
+    VoidCallback? onLocalChanged,
+  }) async {
     final category = getItemCategory(item.url);
+    final isManga = item.contentType == MultimediaContentType.manga;
+    final previousItem = isManga ? _findItem(item.url) : null;
+    final previousFavorite = isManga ? isFavorite(item.url) : false;
+    if (isManga) _requireMangaCloudSession();
+
     await _storageService.addToLibrary(item, favorite: favorite);
+    onLocalChanged?.call();
+    if (isManga) {
+      try {
+        if (!favorite && category == null) {
+          await _accountService.removeMangaLibraryItem(item.url);
+        } else {
+          await _accountService.saveMangaLibraryItem(
+            item,
+            category,
+            favorite: favorite,
+          );
+        }
+      } catch (_) {
+        await _restoreMangaLocal(
+          item: previousItem ?? item,
+          existed: previousItem != null,
+          category: category,
+          favorite: previousFavorite,
+        );
+        onLocalChanged?.call();
+        rethrow;
+      }
+      return;
+    }
     if (!favorite && category == null) {
       _syncInBackground(
         _accountService.removeLibraryItem(item.url),
@@ -118,8 +253,33 @@ class LibraryRepository {
     );
   }
 
-  Future<void> removeFromLibrary(String url) async {
+  Future<void> removeFromLibrary(
+    String url, {
+    VoidCallback? onLocalChanged,
+  }) async {
+    final item = _findItem(url);
+    final isManga = item?.contentType == MultimediaContentType.manga;
+    final previousCategory = isManga ? getItemCategory(url) : null;
+    final previousFavorite = isManga ? isFavorite(url) : false;
+    if (isManga) _requireMangaCloudSession();
+
     await _storageService.removeFromLibrary(url);
+    onLocalChanged?.call();
+    if (item != null && isManga) {
+      try {
+        await _accountService.removeMangaLibraryItem(url);
+      } catch (_) {
+        await _restoreMangaLocal(
+          item: item,
+          existed: true,
+          category: previousCategory,
+          favorite: previousFavorite,
+        );
+        onLocalChanged?.call();
+        rethrow;
+      }
+      return;
+    }
     _syncInBackground(
       _accountService.removeLibraryItem(url),
       'remove library item',
@@ -164,6 +324,32 @@ class LibraryRepository {
       if (item.url == url) return item;
     }
     return null;
+  }
+
+  void _requireMangaCloudSession() {
+    if (!_accountService.isSignedIn) {
+      throw StateError(
+        'AnimeWitcher account is required for Manga library mutations.',
+      );
+    }
+  }
+
+  Future<void> _restoreMangaLocal({
+    required MultimediaItem item,
+    required bool existed,
+    required LibraryCategory? category,
+    required bool favorite,
+  }) async {
+    if (!existed) {
+      await _storageService.removeFromLibrary(item.url);
+      return;
+    }
+    await _storageService.addToLibrary(
+      item,
+      category: category?.storageKey,
+      replaceCategory: true,
+      favorite: favorite,
+    );
   }
 
   void _syncInBackground(Future<void> operation, String label) {

@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/storage/library_category.dart';
+import '../../../../l10n/generated/app_localizations.dart';
 import '../../../../shared/widgets/apple_liquid_glass.dart';
 import '../library_provider.dart';
+import '../library_media_kind.dart';
 
 /// Library category picker.
 ///
@@ -15,10 +17,12 @@ class LibraryCategorySelector extends ConsumerStatefulWidget {
     super.key,
     required this.selected,
     required this.counts,
+    required this.mediaKind,
   });
 
   final LibraryCategory selected;
   final Map<LibraryCategory, int> counts;
+  final LibraryMediaKind mediaKind;
 
   @override
   ConsumerState<LibraryCategorySelector> createState() =>
@@ -40,6 +44,26 @@ class _LibraryCategorySelectorState
   String _categoryLabel(BuildContext context, LibraryCategory category) {
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    if (widget.mediaKind == LibraryMediaKind.manga) {
+      final l10n = AppLocalizations.of(context);
+      return switch (category) {
+        LibraryCategory.favorite => isArabic ? 'المفضلة' : 'Favorites',
+        LibraryCategory.watching =>
+          l10n?.mangaReadingNow ?? (isArabic ? 'أقرأها حاليًا' : 'Reading'),
+        LibraryCategory.continueLater =>
+          l10n?.mangaContinueLater ??
+              (isArabic ? 'أكملها لاحقًا' : 'Continue Later'),
+        LibraryCategory.planToWatch =>
+          l10n?.mangaPlanToRead ??
+              (isArabic ? 'أرغب بقراءتها' : 'Plan to Read'),
+        LibraryCategory.completed =>
+          l10n?.mangaCompletedReading ??
+              (isArabic ? 'تمت قراءتها' : 'Completed Reading'),
+        LibraryCategory.notInterested =>
+          l10n?.mangaNotInterested ??
+              (isArabic ? 'لا أرغب بقراءتها' : 'Not Interested'),
+      };
+    }
     return switch (category) {
       LibraryCategory.favorite => isArabic ? 'المفضلة' : 'Favorites',
       LibraryCategory.watching => isArabic ? 'أشاهده حاليًا' : 'Watching',

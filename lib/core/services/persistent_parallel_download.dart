@@ -473,6 +473,7 @@ class PersistentParallelDownload {
   final Set<String> _activeConnectionIds = {};
   final Map<String, ({int generation, DateTime expiresAt, String claimId})>
   _nativeClaimOffers = {};
+  bool _nativeOffersBlockedPump = false;
   final DownloadConnectionGovernor _connectionGovernor =
       DownloadConnectionGovernor();
   final DownloadTelemetryEstimator _speedTelemetry =
@@ -593,9 +594,12 @@ class PersistentParallelDownload {
   /// reconciliation pass has already adopted any URLSession children that
   /// actually started. Live children remain fenced by [part.launched].
   void releaseNativeBackgroundOffers() {
-    if (_disposed || _nativeClaimOffers.isEmpty) return;
+    if (_disposed) return;
+    final blockedPump = _nativeOffersBlockedPump;
+    _nativeOffersBlockedPump = false;
+    if (_nativeClaimOffers.isEmpty) return;
     _nativeClaimOffers.clear();
-    _schedulePumpAll();
+    if (blockedPump) _schedulePumpAll();
   }
 
   /// Repair a child whose native resume checkpoint claimed progress but no
@@ -1307,6 +1311,7 @@ class PersistentParallelDownload {
       _nativeClaimOffers.remove(part.task.taskId);
       return false;
     }
+    _nativeOffersBlockedPump = true;
     return true;
   }
 
@@ -2447,8 +2452,6 @@ class PersistentParallelDownload {
                         try {
                           if (!await _pumpSession(session)) {
                             _scheduleCoordinatorRecovery(session);
-                          } else {
-                            await _persist(session);
                           }
                         } catch (_) {
                           // One slow/failing session must not head-of-line block

@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../domain/entity/multimedia_item.dart';
+import '../extensions/providers/animewitcher_manga_mapping.dart';
 import '../storage/library_category.dart';
 import '../storage/secure_token_storage.dart';
 import '../storage/storage_service.dart';
@@ -44,6 +45,10 @@ class AnimeWitcherAccountService {
       'animewitcher_account_pending_watched_v1';
   static const String _pendingLibraryDeletesKey =
       'animewitcher_account_pending_library_deletes_v1';
+  static const String _pendingMangaLibraryDeletesKey =
+      'animewitcher_account_pending_manga_library_deletes_v1';
+  static const String _pendingMangaWatchedKey =
+      'animewitcher_account_pending_manga_watched_v1';
   static const String _pendingContinueDeletesKey =
       'animewitcher_account_pending_continue_deletes_v1';
   static const String _pendingLastWatchedDeletesKey =
@@ -70,6 +75,11 @@ class AnimeWitcherAccountService {
 
   final Map<String, Set<String>> _watchedEpisodeCache =
       <String, Set<String>>{};
+  final Map<String, Set<String>> _watchedMangaChapterCache =
+      <String, Set<String>>{};
+  final Set<String> _loadedWatchedManga = <String>{};
+  final Map<String, Future<void>> _mangaWatchedWriteQueues =
+      <String, Future<void>>{};
   final Set<String> _ownedProfileDocumentIds = <String>{};
   final Set<String> _allEpisodesWatchedAnime = <String>{};
   final Set<String> _loadedWatchedAnime = <String>{};
@@ -1459,6 +1469,58 @@ class AnimeWitcherAccountService {
     });
   }
 
+  Future<int?> loadMangaUserRating(String mangaId) async {
+    final id = mangaId.trim();
+    final profile = _profile;
+    if (id.isEmpty || profile == null || _session == null) return null;
+    final document = await _authenticated(
+      (token) => _firestore.getDocument(
+        animeWitcherMangaRatingPath(id, profile.documentId),
+        token,
+      ),
+    );
+    return _ratingValue(document?.fields['rate']);
+  }
+
+  Future<int?> saveMangaUserRating(String mangaId, int rate) async {
+    final id = mangaId.trim();
+    if (id.isEmpty) {
+      throw const AnimeWitcherAccountException(
+        'invalid-manga',
+        'Manga id is missing.',
+      );
+    }
+    if (rate < 1 || rate > 10) {
+      throw const AnimeWitcherAccountException(
+        'invalid-rating',
+        'Rating must be an integer from 1 to 10.',
+      );
+    }
+    final profile = _requireSignedInProfile();
+    final path = animeWitcherMangaRatingPath(id, profile.documentId);
+    await _authenticated(
+      (token) => _firestore.setDocument(
+        path,
+        <String, dynamic>{'rate': rate},
+        token,
+        merge: true,
+      ),
+    );
+    return rate;
+  }
+
+  Future<void> clearMangaUserRating(String mangaId) async {
+    final id = mangaId.trim();
+    if (id.isEmpty) return;
+    final profile = _requireSignedInProfile();
+    final path = animeWitcherMangaRatingPath(id, profile.documentId);
+    await _authenticated((token) async {
+      final existing = await _firestore.getDocument(path, token);
+      if (existing == null) return;
+      await _firestore.deleteDocument(path, token);
+    });
+  }
+
   Future<bool> isAnimeReviewsClosed(String animeId) async {
     final id = animeId.trim();
     if (id.isEmpty) return false;
@@ -1790,7 +1852,9 @@ class AnimeWitcherAccountService {
     final operation = () async {
       await Future.wait<void>(<Future<void>>[
         _syncLibrary(),
+        _syncMangaLibrary(),
         _syncWatchedEpisodes(),
+        _syncWatchedMangaChapters(),
         _syncContinueWatching(),
       ]);
       if (!_isCurrentProfile(profile)) return;
@@ -2100,6 +2164,9 @@ class AnimeWitcherAccountService {
     _refreshInFlight = null;
     _syncInFlight = null;
     _watchedEpisodeCache.clear();
+    _watchedMangaChapterCache.clear();
+    _loadedWatchedManga.clear();
+    _mangaWatchedWriteQueues.clear();
     _allEpisodesWatchedAnime.clear();
     _loadedWatchedAnime.clear();
     _stopTimeCache.clear();
@@ -2334,6 +2401,143 @@ class AnimeWitcherAccountService {
     }
   }
 
+  Future<void> _syncMangaLibrary() async {
+    final profile = _profile!;
+    await _pendingStorageWrite;
+    await _flushPendingMangaLibraryDeletes(profile);
+    if (!_isCurrentProfile(profile)) return;
+
+    final favoriteDocs = await _authenticated(
+      (token) => _firestore.queryOrderedDocuments(
+        'users/${profile.documentId}/fav_manga',
+        token,
+      ),
+    );
+    final listDocs = await _authenticated(
+      (token) => _firestore.queryOrderedDocuments(
+        'users/${profile.documentId}/user_manga',
+        token,
+      ),
+    );
+    if (!_isCurrentProfile(profile)) return;
+
+    final remoteEntries = <String, _RemoteLibraryEntry>{};
+    for (final document in listDocs) {
+      final mangaId = _mangaIdFromListDocument(document);
+      if (mangaId == null || mangaId.isEmpty) continue;
+      remoteEntries[mangaId] = _RemoteLibraryEntry(
+        category: _categoryFromCloudType(
+          document.fields['type'] ?? document.fields['manga_type'],
+        ),
+        favorite: false,
+        document: document,
+        updatedAt: _dateValue(document.fields['date']),
+      );
+    }
+    for (final document in favoriteDocs) {
+      final mangaId = _mangaIdFromFavorite(document);
+      if (mangaId == null || mangaId.isEmpty) continue;
+      final existing = remoteEntries[mangaId];
+      final favoriteUpdatedAt = _dateValue(document.fields['date']);
+      remoteEntries[mangaId] = _RemoteLibraryEntry(
+        category: existing?.category,
+        favorite: true,
+        document: existing?.document ?? document,
+        updatedAt: _latestDate(existing?.updatedAt, favoriteUpdatedAt),
+      );
+    }
+
+    final localItems = _storage
+        .getLibraryItems()
+        .where((item) => item.contentType == MultimediaContentType.manga)
+        .toList(growable: false);
+    final localByMangaId = <String, MultimediaItem>{};
+    for (final item in localItems) {
+      final mangaId = _mangaIdFromItem(item);
+      if (mangaId.isNotEmpty) localByMangaId[mangaId] = item;
+    }
+
+    for (final entry in remoteEntries.entries) {
+      if (!_isCurrentProfile(profile)) return;
+      final mangaId = entry.key;
+      final remote = entry.value;
+      final remoteMillis =
+          remote.updatedAt?.millisecondsSinceEpoch ??
+          DateTime.now().millisecondsSinceEpoch;
+      final local = localByMangaId[mangaId];
+
+      if (local == null) {
+        final item =
+            _mangaItemFromRemoteDocument(remote.document, mangaId) ??
+            await _itemForMangaId(mangaId);
+        if (item != null && _isCurrentProfile(profile)) {
+          await _storage.addToLibrary(
+            item,
+            category: remote.category?.storageKey,
+            replaceCategory: true,
+            favorite: remote.favorite,
+            updatedAt: remoteMillis,
+            syncedAccountUid: profile.uid,
+            syncedAt: remoteMillis,
+          );
+        }
+        continue;
+      }
+
+      final resolution = resolveAnimeWitcherSyncConflict(
+        remoteExists: true,
+        localUpdatedAt: _storage.getLibraryItemUpdatedAt(local.url),
+        remoteUpdatedAt: remote.updatedAt?.millisecondsSinceEpoch ?? 0,
+        syncedAccountUid: _storage.getLibraryItemSyncedAccountUid(local.url),
+        localSyncedAt: _storage.getLibraryItemSyncedAt(local.url),
+        currentAccountUid: profile.uid,
+      );
+      if (resolution == AnimeWitcherSyncResolution.uploadLocal) {
+        await saveMangaLibraryItem(
+          local,
+          _localLibraryCategory(local.url),
+          favorite: _storage.isLibraryItemFavorite(local.url),
+        );
+        continue;
+      }
+
+      final remoteItem =
+          _mangaItemFromRemoteDocument(remote.document, mangaId) ?? local;
+      await _storage.addToLibrary(
+        remoteItem,
+        category: remote.category?.storageKey,
+        replaceCategory: true,
+        favorite: remote.favorite,
+        updatedAt: remoteMillis,
+        syncedAccountUid: profile.uid,
+        syncedAt: remoteMillis,
+      );
+    }
+
+    for (final item in localItems) {
+      if (!_isCurrentProfile(profile)) return;
+      final mangaId = _mangaIdFromItem(item);
+      if (mangaId.isEmpty || remoteEntries.containsKey(mangaId)) continue;
+      final resolution = resolveAnimeWitcherSyncConflict(
+        remoteExists: false,
+        localUpdatedAt: _storage.getLibraryItemUpdatedAt(item.url),
+        remoteUpdatedAt: 0,
+        syncedAccountUid: _storage.getLibraryItemSyncedAccountUid(item.url),
+        localSyncedAt: _storage.getLibraryItemSyncedAt(item.url),
+        currentAccountUid: profile.uid,
+      );
+      if (resolution == AnimeWitcherSyncResolution.deleteLocal) {
+        await _storage.removeFromLibrary(item.url);
+        continue;
+      }
+      await saveMangaLibraryItem(
+        item,
+        _localLibraryCategory(item.url),
+        favorite: _storage.isLibraryItemFavorite(item.url),
+      );
+    }
+  }
+
   LibraryCategory? _localLibraryCategory(String url) {
     final raw = _storage.getLibraryItemCategory(url);
     if (raw == null) return null;
@@ -2444,6 +2648,144 @@ class AnimeWitcherAccountService {
     );
   }
 
+  Future<void> saveMangaLibraryItem(
+    MultimediaItem item,
+    LibraryCategory? category, {
+    bool? favorite,
+  }) async {
+    final profile = _profile;
+    final mangaId = _mangaIdFromItem(item);
+    if (!isSignedIn || profile == null || mangaId.isEmpty) return;
+
+    final primaryCategory =
+        category == LibraryCategory.favorite ? null : category;
+    final isFavorite = favorite ?? category == LibraryCategory.favorite;
+    final mutationId = _pendingMutationId(mangaId);
+    await _enqueueLibraryWrite('manga:$mangaId', () async {
+      if (!_isCurrentProfile(profile)) return;
+      final root = 'users/${profile.documentId}';
+      final mangaReference = FirestoreReference('manga_list/$mangaId');
+
+      if (primaryCategory == null) {
+        await _authenticated(
+          (token) => _firestore.deleteDocument(
+            '$root/user_manga/$mangaId',
+            token,
+          ),
+        );
+      } else {
+        await _authenticated(
+          (token) => _firestore.setDocumentWithServerTimestamps(
+            '$root/user_manga/$mangaId',
+            <String, dynamic>{
+              'doc_ref': mangaReference,
+              'type': _cloudType(primaryCategory),
+              'views': 0,
+            },
+            token,
+            serverTimestampFields: const <String>{'date'},
+          ),
+        );
+      }
+
+      if (isFavorite) {
+        await _authenticated(
+          (token) => _firestore.setDocumentWithServerTimestamps(
+            '$root/fav_manga/$mangaId',
+            <String, dynamic>{
+              'manga_doc_id': mangaReference,
+              'views': 0,
+            },
+            token,
+            serverTimestampFields: const <String>{'date'},
+          ),
+        );
+      } else {
+        await _authenticated(
+          (token) => _firestore.deleteDocument(
+            '$root/fav_manga/$mangaId',
+            token,
+          ),
+        );
+      }
+    });
+
+    await _storage.markLibraryItemSynced(
+      item.url,
+      accountUid: profile.uid,
+      syncedAt: DateTime.now().millisecondsSinceEpoch,
+    );
+    await _mutatePending(_pendingMangaLibraryDeletesKey, (values) {
+      values.remove(mutationId);
+    });
+  }
+
+  Future<void> removeMangaLibraryItem(String itemUrl) async {
+    final profile = _profile;
+    final mangaId = _mangaIdFromUrl(itemUrl);
+    if (profile == null || mangaId == null) return;
+
+    final mutationId = _pendingMutationId(mangaId);
+    final revision = _nextMutationRevision();
+    await _mutatePending(_pendingMangaLibraryDeletesKey, (values) {
+      values[mutationId] = <String, dynamic>{
+        'manga_id': mangaId,
+        'owner_uid': profile.uid,
+        'revision': revision,
+      };
+    });
+    if (!isSignedIn) return;
+
+    await _deleteMangaLibraryRemote(mangaId, profile);
+    await _removePendingMutation(
+      _pendingMangaLibraryDeletesKey,
+      mutationId,
+      revision,
+    );
+  }
+
+  Future<void> _deleteMangaLibraryRemote(
+    String mangaId,
+    AnimeWitcherProfile profile,
+  ) {
+    return _enqueueLibraryWrite('manga:$mangaId', () async {
+      if (!_isCurrentProfile(profile)) return;
+      final root = 'users/${profile.documentId}';
+      await _authenticated(
+        (token) => _firestore.deleteDocument(
+          '$root/user_manga/$mangaId',
+          token,
+        ),
+      );
+      await _authenticated(
+        (token) => _firestore.deleteDocument(
+          '$root/fav_manga/$mangaId',
+          token,
+        ),
+      );
+    });
+  }
+
+  Future<void> _flushPendingMangaLibraryDeletes(
+    AnimeWitcherProfile profile,
+  ) async {
+    final pending = _readPendingMutations(_pendingMangaLibraryDeletesKey);
+    for (final entry in pending.entries) {
+      if (!_isCurrentProfile(profile)) return;
+      final mutation = entry.value;
+      if (!_mutationBelongsToProfile(mutation, profile)) continue;
+      final mangaId = _optionalString(mutation['manga_id']);
+      final revision = _optionalString(mutation['revision']);
+      if (mangaId == null || revision == null) continue;
+      await _deleteMangaLibraryRemote(mangaId, profile);
+      await _removePendingMutation(
+        _pendingMangaLibraryDeletesKey,
+        entry.key,
+        revision,
+      );
+    }
+  }
+
   Future<void> removeLibraryItem(String itemUrl) async {
     final animeId = AnimeWitcherSyncIds.animeIdFromUrl(itemUrl);
     final profile = _profile;
@@ -2545,6 +2887,201 @@ class AnimeWitcherAccountService {
   // -------------------------------------------------------------------------
   // Watched episodes and resume positions
   // -------------------------------------------------------------------------
+
+
+  Future<void> _syncWatchedMangaChapters() async {
+    final profile = _profile!;
+    final docs = await _authenticated(
+      (token) => _firestore.listDocuments(
+        'users/${profile.documentId}/chapters_watched',
+        token,
+      ),
+    );
+    if (!_isCurrentProfile(profile)) return;
+
+    _watchedMangaChapterCache.clear();
+    _loadedWatchedManga.clear();
+    for (final document in docs) {
+      final raw = document.fields['chapters_watched'];
+      _watchedMangaChapterCache[document.id] = raw is List
+          ? raw.map((value) => value.toString()).toSet()
+          : <String>{};
+      _loadedWatchedManga.add(document.id);
+    }
+
+    await _pendingStorageWrite;
+    await _flushPendingMangaWatched(profile);
+  }
+
+  bool isMangaChapterWatchedCached(String mangaId, String chapterId) {
+    final normalizedManga = mangaId.trim();
+    final normalizedChapter = chapterId.trim();
+    if (normalizedManga.isEmpty || normalizedChapter.isEmpty) return false;
+    return _watchedMangaChapterCache[normalizedManga]?.contains(
+          normalizedChapter,
+        ) ==
+        true;
+  }
+
+  Future<Set<String>> watchedMangaChapterIds(
+    String mangaId, {
+    bool refresh = false,
+  }) async {
+    final normalizedManga = mangaId.trim();
+    final profile = _profile;
+    if (!isSignedIn || normalizedManga.isEmpty || profile == null) {
+      return const <String>{};
+    }
+    if (refresh || !_loadedWatchedManga.contains(normalizedManga)) {
+      final document = await _authenticated(
+        (token) => _firestore.getDocument(
+          'users/${profile.documentId}/chapters_watched/$normalizedManga',
+          token,
+        ),
+      );
+      if (!_isCurrentProfile(profile)) return const <String>{};
+      final raw = document?.fields['chapters_watched'];
+      _watchedMangaChapterCache[normalizedManga] = raw is List
+          ? raw.map((value) => value.toString()).toSet()
+          : <String>{};
+      _loadedWatchedManga.add(normalizedManga);
+    }
+    return Set<String>.unmodifiable(
+      _watchedMangaChapterCache[normalizedManga] ?? const <String>{},
+    );
+  }
+
+  Future<void> setMangaChaptersWatched({
+    required String mangaId,
+    required Iterable<String> chapterIds,
+    required bool watched,
+  }) async {
+    final normalizedManga = mangaId.trim();
+    final ids = chapterIds
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (normalizedManga.isEmpty || ids.isEmpty) return;
+
+    final profile = _profile;
+    final mutationId = _pendingMutationId(normalizedManga, ids.join(','));
+    final revision = _nextMutationRevision();
+    await _mutatePending(_pendingMangaWatchedKey, (values) {
+      values[mutationId] = <String, dynamic>{
+        'manga_id': normalizedManga,
+        'chapter_ids': ids,
+        'watched': watched,
+        'owner_uid': profile?.uid,
+        'revision': revision,
+      };
+    });
+
+    _applyMangaWatchedCache(normalizedManga, ids, watched);
+    if (profile == null || !isSignedIn) return;
+
+    await _enqueueMangaWatchedWrite(
+      normalizedManga,
+      () => _setMangaChaptersWatchedInternal(
+        mangaId: normalizedManga,
+        chapterIds: ids,
+        profile: profile,
+        watched: watched,
+      ),
+    );
+    await _removePendingMutation(_pendingMangaWatchedKey, mutationId, revision);
+  }
+
+  Future<void> _flushPendingMangaWatched(
+    AnimeWitcherProfile profile,
+  ) async {
+    final pending = _readPendingMutations(_pendingMangaWatchedKey);
+    for (final entry in pending.entries) {
+      if (!_isCurrentProfile(profile)) return;
+      final mutation = entry.value;
+      if (!_mutationBelongsToProfile(mutation, profile)) continue;
+      final mangaId = _optionalString(mutation['manga_id']);
+      final revision = _optionalString(mutation['revision']);
+      final rawIds = mutation['chapter_ids'];
+      if (mangaId == null || revision == null || rawIds is! List) continue;
+      final ids = rawIds
+          .map((value) => value.toString().trim())
+          .where((value) => value.isNotEmpty)
+          .toList(growable: false);
+      if (ids.isEmpty) continue;
+      await _enqueueMangaWatchedWrite(
+        mangaId,
+        () => _setMangaChaptersWatchedInternal(
+          mangaId: mangaId,
+          chapterIds: ids,
+          profile: profile,
+          watched: mutation['watched'] == true,
+        ),
+      );
+      await _removePendingMutation(_pendingMangaWatchedKey, entry.key, revision);
+    }
+  }
+
+  Future<void> _enqueueMangaWatchedWrite(
+    String mangaId,
+    Future<void> Function() write,
+  ) {
+    final previous = _mangaWatchedWriteQueues[mangaId] ?? Future<void>.value();
+    late final Future<void> operation;
+    operation = previous.then<void>(
+      (_) => write(),
+      onError: (Object _, StackTrace __) => write(),
+    );
+    _mangaWatchedWriteQueues[mangaId] = operation;
+    return operation.whenComplete(() {
+      if (identical(_mangaWatchedWriteQueues[mangaId], operation)) {
+        _mangaWatchedWriteQueues.remove(mangaId);
+      }
+    });
+  }
+
+  Future<void> _setMangaChaptersWatchedInternal({
+    required String mangaId,
+    required List<String> chapterIds,
+    required AnimeWitcherProfile profile,
+    required bool watched,
+  }) async {
+    if (!_isCurrentProfile(profile) || chapterIds.isEmpty) return;
+    await _authenticated(
+      (token) => _firestore.transformArrayFieldValues(
+        'users/${profile.documentId}/chapters_watched/$mangaId',
+        idToken: token,
+        field: 'chapters_watched',
+        values: chapterIds,
+        append: watched,
+        baseFields: watched
+            ? <String, dynamic>{
+                'user_id': profile.documentId,
+                'last_chapter_watched_id': chapterIds.last,
+              }
+            : const <String, dynamic>{},
+      ),
+    );
+    if (!_isCurrentProfile(profile)) return;
+    _applyMangaWatchedCache(mangaId, chapterIds, watched);
+  }
+
+  void _applyMangaWatchedCache(
+    String mangaId,
+    Iterable<String> chapterIds,
+    bool watched,
+  ) {
+    final values = Set<String>.from(
+      _watchedMangaChapterCache[mangaId] ?? const <String>{},
+    );
+    if (watched) {
+      values.addAll(chapterIds);
+    } else {
+      values.removeAll(chapterIds);
+    }
+    _watchedMangaChapterCache[mangaId] = values;
+    _loadedWatchedManga.add(mangaId);
+  }
 
   Future<void> _syncWatchedEpisodes() async {
     final profile = _profile!;
@@ -3433,6 +3970,84 @@ class AnimeWitcherAccountService {
   String? _animeIdFromListDocument(FirestoreDocument document) {
     final reference = _optionalString(document.fields['doc_ref']);
     return reference == null ? document.id : _lastPathSegment(reference);
+  }
+
+  Future<MultimediaItem?> _itemForMangaId(String mangaId) async {
+    final document = await _authenticated(
+      (token) => _firestore.getDocument('manga_list/$mangaId', token),
+    );
+    if (document == null) return null;
+    return _mangaItemFromFields(document.fields, mangaId);
+  }
+
+  MultimediaItem? _mangaItemFromRemoteDocument(
+    FirestoreDocument document,
+    String mangaId,
+  ) {
+    final compact = _itemFromCompact(document.fields['animewitcher_item']);
+    if (compact != null &&
+        compact.contentType == MultimediaContentType.manga) {
+      return compact;
+    }
+    for (final key in const <String>['mangaModel', 'manga_model']) {
+      final source = _map(document.fields[key]);
+      if (source.isEmpty) continue;
+      final mapped = _mangaItemFromFields(source, mangaId);
+      if (mapped != null) return mapped;
+    }
+    return null;
+  }
+
+  MultimediaItem? _mangaItemFromFields(
+    Map<String, dynamic> fields,
+    String mangaId,
+  ) {
+    final source = <String, Object?>{
+      ...fields,
+      'objectID': mangaId,
+    };
+    final item = mapAnimeWitcherMangaHit(source);
+    return item.title.trim().isEmpty ? null : item;
+  }
+
+  String? _mangaIdFromListDocument(FirestoreDocument document) {
+    final reference = _optionalString(
+      document.fields['doc_ref'] ??
+          document.fields['manga_doc_id'] ??
+          document.fields['manga_id'],
+    );
+    return reference == null ? document.id : _lastPathSegment(reference);
+  }
+
+  String? _mangaIdFromFavorite(FirestoreDocument document) {
+    final reference = _optionalString(
+      document.fields['manga_doc_id'] ??
+          document.fields['doc_ref'] ??
+          document.fields['manga_id'],
+    );
+    return reference == null ? document.id : _lastPathSegment(reference);
+  }
+
+  String _mangaIdFromItem(MultimediaItem item) {
+    final synced = item.syncData?['mangaId']?.trim() ?? '';
+    if (synced.isNotEmpty) return synced;
+    return _mangaIdFromUrl(item.url) ?? '';
+  }
+
+  String? _mangaIdFromUrl(String url) {
+    final uri = Uri.tryParse(url.trim());
+    if (uri == null || uri.pathSegments.isEmpty) return null;
+    final segments = uri.pathSegments.where((part) => part.isNotEmpty).toList();
+    if (segments.length < 2 || segments[segments.length - 2] != 'manga') {
+      return null;
+    }
+    final raw = segments.last.trim();
+    if (raw.isEmpty) return null;
+    try {
+      return Uri.decodeComponent(raw);
+    } catch (_) {
+      return raw;
+    }
   }
 
   String _cloudType(LibraryCategory category) => switch (category) {

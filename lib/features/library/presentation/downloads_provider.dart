@@ -5,6 +5,7 @@ import 'package:background_downloader/background_downloader.dart';
 import 'package:path/path.dart' as p;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../core/domain/entity/manga.dart';
 import '../../../core/domain/entity/multimedia_item.dart';
 import '../../../core/services/download_concurrency.dart';
 import '../../../core/services/download_v2/download_v2_identity.dart';
@@ -21,6 +22,8 @@ class DownloadItem {
   final double progress;
   final MultimediaItem item;
   final Episode? episode;
+  final MangaChapter? chapter;
+  final DownloadMediaKind mediaKind;
   final String? logicalId;
   final int timestamp;
   final String trackingUrl;
@@ -37,6 +40,8 @@ class DownloadItem {
     required this.progress,
     required this.item,
     this.episode,
+    this.chapter,
+    this.mediaKind = DownloadMediaKind.videoEpisode,
     this.logicalId,
     required this.timestamp,
     String? trackingUrl,
@@ -69,6 +74,9 @@ bool downloadsPointAtSameTarget(DownloadItem a, DownloadItem b) {
   final trackA = a.trackingUrl.trim();
   final trackB = b.trackingUrl.trim();
   if (trackA.isNotEmpty && trackA == trackB) return true;
+  final chapterA = a.chapter?.url.trim() ?? '';
+  final chapterB = b.chapter?.url.trim() ?? '';
+  if (chapterA.isNotEmpty && chapterA == chapterB) return true;
   final episodeA = a.episode?.url.trim() ?? '';
   final episodeB = b.episode?.url.trim() ?? '';
   if (episodeA.isNotEmpty && episodeA == episodeB) return true;
@@ -77,6 +85,63 @@ bool downloadsPointAtSameTarget(DownloadItem a, DownloadItem b) {
   final fileA = a.destinationPath.trim();
   final fileB = b.destinationPath.trim();
   return fileA.isNotEmpty && fileA == fileB;
+}
+
+DownloadItem? completedMangaChapterDownload(
+  List<DownloadItem> downloads,
+  MangaChapter chapter,
+) {
+  final mangaId = chapter.mangaId.trim();
+  final chapterId = chapter.id.trim();
+  final logicalId = mangaId.isNotEmpty && chapterId.isNotEmpty
+      ? logicalDownloadIdForMangaChapter(
+          mangaId: mangaId,
+          chapterId: chapterId,
+        ).value
+      : null;
+  final chapterUrl = chapter.url.trim();
+
+  for (final item in downloads) {
+    if (item.status != TaskStatus.complete ||
+        item.mediaKind != DownloadMediaKind.mangaChapter) {
+      continue;
+    }
+    if (logicalId != null && item.logicalId?.trim() == logicalId) return item;
+    final downloadedChapter = item.chapter;
+    if (downloadedChapter != null &&
+        downloadedChapter.mangaId.trim() == mangaId &&
+        downloadedChapter.id.trim() == chapterId) {
+      return item;
+    }
+    if (chapterUrl.isNotEmpty &&
+        (item.trackingUrl.trim() == chapterUrl ||
+            downloadedChapter?.url.trim() == chapterUrl)) {
+      return item;
+    }
+  }
+  return null;
+}
+
+DownloadItem? completedEpisodeDownload(
+  List<DownloadItem> downloads,
+  MultimediaItem parentItem,
+  Episode episode,
+) {
+  final parentUrl = parentItem.url.trim();
+  final episodeUrl = episode.url.trim();
+  for (final item in downloads) {
+    if (item.status != TaskStatus.complete ||
+        item.mediaKind != DownloadMediaKind.videoEpisode) {
+      continue;
+    }
+    if (parentUrl.isNotEmpty && item.item.url.trim() != parentUrl) continue;
+    if (episodeUrl.isNotEmpty &&
+        (item.trackingUrl.trim() == episodeUrl ||
+            item.episode?.url.trim() == episodeUrl)) {
+      return item;
+    }
+  }
+  return null;
 }
 
 int _statusRank(TaskStatus status) {
@@ -207,11 +272,17 @@ CollapsedDownloads collapseDuplicateDownloads(List<DownloadItem> items) {
 @Riverpod(keepAlive: true)
 class DownloadsNotifier extends _$DownloadsNotifier {
   static const Duration _refreshInterval = Duration(seconds: 1);
+  static const Duration _durableRefreshInterval = Duration(seconds: 30);
 
   final Set<String> _deletingIds = <String>{};
+  final Set<String> _artworkScheduledIds = <String>{};
   List<LogicalDownloadRecordV2> _records = const <LogicalDownloadRecordV2>[];
+  Map<String, Map<String, dynamic>> _metadataByTaskId =
+      const <String, Map<String, dynamic>>{};
   StreamSubscription<List<LogicalDownloadRecordV2>>? _recordsSubscription;
   Timer? _refreshTimer;
+  Timer? _durableRefreshTimer;
+  Future<void>? _durableReloadInFlight;
 
   @override
   Future<List<DownloadItem>> build() async {
@@ -219,34 +290,67 @@ class DownloadsNotifier extends _$DownloadsNotifier {
     await manager.initialize();
 
     _records = await ref.read(logicalDownloadStoreV2Provider).all();
+    _metadataByTaskId = await ref
+        .read(storageServiceProvider)
+        .getAllDownloadMetadata();
+
     _recordsSubscription = manager.records.listen((records) {
       _records = records;
-      unawaited(_refreshState());
+      unawaited(_reloadMetadataAndRefresh());
     });
+
+    // Progress is ephemeral manager state. Project it from memory every second;
+    // do not scan both Hive boxes on the UI isolate for every progress tick.
     _refreshTimer = Timer.periodic(_refreshInterval, (_) {
-      unawaited(_refreshState());
+      _refreshPresentationState();
+    });
+    // Keep a much slower durable reconciliation as a lifecycle/race safety net.
+    _durableRefreshTimer = Timer.periodic(_durableRefreshInterval, (_) {
+      unawaited(_reloadDurableState());
     });
 
     ref.onDispose(() {
       unawaited(_recordsSubscription?.cancel());
       _refreshTimer?.cancel();
+      _durableRefreshTimer?.cancel();
     });
 
-    return _refreshList();
+    return _projectList();
   }
 
-  Future<void> _refreshState() async {
-    // The timer is the safety net for presentation. Re-read durable V2 truth
-    // instead of repeatedly projecting a cached list if a stream notification
-    // was missed during a lifecycle/subscription race.
-    _records = await ref.read(logicalDownloadStoreV2Provider).all();
-    state = AsyncData(await _refreshList());
+  void _refreshPresentationState() {
+    state = AsyncData(_projectList());
   }
 
-  Future<List<DownloadItem>> _refreshList() async {
+  Future<void> _reloadMetadataAndRefresh() async {
+    _metadataByTaskId = await ref
+        .read(storageServiceProvider)
+        .getAllDownloadMetadata();
+    _refreshPresentationState();
+  }
+
+  Future<void> _reloadDurableState() {
+    final existing = _durableReloadInFlight;
+    if (existing != null) return existing;
+
+    final task = () async {
+      _records = await ref.read(logicalDownloadStoreV2Provider).all();
+      _metadataByTaskId = await ref
+          .read(storageServiceProvider)
+          .getAllDownloadMetadata();
+      _refreshPresentationState();
+    }();
+    _durableReloadInFlight = task;
+    return task.whenComplete(() {
+      if (identical(_durableReloadInFlight, task)) {
+        _durableReloadInFlight = null;
+      }
+    });
+  }
+
+  List<DownloadItem> _projectList() {
     final manager = ref.read(downloadManagerV2Provider);
-    final storage = ref.read(storageServiceProvider);
-    final metadataByTaskId = await storage.getAllDownloadMetadata();
+    final metadataByTaskId = _metadataByTaskId;
     final metadataByLogicalId = <String, Map<String, dynamic>>{};
 
     for (final metadata in metadataByTaskId.values) {
@@ -275,7 +379,16 @@ class DownloadsNotifier extends _$DownloadsNotifier {
               Map<String, dynamic>.from(metadata['episode'] as Map),
             )
           : null;
-      final trackingUrl = _trackingUrlFor(metadata, item, episode);
+      final taskSnapshot = metadata['taskSnapshot'] is Map
+          ? Map<String, dynamic>.from(metadata['taskSnapshot'] as Map)
+          : const <String, dynamic>{};
+      final chapter = MangaChapter.fromJson(taskSnapshot['chapter']);
+      final trackingUrl = _trackingUrlFor(
+        metadata,
+        item,
+        episode,
+        chapter,
+      );
       final snapshot = manager.snapshotFor(record.logicalId);
       final task = _presentationTaskFor(
         record,
@@ -287,6 +400,8 @@ class DownloadsNotifier extends _$DownloadsNotifier {
         progress: _progressFor(record, snapshot),
         item: item,
         episode: episode,
+        chapter: chapter,
+        mediaKind: record.mediaKind,
         logicalId: record.logicalId.value,
         timestamp: (metadata['timestamp'] as int?) ?? record.updatedAtMillis,
         trackingUrl: trackingUrl,
@@ -298,7 +413,9 @@ class DownloadsNotifier extends _$DownloadsNotifier {
         timeRemaining: snapshot?.timeRemaining ?? Duration.zero,
       );
       items.add(projected);
-      if (projected.status == TaskStatus.complete) {
+      if (projected.status == TaskStatus.complete &&
+          projected.mediaKind == DownloadMediaKind.videoEpisode &&
+          _artworkScheduledIds.add(projected.id)) {
         unawaited(
           ensureDownloadedEpisodeArtwork(
             taskId: projected.id,
@@ -307,7 +424,6 @@ class DownloadsNotifier extends _$DownloadsNotifier {
         );
       }
     }
-
 
     items.removeWhere((item) => _deletingIds.contains(item.id));
     items.sort((a, b) => a.timestamp.compareTo(b.timestamp));
@@ -385,7 +501,7 @@ class DownloadsNotifier extends _$DownloadsNotifier {
     final logical = item?.logicalId?.trim();
     if (logical == null || logical.isEmpty) return;
     await ref.read(downloadManagerV2Provider).pause(DownloadLogicalId(logical));
-    await _refreshState();
+    await _reloadDurableState();
   }
 
   Future<void> resumeDownload(String taskId) async {
@@ -393,7 +509,7 @@ class DownloadsNotifier extends _$DownloadsNotifier {
     final logical = item?.logicalId?.trim();
     if (logical == null || logical.isEmpty) return;
     await ref.read(downloadManagerV2Provider).resume(DownloadLogicalId(logical));
-    await _refreshState();
+    await _reloadDurableState();
   }
 }
 
@@ -401,9 +517,12 @@ String _trackingUrlFor(
   Map<String, dynamic> metadata,
   MultimediaItem item,
   Episode? episode,
+  MangaChapter? chapter,
 ) {
   final stored = (metadata['trackingUrl'] as String?)?.trim();
   if (stored != null && stored.isNotEmpty) return stored;
+  final chapterUrl = chapter?.url.trim();
+  if (chapterUrl != null && chapterUrl.isNotEmpty) return chapterUrl;
   final episodeUrl = episode?.url.trim();
   if (episodeUrl != null && episodeUrl.isNotEmpty) return episodeUrl;
   return item.url.trim();

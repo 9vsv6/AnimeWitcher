@@ -10,6 +10,7 @@ import '../download_parallel.dart';
 import '../persistent_parallel_download.dart';
 import 'download_v2_diagnostics.dart';
 import 'download_v2_models.dart';
+import 'manga_chapter_transport_v2.dart';
 
 /// Package-neutral description of one V2 parent transfer.
 ///
@@ -160,7 +161,7 @@ Set<String> activeDurablePartTaskIdsV2({
 }
 
 final class PackageBackgroundDownloaderGateway
-    implements BackgroundDownloaderGateway {
+    implements BackgroundDownloaderGateway, MangaChapterGatewayV2 {
   PackageBackgroundDownloaderGateway({
     FileDownloader? downloader,
     DownloadNotificationPrefs Function()? notificationPreferences,
@@ -261,6 +262,57 @@ final class PackageBackgroundDownloaderGateway
   /// native queue independently filters children that already exist in URLSession.
   void releaseNativeBackgroundOffersV2() {
     _durableParallel?.releaseNativeBackgroundOffers();
+  }
+
+  @override
+  Future<DownloadTransportHandle> startMangaChapter(
+    MangaChapterTransportSpecV2 spec,
+  ) async {
+    await initialize();
+    await configurePackageNotificationsV2(
+      _downloader,
+      _notificationPreferences(),
+    );
+    final transport = MangaChapterTransportV2(
+      startPage: _startMangaPageTaskV2,
+    );
+    return transport.start(spec);
+  }
+
+  Future<DownloadTransportHandle> _startMangaPageTaskV2(
+    MangaChapterPageTaskV2 page,
+  ) async {
+    await initialize();
+
+    // Older Manga builds placed page children in the normal V2 group, which
+    // makes them inherit user-facing notifications. Replace such an exact
+    // child once so upgraded installs also become notification-silent.
+    final tracked = _downloader.transfers.forId(page.taskId);
+    final persisted = await _downloader.database.recordForId(page.taskId);
+    final existingTask = tracked?.task ?? persisted?.task;
+    if (existingTask != null &&
+        existingTask.group != kDownloadV2SilentPackageGroup) {
+      final legacy = await attach(page.taskId);
+      await legacy?.cancel();
+      await removeTracking(page.taskId);
+    }
+
+    final existing = await attach(page.taskId);
+    final reusable = await reusableMangaPageHandleV2(
+      existing: existing,
+      destinationPath: page.destinationPath,
+      removeTracking: () => removeTracking(page.taskId),
+    );
+    if (reusable != null) return reusable;
+
+    final prefs = _notificationPreferences();
+    final task = await packageMangaPageTaskForV2(
+      page,
+      userInitiated: prefs.running,
+      showRunningNotification: prefs.running,
+    );
+    final transfer = await _downloader.transfers.start(task);
+    return _handleFor(transfer);
   }
 
   @override
@@ -711,16 +763,85 @@ int effectivePackageParallelChunksV2(
   return requestedChunks;
 }
 
+Future<DownloadTransportHandle?> reusableMangaPageHandleV2({
+  required DownloadTransportHandle? existing,
+  required String destinationPath,
+  required Future<void> Function() removeTracking,
+}) async {
+  if (existing == null) return null;
+
+  final status = existing.current.status;
+  if (status == DownloadTransportStatus.complete) {
+    final file = File(destinationPath);
+    if (await file.exists() && await file.length() > 0) return existing;
+    await removeTracking();
+    return null;
+  }
+
+  if (status == DownloadTransportStatus.paused) {
+    final resumed = await existing.resume();
+    if (resumed) return existing;
+
+    // A recovered Manga page must never leave an active chapter parked on a
+    // stale paused package task. Cancel/forget it and let the caller recreate
+    // only this page from its fresh chapter-page descriptor.
+    await existing.cancel();
+    await removeTracking();
+    return null;
+  }
+
+  if (status == DownloadTransportStatus.failed ||
+      status == DownloadTransportStatus.canceled ||
+      status == DownloadTransportStatus.missing) {
+    await removeTracking();
+    return null;
+  }
+  return existing;
+}
+
 /// Maps one AnimeWitcher parent transfer spec to exactly one package task.
 ///
 /// A request greater than one maps to one [ParallelDownloadTask] descriptor.
 /// The production gateway may execute that descriptor through durable immutable
 /// ranges on iOS while preserving the same parent task identity.
+Future<DownloadTask> packageMangaPageTaskForV2(
+  MangaChapterPageTaskV2 page, {
+  required bool userInitiated,
+  bool showRunningNotification = true,
+}) {
+  final parentId = page.taskId.replaceFirst(RegExp(r'_p\d{4,}$'), '');
+  return packageTaskForV2(
+    DownloadTaskSpecV2(
+      taskId: page.taskId,
+      url: page.url,
+      destinationPath: page.destinationPath,
+      headers: page.headers,
+      allowPause: true,
+      retries: page.retries,
+      parallelChunks: 1,
+    ),
+    userInitiated: userInitiated,
+    group: kDownloadV2SilentPackageGroup,
+    notificationConfig: TaskNotificationConfig(
+      running: showRunningNotification
+          ? const TaskNotification(
+              'Downloading manga chapter',
+              'Pages are downloading',
+            )
+          : null,
+      groupNotificationId: 'manga_$parentId',
+    ),
+    // Manga page children are implementation details, never user notifications.
+    isIOS: false,
+  );
+}
+
 Future<DownloadTask> packageTaskForV2(
   DownloadTaskSpecV2 spec, {
   bool userInitiated = true,
   String group = kDownloadV2PackageGroup,
   bool? isIOS,
+  TaskNotificationConfig? notificationConfig,
 }) async {
   final (baseDirectory, directory, filename) = await _destinationFor(
     spec.destinationPath,
@@ -749,6 +870,7 @@ Future<DownloadTask> packageTaskForV2(
       updates: Updates.statusAndProgress,
       retries: spec.retries,
       allowPause: spec.allowPause,
+      notificationConfig: notificationConfig,
     );
   }
 
@@ -765,6 +887,7 @@ Future<DownloadTask> packageTaskForV2(
     updates: Updates.statusAndProgress,
     retries: spec.retries,
     allowPause: spec.allowPause,
+    notificationConfig: notificationConfig,
   );
 }
 
@@ -942,7 +1065,7 @@ DownloadTransportStatus durableParallelProgressStatusV2({
   required double progress,
   required bool parentActive,
 }) {
-  if (progress >= 1) return DownloadTransportStatus.complete;
+  if (progress >= 1 && !parentActive) return DownloadTransportStatus.complete;
   return parentActive
       ? DownloadTransportStatus.running
       : DownloadTransportStatus.paused;

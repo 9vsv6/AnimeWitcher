@@ -4,7 +4,7 @@ description: "A new Flutter project."
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to use `flutter pub publish`.
 
-version: 1.5.0+1
+version: 1.6.0+2
 
 environment:
   # background_downloader 9.6+ requires Dart 3.13 and provides the Transfers
@@ -28,6 +28,7 @@ dependencies:
   package_info_plus: any
   shared_preferences: ^2.5.4
   path_provider: ^2.1.5
+  share_plus: ^13.0.0
   disk_usage: ^1.0.0
   wakelock_plus: ^1.4.0
   # background_downloader 9.6 currently depends on connectivity_plus 6.x.
@@ -43,6 +44,11 @@ dependencies:
   device_info_plus: any
   crypto: ^3.0.7
   ffi: ^2.2.0
+  code_assets: ^2.0.0
+  hooks: ^2.2.0
+  native_toolchain_c: ^0.19.4
+  flutter_avif_ios: ^3.1.0
+  flutter_avif_platform_interface: ^3.1.0
   file_picker: ^12.0.0-beta.7
   image: ^4.8.0
   archive: ^4.0.7
@@ -55,6 +61,7 @@ dependencies:
   flutter_svg: ^2.2.3
   dpad: ^2.0.2
   shimmer: ^3.0.0
+  super_sliver_list: ^0.4.1
   video_view:
     path: packages/video_view
   flutter_cache_manager: ^3.4.1
