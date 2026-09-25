@@ -287,15 +287,16 @@ class _MyAppState extends ConsumerState<MyApp>
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(
-        ref.read(downloadManagerV2Provider).initialize().catchError((
-          Object error,
-        ) {
-          if (kDebugMode) {
-            debugPrint(
-              '[DownloadManagerV2] Startup initialization deferred: $error',
-            );
-          }
-        }),
+        ref
+            .read(downloadManagerV2Provider)
+            .initialize()
+            .catchError((Object error) {
+              if (kDebugMode) {
+                debugPrint(
+                  '[DownloadManagerV2] Startup initialization deferred: $error',
+                );
+              }
+            }),
       );
       _checkAppUpdates();
       // The first-launch welcome (theme, skipping, sign-in) is part of the
