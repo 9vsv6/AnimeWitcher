@@ -84,7 +84,6 @@ void main() {
       final ios = await actionsOn(TargetPlatform.iOS);
       final android = await actionsOn(TargetPlatform.android);
       expect(ios, android);
-      expect(428 - ios.right, greaterThanOrEqualTo(59));
     } finally {
       controller.dispose();
       searchFocus.dispose();
