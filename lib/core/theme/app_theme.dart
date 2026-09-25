@@ -6,6 +6,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'theme_provider.dart';
+
 class _FixedLtrCupertinoPageTransitionsBuilder extends PageTransitionsBuilder {
   const _FixedLtrCupertinoPageTransitionsBuilder();
 
@@ -149,58 +151,179 @@ class AppTheme {
   static const Color amberOnSelected = Color(0xFFFAC775);
   static const Color amberMuted = Color(0xFFB4B2A9);
 
+  static const AppDarkPalette amberPalette = AppDarkPalette(
+    accent: amberAccent,
+    onAccent: amberOnAccent,
+    background: amberBackground,
+    surface: amberSurface,
+    surfaceHigh: amberSurfaceHigh,
+    surfaceHighest: amberSurfaceHighest,
+    selected: amberSelected,
+    onSelected: amberOnSelected,
+    muted: amberMuted,
+    outline: Color(0xFF3A3936),
+  );
+
+  /// True black for OLED screens, with the app's gold.
+  static const AppDarkPalette amoledPalette = AppDarkPalette(
+    accent: animeWitcherAccent,
+    onAccent: Color(0xFF2B2300),
+    background: Color(0xFF000000),
+    surface: Color(0xFF0A0A0A),
+    surfaceHigh: Color(0xFF141414),
+    surfaceHighest: Color(0xFF1E1E1E),
+    selected: Color(0xFF4A3D00),
+    onSelected: Color(0xFFFFE57F),
+    muted: Color(0xFFA0A0A0),
+    outline: Color(0xFF262626),
+  );
+
+  /// Deep navy with sky blue.
+  static const AppDarkPalette oceanPalette = AppDarkPalette(
+    accent: Color(0xFF4FC3F7),
+    onAccent: Color(0xFF01344A),
+    background: Color(0xFF0B1320),
+    surface: Color(0xFF111B2B),
+    surfaceHigh: Color(0xFF172436),
+    surfaceHighest: Color(0xFF1E2E44),
+    selected: Color(0xFF0E4A6B),
+    onSelected: Color(0xFFB3E5FC),
+    muted: Color(0xFF9FB3C8),
+    outline: Color(0xFF2A3A50),
+  );
+
+  /// Pine green with emerald.
+  static const AppDarkPalette forestPalette = AppDarkPalette(
+    accent: Color(0xFF5DCAA5),
+    onAccent: Color(0xFF04342C),
+    background: Color(0xFF0C1411),
+    surface: Color(0xFF121C18),
+    surfaceHigh: Color(0xFF18251F),
+    surfaceHighest: Color(0xFF1F2E27),
+    selected: Color(0xFF085041),
+    onSelected: Color(0xFF9FE1CB),
+    muted: Color(0xFFA3B8AE),
+    outline: Color(0xFF2B3B33),
+  );
+
+  /// Dark plum with cherry-blossom pink.
+  static const AppDarkPalette sakuraPalette = AppDarkPalette(
+    accent: Color(0xFFF48FB1),
+    onAccent: Color(0xFF4B1528),
+    background: Color(0xFF160F13),
+    surface: Color(0xFF1F161B),
+    surfaceHigh: Color(0xFF281C23),
+    surfaceHighest: Color(0xFF32232C),
+    selected: Color(0xFF72243E),
+    onSelected: Color(0xFFF8BBD0),
+    muted: Color(0xFFC2A9B5),
+    outline: Color(0xFF41303A),
+  );
+
+  /// Night indigo with lavender.
+  static const AppDarkPalette violetPalette = AppDarkPalette(
+    accent: Color(0xFFB39DDB),
+    onAccent: Color(0xFF26215C),
+    background: Color(0xFF100F1A),
+    surface: Color(0xFF171624),
+    surfaceHigh: Color(0xFF1E1C2F),
+    surfaceHighest: Color(0xFF26233A),
+    selected: Color(0xFF3C3489),
+    onSelected: Color(0xFFD1C4E9),
+    muted: Color(0xFFABA7C4),
+    outline: Color(0xFF34304A),
+  );
+
+  /// Near black with crimson.
+  static const AppDarkPalette crimsonPalette = AppDarkPalette(
+    accent: Color(0xFFEF5350),
+    onAccent: Color(0xFF2A0606),
+    background: Color(0xFF120C0C),
+    surface: Color(0xFF1B1313),
+    surfaceHigh: Color(0xFF241919),
+    surfaceHighest: Color(0xFF2E2020),
+    selected: Color(0xFF791F1F),
+    onSelected: Color(0xFFFFCDD2),
+    muted: Color(0xFFBFA8A8),
+    outline: Color(0xFF3D2B2B),
+  );
+
+  /// The colours a tinted dark theme is drawn in; null for the app's own
+  /// dark and light themes, which are built on their own.
+  static AppDarkPalette? paletteFor(AppThemeStyle style) => switch (style) {
+    AppThemeStyle.dark || AppThemeStyle.light => null,
+    AppThemeStyle.amber => amberPalette,
+    AppThemeStyle.amoled => amoledPalette,
+    AppThemeStyle.ocean => oceanPalette,
+    AppThemeStyle.forest => forestPalette,
+    AppThemeStyle.sakura => sakuraPalette,
+    AppThemeStyle.violet => violetPalette,
+    AppThemeStyle.crimson => crimsonPalette,
+  };
+
+  /// The dark theme [style] draws in; the app's own dark theme, from the
+  /// device's colours where it has them, when the style has no palette.
+  static ThemeData darkThemeFor(AppThemeStyle style, ColorScheme? darkScheme) {
+    final palette = paletteFor(style);
+    return palette == null
+        ? createDarkTheme(darkScheme)
+        : createPaletteTheme(palette);
+  }
+
   /// The dark theme redrawn in warm charcoal with an amber accent.
+  static ThemeData createAmberTheme() => createPaletteTheme(amberPalette);
+
+  /// The dark theme redrawn in [p]'s colours.
   ///
   /// Built on [createDarkTheme] so it keeps every shape, font and component
   /// setting that theme carries, and only the colours change.
-  static ThemeData createAmberTheme() {
+  static ThemeData createPaletteTheme(AppDarkPalette p) {
     final base = createDarkTheme(null);
     final scheme = base.colorScheme.copyWith(
-      primary: amberAccent,
-      onPrimary: amberOnAccent,
-      primaryContainer: amberSelected,
-      onPrimaryContainer: amberOnSelected,
-      secondary: amberAccent,
-      onSecondary: amberOnAccent,
-      secondaryContainer: amberSelected,
-      onSecondaryContainer: amberOnSelected,
-      tertiary: amberAccent,
-      onTertiary: amberOnAccent,
-      surface: amberBackground,
-      surfaceDim: amberBackground,
-      surfaceBright: amberSurfaceHighest,
-      surfaceContainerLowest: amberBackground,
-      surfaceContainerLow: amberSurface,
-      surfaceContainer: amberSurface,
-      surfaceContainerHigh: amberSurfaceHigh,
-      surfaceContainerHighest: amberSurfaceHighest,
-      onSurfaceVariant: amberMuted,
-      outlineVariant: const Color(0xFF3A3936),
+      primary: p.accent,
+      onPrimary: p.onAccent,
+      primaryContainer: p.selected,
+      onPrimaryContainer: p.onSelected,
+      secondary: p.accent,
+      onSecondary: p.onAccent,
+      secondaryContainer: p.selected,
+      onSecondaryContainer: p.onSelected,
+      tertiary: p.accent,
+      onTertiary: p.onAccent,
+      surface: p.background,
+      surfaceDim: p.background,
+      surfaceBright: p.surfaceHighest,
+      surfaceContainerLowest: p.background,
+      surfaceContainerLow: p.surface,
+      surfaceContainer: p.surface,
+      surfaceContainerHigh: p.surfaceHigh,
+      surfaceContainerHighest: p.surfaceHighest,
+      onSurfaceVariant: p.muted,
+      outlineVariant: p.outline,
     );
     return base.copyWith(
       colorScheme: scheme,
-      scaffoldBackgroundColor: amberBackground,
-      canvasColor: amberBackground,
-      iconTheme: base.iconTheme.copyWith(color: amberMuted),
-      dialogTheme: base.dialogTheme.copyWith(backgroundColor: amberSurface),
+      scaffoldBackgroundColor: p.background,
+      canvasColor: p.background,
+      iconTheme: base.iconTheme.copyWith(color: p.muted),
+      dialogTheme: base.dialogTheme.copyWith(backgroundColor: p.surface),
       bottomSheetTheme: base.bottomSheetTheme.copyWith(
-        backgroundColor: amberSurface,
-        modalBackgroundColor: amberSurface,
+        backgroundColor: p.surface,
+        modalBackgroundColor: p.surface,
       ),
       appBarTheme: base.appBarTheme.copyWith(
-        backgroundColor: amberBackground,
+        backgroundColor: p.background,
         surfaceTintColor: Colors.transparent,
       ),
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith(
-          (states) => states.contains(WidgetState.selected)
-              ? amberOnAccent
-              : amberMuted,
+          (states) =>
+              states.contains(WidgetState.selected) ? p.onAccent : p.muted,
         ),
         trackColor: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.selected)
-              ? amberAccent
-              : amberSurfaceHighest,
+              ? p.accent
+              : p.surfaceHighest,
         ),
       ),
     );
@@ -681,4 +804,35 @@ class AppTheme {
       ),
     );
   }
+}
+
+/// The colours of a tinted dark theme: an accent, the surfaces from the page
+/// up to the highest card, and the muted text and lines between them.
+@immutable
+class AppDarkPalette {
+  const AppDarkPalette({
+    required this.accent,
+    required this.onAccent,
+    required this.background,
+    required this.surface,
+    required this.surfaceHigh,
+    required this.surfaceHighest,
+    required this.selected,
+    required this.onSelected,
+    required this.muted,
+    required this.outline,
+  });
+
+  final Color accent;
+  final Color onAccent;
+  final Color background;
+  final Color surface;
+  final Color surfaceHigh;
+  final Color surfaceHighest;
+
+  /// The fill behind a chosen item, and the text on it.
+  final Color selected;
+  final Color onSelected;
+  final Color muted;
+  final Color outline;
 }

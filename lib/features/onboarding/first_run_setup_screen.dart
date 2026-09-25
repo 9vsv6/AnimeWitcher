@@ -239,6 +239,7 @@ class _FirstRunSetupScreenState extends ConsumerState<FirstRunSetupScreen> {
             values: AppThemeStyle.values,
             selected: themeStyle,
             label: (style) => style.label(arabic: arabic),
+            swatch: (style) => style.swatch,
             // Applied at once, so the app around the setup changes too.
             onSelected: (style) =>
                 ref.read(appThemeStyleProvider.notifier).select(style),
@@ -725,12 +726,14 @@ class _Choices<T> extends StatelessWidget {
     required this.selected,
     required this.label,
     required this.onSelected,
+    this.swatch,
   });
 
   final List<T> values;
   final T selected;
   final String Function(T value) label;
   final ValueChanged<T> onSelected;
+  final Color Function(T value)? swatch;
 
   @override
   Widget build(BuildContext context) {
@@ -741,6 +744,17 @@ class _Choices<T> extends StatelessWidget {
       children: [
         for (final value in values)
           ChoiceChip(
+            avatar: swatch == null
+                ? null
+                : Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: swatch!(value),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white38),
+                    ),
+                  ),
             label: Text(label(value)),
             selected: value == selected,
             onSelected: (_) => onSelected(value),

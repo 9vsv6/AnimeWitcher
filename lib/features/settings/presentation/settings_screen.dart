@@ -197,12 +197,14 @@ class SettingsScreen extends ConsumerWidget {
           SettingsTile(
             icon: Icons.dark_mode_rounded,
             title: l10n.appTheme,
-            // Picked on the row: three themes, no dialog in between.
+            // Picked on the row, each theme with its colour, no dialog in
+            // between.
             trailing: const SizedBox.shrink(),
             below: SettingsChoices<AppThemeStyle>(
               values: AppThemeStyle.values,
               selected: ref.watch(appThemeStyleProvider),
               label: (style) => style.label(arabic: isArabic),
+              swatch: (style) => style.swatch,
               onSelected: (style) =>
                   ref.read(appThemeStyleProvider.notifier).select(style),
             ),

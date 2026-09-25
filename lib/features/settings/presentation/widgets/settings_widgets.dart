@@ -64,12 +64,16 @@ class SettingsChoices<T> extends StatelessWidget {
     required this.selected,
     required this.label,
     required this.onSelected,
+    this.swatch,
   });
 
   final List<T> values;
   final T selected;
   final String Function(T value) label;
   final ValueChanged<T> onSelected;
+
+  /// A colour shown as a dot before each choice's name, as the themes have.
+  final Color Function(T value)? swatch;
 
   @override
   Widget build(BuildContext context) {
@@ -80,6 +84,9 @@ class SettingsChoices<T> extends StatelessWidget {
       children: [
         for (final value in values)
           ChoiceChip(
+            avatar: swatch == null
+                ? null
+                : _SwatchDot(color: swatch!(value), ring: colors.onSurface),
             label: Text(label(value)),
             selected: value == selected,
             onSelected: (_) => onSelected(value),
@@ -99,6 +106,24 @@ class SettingsChoices<T> extends StatelessWidget {
       ],
     );
   }
+}
+
+class _SwatchDot extends StatelessWidget {
+  const _SwatchDot({required this.color, required this.ring});
+
+  final Color color;
+  final Color ring;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 16,
+    height: 16,
+    decoration: BoxDecoration(
+      color: color,
+      shape: BoxShape.circle,
+      border: Border.all(color: ring.withValues(alpha: 0.35)),
+    ),
+  );
 }
 
 class SettingsTile extends StatefulWidget {

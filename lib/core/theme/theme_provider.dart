@@ -4,6 +4,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../storage/settings_repository.dart';
 import '../providers/device_info_provider.dart';
 import '../storage/storage_service.dart';
+import 'app_theme.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -65,7 +66,25 @@ enum AppThemeStyle {
   light,
 
   /// Warm charcoal with an amber accent.
-  amber;
+  amber,
+
+  /// True black, for OLED screens.
+  amoled,
+
+  /// Deep navy with sky blue.
+  ocean,
+
+  /// Pine green with emerald.
+  forest,
+
+  /// Dark plum with cherry-blossom pink.
+  sakura,
+
+  /// Night indigo with lavender.
+  violet,
+
+  /// Near black with crimson.
+  crimson;
 
   static AppThemeStyle? fromName(String? raw) {
     for (final value in AppThemeStyle.values) {
@@ -84,6 +103,19 @@ enum AppThemeStyle {
     AppThemeStyle.dark => arabic ? 'داكن' : 'Dark',
     AppThemeStyle.light => arabic ? 'فاتح' : 'Light',
     AppThemeStyle.amber => arabic ? 'كهرماني' : 'Amber',
+    AppThemeStyle.amoled => arabic ? 'أسود نقي' : 'AMOLED black',
+    AppThemeStyle.ocean => arabic ? 'محيطي' : 'Ocean',
+    AppThemeStyle.forest => arabic ? 'غابة' : 'Forest',
+    AppThemeStyle.sakura => arabic ? 'ساكورا' : 'Sakura',
+    AppThemeStyle.violet => arabic ? 'بنفسجي' : 'Violet',
+    AppThemeStyle.crimson => arabic ? 'قرمزي' : 'Crimson',
+  };
+
+  /// The theme's accent, for a dot beside its name in the pickers.
+  Color get swatch => switch (this) {
+    AppThemeStyle.dark => AppTheme.animeWitcherAccent,
+    AppThemeStyle.light => AppTheme.lightBackground,
+    _ => AppTheme.paletteFor(this)!.accent,
   };
 }
 

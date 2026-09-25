@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'package:animewitcher/core/navigation/app_layout_style.dart';
+import 'package:animewitcher/core/theme/app_theme.dart';
 import 'package:animewitcher/core/theme/theme_provider.dart';
 import 'package:animewitcher/features/details/presentation/widgets/details_seasons_bar.dart';
 import 'package:animewitcher/features/player/data/anime4k.dart';
@@ -129,7 +130,24 @@ class _Palette {
     AppThemeStyle.dark => dark,
     AppThemeStyle.light => light,
     AppThemeStyle.amber => amber,
+    _ => _Palette.fromDark(AppTheme.paletteFor(theme)!),
   };
+
+  /// A tinted dark theme's colours, as the preview draws them.
+  factory _Palette.fromDark(AppDarkPalette p) => _Palette(
+    screen: p.background,
+    chrome: p.surfaceHigh,
+    banner: p.selected,
+    poster: p.surfaceHighest,
+    line: p.outline,
+    icon: Colors.white60,
+    wide: <Color>[
+      p.surfaceHighest,
+      p.selected,
+      p.surfaceHigh,
+      p.surfaceHighest,
+    ],
+  );
 
   /// Black, like the app's dark theme.
   static const dark = _Palette(
