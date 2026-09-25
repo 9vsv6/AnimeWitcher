@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'theme_provider.dart';
 
@@ -38,6 +37,25 @@ class _FixedLtrCupertinoPageTransitionsBuilder extends PageTransitionsBuilder {
 }
 
 class AppTheme {
+  /// The app's typeface, bundled under assets/fonts with every weight the
+  /// app uses. One family with real 500, 600 and 700 files: fetched through
+  /// google_fonts each weight was a family of its own, so text set bold on
+  /// top of the theme drew the regular file and came out thin.
+  static const String appFontFamily = 'Readex Pro';
+
+  static TextStyle _appFont({
+    double? fontSize,
+    FontWeight? fontWeight,
+    Color? color,
+    double? letterSpacing,
+  }) => TextStyle(
+    fontFamily: appFontFamily,
+    fontSize: fontSize,
+    fontWeight: fontWeight,
+    color: color,
+    letterSpacing: letterSpacing,
+  );
+
   static final PageTransitionsTheme _pageTransitionsTheme =
       PageTransitionsTheme(
         builders: <TargetPlatform, PageTransitionsBuilder>{
@@ -357,6 +375,7 @@ class AppTheme {
 
     return ThemeData(
       useMaterial3: true,
+      fontFamily: appFontFamily,
       pageTransitionsTheme: _pageTransitionsTheme,
       brightness: Brightness.dark,
       // An icon that names no colour of its own still has to be visible on
@@ -373,11 +392,10 @@ class AppTheme {
           borderRadius: BorderRadius.circular(_surfaceRadius),
           side: _hairline(colorScheme),
         ),
-        titleTextStyle: const TextStyle(
-          fontFamily: 'Outfit',
+        titleTextStyle: _appFont(
           fontSize: 20,
           fontWeight: FontWeight.w600,
-          color: Color(0xFFF9FAFB),
+          color: const Color(0xFFF9FAFB),
         ),
       ),
 
@@ -410,51 +428,43 @@ class AppTheme {
       colorScheme: colorScheme,
 
       // Typography
-      textTheme: GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme)
+      textTheme: ThemeData.dark().textTheme
+          .apply(fontFamily: appFontFamily)
           .copyWith(
-            displayLarge: GoogleFonts.outfit(
+            displayLarge: _appFont(
               fontSize: 32,
               fontWeight: FontWeight.bold,
               color: const Color(0xFFF9FAFB),
             ),
-            displayMedium: GoogleFonts.outfit(
+            displayMedium: _appFont(
               fontSize: 28,
               fontWeight: FontWeight.bold,
               color: const Color(0xFFF9FAFB),
             ),
-            displaySmall: GoogleFonts.outfit(
+            displaySmall: _appFont(
               fontSize: 24,
               fontWeight: FontWeight.bold,
               color: const Color(0xFFF9FAFB),
             ),
-            headlineMedium: GoogleFonts.outfit(
+            headlineMedium: _appFont(
               fontSize: 24,
               fontWeight: FontWeight.w600,
               color: const Color(0xFFF9FAFB),
             ),
-            titleLarge: GoogleFonts.outfit(
+            titleLarge: _appFont(
               fontSize: 20,
               fontWeight: FontWeight.w600,
               color: const Color(0xFFF9FAFB),
             ),
-            titleMedium: GoogleFonts.outfit(
+            titleMedium: _appFont(
               fontSize: 16,
               fontWeight: FontWeight.w600,
               color: const Color(0xFFF9FAFB),
             ),
-            bodyLarge: GoogleFonts.outfit(
-              fontSize: 16,
-              color: const Color(0xFFE5E7EB),
-            ),
-            bodyMedium: GoogleFonts.outfit(
-              fontSize: 14,
-              color: const Color(0xFF9CA3AF),
-            ),
-            bodySmall: GoogleFonts.outfit(
-              fontSize: 12,
-              color: const Color(0xFF6B7280),
-            ),
-            labelLarge: GoogleFonts.outfit(
+            bodyLarge: _appFont(fontSize: 16, color: const Color(0xFFE5E7EB)),
+            bodyMedium: _appFont(fontSize: 14, color: const Color(0xFF9CA3AF)),
+            bodySmall: _appFont(fontSize: 12, color: const Color(0xFF6B7280)),
+            labelLarge: _appFont(
               fontSize: 14,
               fontWeight: FontWeight.w600,
               letterSpacing: 0.1,
@@ -520,8 +530,16 @@ class AppTheme {
         disabledColor: colorScheme.onSurface.withValues(alpha: 0.12),
         selectedColor: colorScheme.primary.withValues(alpha: 0.18),
         secondarySelectedColor: colorScheme.primary.withValues(alpha: 0.18),
-        labelStyle: TextStyle(color: colorScheme.onSurface),
-        secondaryLabelStyle: TextStyle(color: colorScheme.primary),
+        // Semi-bold: at chip size the regular weight read as faint beside
+        // the page's other labels.
+        labelStyle: TextStyle(
+          color: colorScheme.onSurface,
+          fontWeight: FontWeight.w600,
+        ),
+        secondaryLabelStyle: TextStyle(
+          color: colorScheme.primary,
+          fontWeight: FontWeight.w600,
+        ),
         checkmarkColor: colorScheme.primary,
         side: BorderSide.none,
         shape: RoundedRectangleBorder(
@@ -611,6 +629,7 @@ class AppTheme {
 
     return ThemeData(
       useMaterial3: true,
+      fontFamily: appFontFamily,
       pageTransitionsTheme: _pageTransitionsTheme,
       brightness: Brightness.light,
       scaffoldBackgroundColor: colorScheme.surface,
@@ -623,8 +642,7 @@ class AppTheme {
           borderRadius: BorderRadius.circular(_surfaceRadius),
           side: _hairline(colorScheme),
         ),
-        titleTextStyle: TextStyle(
-          fontFamily: 'Outfit',
+        titleTextStyle: _appFont(
           fontSize: 20,
           fontWeight: FontWeight.w600,
           color: colorScheme.onSurface,
@@ -660,32 +678,30 @@ class AppTheme {
       colorScheme: colorScheme,
 
       // Typography
-      textTheme: GoogleFonts.outfitTextTheme(ThemeData.light().textTheme)
+      textTheme: ThemeData.light().textTheme
+          .apply(fontFamily: appFontFamily)
           .copyWith(
-            displayLarge: GoogleFonts.outfit(
+            displayLarge: _appFont(
               fontSize: 32,
               fontWeight: FontWeight.bold,
               color: colorScheme.onSurface,
             ),
-            headlineMedium: GoogleFonts.outfit(
+            headlineMedium: _appFont(
               fontSize: 24,
               fontWeight: FontWeight.w600,
               color: colorScheme.onSurface,
             ),
-            titleLarge: GoogleFonts.outfit(
+            titleLarge: _appFont(
               fontSize: 20,
               fontWeight: FontWeight.w600,
               color: colorScheme.onSurface,
             ),
-            bodyLarge: GoogleFonts.outfit(
-              fontSize: 16,
-              color: colorScheme.onSurface,
-            ),
-            bodyMedium: GoogleFonts.outfit(
+            bodyLarge: _appFont(fontSize: 16, color: colorScheme.onSurface),
+            bodyMedium: _appFont(
               fontSize: 14,
               color: colorScheme.onSurfaceVariant,
             ),
-            bodySmall: GoogleFonts.outfit(
+            bodySmall: _appFont(
               fontSize: 12,
               color: colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
             ),
@@ -698,11 +714,10 @@ class AppTheme {
         centerTitle: false,
         scrolledUnderElevation: 0,
         iconTheme: IconThemeData(color: colorScheme.onSurface),
-        titleTextStyle: TextStyle(
+        titleTextStyle: _appFont(
           color: colorScheme.onSurface,
           fontSize: 20,
           fontWeight: FontWeight.w600,
-          fontFamily: 'Outfit',
         ),
         toolbarHeight: _toolbarHeight,
       ),
@@ -742,8 +757,16 @@ class AppTheme {
         disabledColor: colorScheme.onSurface.withValues(alpha: 0.12),
         selectedColor: colorScheme.primary.withValues(alpha: 0.15),
         secondarySelectedColor: colorScheme.primary.withValues(alpha: 0.15),
-        labelStyle: TextStyle(color: colorScheme.onSurface),
-        secondaryLabelStyle: TextStyle(color: colorScheme.primary),
+        // Semi-bold: at chip size the regular weight read as faint beside
+        // the page's other labels.
+        labelStyle: TextStyle(
+          color: colorScheme.onSurface,
+          fontWeight: FontWeight.w600,
+        ),
+        secondaryLabelStyle: TextStyle(
+          color: colorScheme.primary,
+          fontWeight: FontWeight.w600,
+        ),
         checkmarkColor: colorScheme.primary,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),

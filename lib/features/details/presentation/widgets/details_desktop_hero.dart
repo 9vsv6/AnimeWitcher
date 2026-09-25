@@ -39,6 +39,7 @@ class DetailsDesktopHero extends ConsumerWidget {
     this.nextAiring,
     this.manga = false,
     this.showPoster = false,
+    this.compact = false,
     // Kept for backwards compatibility with callers that still pass it,
     // but it's no longer used now that [DetailsActionButtons] is removed
     // from the desktop layout.
@@ -99,6 +100,15 @@ class DetailsDesktopHero extends ConsumerWidget {
   /// whose banner is often missing, keeps its cover in view.
   final bool showPoster;
 
+  /// Drawn for a phone: the same page — the artwork, the poster beside the
+  /// name, the actions and the story, then everything else — at a phone's
+  /// size, with narrow margins and a smaller poster and title.
+  final bool compact;
+
+  double get _side => compact ? 16 : 60;
+  double get _posterWidth => compact ? 104 : 170;
+  double get _posterHeight => compact ? 150 : 245;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
@@ -131,7 +141,11 @@ class DetailsDesktopHero extends ConsumerWidget {
         // and enough room below for the synopsis to start on the same screen.
         // With the poster beside the name the block is taller, so it starts
         // higher and the synopsis still begins on the first screen.
-        final heroBand = showPoster
+        final heroBand = compact
+            // A phone keeps a wide slice of the picture above the poster:
+            // about half the screen's width, so the frame still reads.
+            ? (constraints.maxWidth * 0.5).clamp(150.0, 280.0)
+            : showPoster
             ? (constraints.maxHeight * 0.56 - 150).clamp(160.0, 410.0)
             : (constraints.maxHeight * 0.56).clamp(300.0, 560.0);
 
@@ -146,8 +160,15 @@ class DetailsDesktopHero extends ConsumerWidget {
             Stack(
               children: [
                 // The picture, behind the words and as tall as they make
-                // this section.
-                Positioned.fill(
+                // this section — short of its foot by a hair, so the fade
+                // below is the last thing drawn there. Ending on the same
+                // edge, a fractional pixel row let a line of the picture
+                // show through under the fade.
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  right: 0,
+                  bottom: 3,
                   child: ArtworkDecode(
                     paintedWidth: MediaQuery.sizeOf(context).width,
                     builder: (BuildContext context, int? decodeWidth) =>
@@ -245,7 +266,7 @@ class DetailsDesktopHero extends ConsumerWidget {
                 SizedBox(
                   width: double.infinity,
                   child: Padding(
-                    padding: EdgeInsets.fromLTRB(60, heroBand, 60, 0),
+                    padding: EdgeInsets.fromLTRB(_side, heroBand, _side, 0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -265,14 +286,14 @@ class DetailsDesktopHero extends ConsumerWidget {
                                 onLongPress: () => _copyAnimeTitle(context),
                                 child: displayItem.logoUrl != null
                                     ? ArtworkDecode(
-                                        paintedWidth: 420,
+                                        paintedWidth: compact ? 240 : 420,
                                         builder:
                                             (
                                               BuildContext context,
                                               int? decodeWidth,
                                             ) => CachedNetworkImage(
                                               imageUrl: displayItem.logoUrl!,
-                                              height: 96,
+                                              height: compact ? 56 : 96,
                                               // This widget takes a resolved
                                               // alignment, so the start edge is
                                               // worked out here.
@@ -291,7 +312,7 @@ class DetailsDesktopHero extends ConsumerWidget {
                                       )
                                     : _buildTitle(textColor),
                               ),
-                              const SizedBox(height: 16),
+                              SizedBox(height: compact ? 8 : 16),
                               // The scores ride with the metadata, in the same
                               // compact form the phone header uses: one line of
                               // "★ 7.34 · MAL 6.37" reads faster than two pills,
@@ -304,7 +325,7 @@ class DetailsDesktopHero extends ConsumerWidget {
                           ),
                         ),
                         if (heroActions != null) ...[
-                          const SizedBox(height: 24),
+                          SizedBox(height: compact ? 18 : 24),
                           heroActions!,
                         ],
                         if (nextAiring != null) ...[
@@ -312,7 +333,7 @@ class DetailsDesktopHero extends ConsumerWidget {
                           nextAiring!,
                         ],
                         if (story != null) ...[
-                          const SizedBox(height: 28),
+                          SizedBox(height: compact ? 18 : 28),
                           // Held to a readable measure rather than run to
                           // the width of the window, where the eye loses
                           // its way back to the start of the next line.
@@ -328,11 +349,16 @@ class DetailsDesktopHero extends ConsumerWidget {
               ],
             ),
 
-            const SizedBox(height: 44),
+            SizedBox(height: compact ? 24 : 44),
 
             // Everything else about the anime, on solid ground.
             Padding(
-              padding: EdgeInsets.fromLTRB(60, 0, 60, lazy == null ? 60 : 0),
+              padding: EdgeInsets.fromLTRB(
+                _side,
+                0,
+                _side,
+                lazy == null ? _side : 0,
+              ),
               child: child,
             ),
           ],
@@ -352,7 +378,7 @@ class DetailsDesktopHero extends ConsumerWidget {
                   slivers: <Widget>[
                     SliverToBoxAdapter(child: page),
                     SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(60, 0, 60, 60),
+                      padding: EdgeInsets.fromLTRB(_side, 0, _side, _side),
                       sliver: SliverMainAxisGroup(slivers: lazy),
                     ),
                   ],
@@ -361,9 +387,6 @@ class DetailsDesktopHero extends ConsumerWidget {
       },
     );
   }
-
-  static const double _posterWidth = 170;
-  static const double _posterHeight = 245;
 
   /// The name and its details, with the poster beside them at the start
   /// edge when [showPoster] asks for it, their bottoms lined up.
@@ -380,7 +403,7 @@ class DetailsDesktopHero extends ConsumerWidget {
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: colors.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(compact ? 10 : 14),
           border: Border.all(color: colors.onSurface.withValues(alpha: 0.12)),
           boxShadow: const [
             BoxShadow(
@@ -412,7 +435,7 @@ class DetailsDesktopHero extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         poster,
-        const SizedBox(width: 28),
+        SizedBox(width: compact ? 14 : 28),
         Expanded(child: title),
       ],
     );
@@ -434,12 +457,12 @@ class DetailsDesktopHero extends ConsumerWidget {
   Widget _buildTitle(Color textColor) {
     return Text(
       displayItem.title,
-      maxLines: 2,
+      maxLines: compact ? 3 : 2,
       overflow: TextOverflow.ellipsis,
       textAlign: TextAlign.start,
       style: TextStyle(
         color: textColor,
-        fontSize: 44,
+        fontSize: compact ? 22 : 44,
         fontWeight: FontWeight.bold,
         height: 1.1,
         letterSpacing: -0.5,

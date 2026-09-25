@@ -23,7 +23,7 @@ import 'widgets/search_result_section.dart';
 import 'widgets/search_header_bar.dart';
 import 'widgets/search_sort_dialog.dart';
 import 'widgets/bouncy_entry_animation.dart';
-import '../../../shared/widgets/catalog_ltr.dart';
+import '../../../shared/widgets/catalog_direction.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 import '../../../shared/widgets/anime_catalog_shimmer.dart';
 import '../../../shared/widgets/multimedia_card.dart';
@@ -863,7 +863,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       }
 
       return RepaintBoundary(
-        child: CatalogLtr(
+        child: CatalogDirection(
           child: CustomScrollView(
             controller: _resultsScrollController,
             physics: const AlwaysScrollableScrollPhysics(),
@@ -901,7 +901,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     }
 
     return RepaintBoundary(
-      child: CatalogLtr(
+      child: CatalogDirection(
         child: CustomScrollView(
           controller: _resultsScrollController,
           physics: const AlwaysScrollableScrollPhysics(),
@@ -990,7 +990,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
 
     return RepaintBoundary(
-      child: CatalogLtr(
+      child: CatalogDirection(
         child: CustomScrollView(
           controller: _resultsScrollController,
           physics: const AlwaysScrollableScrollPhysics(),

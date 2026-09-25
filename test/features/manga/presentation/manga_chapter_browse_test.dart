@@ -117,7 +117,7 @@ void main() {
       expect(find.text('Chapter 100'), findsOneWidget);
     });
 
-    testWidgets('go to scrolls to the chapter and outlines it', (tester) async {
+    testWidgets('search keeps only the chapters it matches', (tester) async {
       await tester.pumpWidget(_app(await _readUpTo(0)));
 
       await tester.enterText(
@@ -126,29 +126,41 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Chapter 7'), findsOneWidget);
-      expect(tester.getRect(find.text('Chapter 7')).top, lessThan(600));
+      // As the anime episode search: 7, and 70 to 79, and nothing else.
+      expect(find.text('Chapter 79'), findsOneWidget);
+      expect(find.text('Chapter 80'), findsNothing);
+      expect(find.text('Chapter 120'), findsNothing);
+
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('manga-chapter-go-to')),
+        '120',
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Chapter 120'), findsOneWidget);
+      expect(find.text('Chapter 79'), findsNothing);
+      expect(find.text('Chapter 12'), findsNothing);
     });
 
-    testWidgets('go to explains a number that is not there', (tester) async {
+    testWidgets('a search with no chapter says so', (tester) async {
       await tester.pumpWidget(_app(await _readUpTo(0)));
 
       await tester.enterText(
         find.byKey(const ValueKey<String>('manga-chapter-go-to')),
         '999',
       );
-      await tester.pump();
+      await tester.pumpAndSettle();
       expect(
-        find.byKey(const ValueKey<String>('manga-chapter-go-to-error')),
+        find.byKey(const ValueKey<String>('manga-chapter-filter-empty')),
         findsOneWidget,
       );
 
+      // Clearing it brings every chapter back.
       await tester.enterText(
         find.byKey(const ValueKey<String>('manga-chapter-go-to')),
-        'abc',
+        '',
       );
-      await tester.pump();
-      expect(find.text('Type a chapter number'), findsOneWidget);
+      await tester.pumpAndSettle();
+      expect(find.text('Chapter 120'), findsOneWidget);
     });
 
     testWidgets('unread hides what has been read', (tester) async {
@@ -192,6 +204,49 @@ void main() {
       // Nine read: chapter 10 is next, far down a newest-first list.
       expect(find.text('Chapter 10'), findsOneWidget);
       expect(tester.getRect(find.text('Chapter 10')).top, lessThan(600));
+    });
+  });
+
+  group('chapter search', () {
+    MangaChapter chapter(double? number, String name) => MangaChapter(
+      id: name,
+      mangaId: 'm',
+      url: 'c://$name',
+      name: name,
+      number: number,
+    );
+
+    test('a number keeps the chapters that start with it', () {
+      expect(mangaChapterMatchesQuery(chapter(1, 'الفصل 1'), '1'), isTrue);
+      expect(mangaChapterMatchesQuery(chapter(10, 'الفصل 10'), '1'), isTrue);
+      expect(mangaChapterMatchesQuery(chapter(21, 'الفصل 21'), '1'), isFalse);
+      expect(
+        mangaChapterMatchesQuery(chapter(12.5, 'الفصل 12.5'), '12.'),
+        isTrue,
+      );
+    });
+
+    test('Arabic digits find the same chapter', () {
+      expect(mangaChapterMatchesQuery(chapter(47, 'الفصل 47'), '٤٧'), isTrue);
+    });
+
+    test('a chapter with no number is found by the number in its name', () {
+      expect(
+        mangaChapterMatchesQuery(chapter(null, 'Chapter 305'), '30'),
+        isTrue,
+      );
+    });
+
+    test('words search the name', () {
+      expect(
+        mangaChapterMatchesQuery(
+          chapter(3, 'الفصل 3 - الوقوع في الفخ'),
+          'الفخ',
+        ),
+        isTrue,
+      );
+      expect(mangaChapterMatchesQuery(chapter(3, 'الفصل 3'), 'الفخ'), isFalse);
+      expect(mangaChapterMatchesQuery(chapter(3, 'الفصل 3'), '  '), isTrue);
     });
   });
 }

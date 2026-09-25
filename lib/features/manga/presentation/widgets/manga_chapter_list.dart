@@ -54,7 +54,7 @@ class _MangaChapterListState extends ConsumerState<MangaChapterList> {
 
   /// The chapter "go to" or "current" last landed on, outlined in the list.
   String? _targetId;
-  String? _goToError;
+  String _query = '';
   final TextEditingController _goToController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _targetKey = GlobalKey();
@@ -86,7 +86,9 @@ class _MangaChapterListState extends ConsumerState<MangaChapterList> {
   void _reveal(MangaChapter chapter) {
     final ranges = mangaChapterRanges(widget.chapters);
     final range = _rangeIndex;
+    _goToController.clear();
     setState(() {
+      _query = '';
       _filter = MangaChapterFilter.all;
       if (range != null &&
           (range >= ranges.length ||
@@ -190,33 +192,12 @@ class _MangaChapterListState extends ConsumerState<MangaChapterList> {
     return rows;
   }
 
-  void _goTo(String raw) {
-    final text = raw.trim();
-    if (text.isEmpty) {
-      setState(() => _goToError = null);
-      return;
-    }
-    final value = double.tryParse(text.replaceAll(',', '.'));
-    if (value == null) {
-      setState(
-        () => _goToError = _isArabic
-            ? 'اكتب رقم الفصل فقط'
-            : 'Type a chapter number',
-      );
-      return;
-    }
-    final chapter = mangaChapterForNumber(widget.chapters, value);
-    if (chapter == null) {
-      setState(
-        () => _goToError = _isArabic
-            ? 'لا يوجد فصل بهذا الرقم'
-            : 'There is no chapter with that number',
-      );
-      return;
-    }
-    _goToError = null;
-    _reveal(chapter);
-  }
+  /// The search narrows the list as it is typed, as the anime episode
+  /// search does, rather than jumping to one chapter.
+  void _search(String raw) => setState(() {
+    _query = raw;
+    _targetId = null;
+  });
 
   DownloadProgressData? _progressFor(
     MangaChapter chapter,
@@ -332,12 +313,12 @@ class _MangaChapterListState extends ConsumerState<MangaChapterList> {
         controller: _goToController,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         textInputAction: TextInputAction.go,
-        onChanged: _goTo,
-        onSubmitted: _goTo,
+        onChanged: _search,
+        onSubmitted: _search,
         style: TextStyle(color: colors.onSurface, fontSize: 13),
         decoration: InputDecoration(
           isDense: true,
-          hintText: _isArabic ? 'اذهب إلى فصل…' : 'Go to chapter…',
+          hintText: _isArabic ? 'ابحث عن فصل…' : 'Find a chapter…',
           hintStyle: TextStyle(color: colors.onSurfaceVariant, fontSize: 13),
           prefixIcon: Icon(
             Icons.search_rounded,
@@ -416,7 +397,6 @@ class _MangaChapterListState extends ConsumerState<MangaChapterList> {
     required MangaChapter? current,
     Widget? trailing,
   }) {
-    final colors = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -430,11 +410,7 @@ class _MangaChapterListState extends ConsumerState<MangaChapterList> {
             if (current != null)
               TextButton.icon(
                 key: const ValueKey<String>('manga-chapter-to-current'),
-                onPressed: () {
-                  _goToController.clear();
-                  _goToError = null;
-                  _reveal(current);
-                },
+                onPressed: () => _reveal(current),
                 icon: const Icon(Icons.my_location_rounded, size: 18),
                 label: Text(
                   _isArabic ? 'إلى الفصل الحالي' : 'To current chapter',
@@ -443,15 +419,6 @@ class _MangaChapterListState extends ConsumerState<MangaChapterList> {
             if (trailing != null) trailing,
           ],
         ),
-        if (_goToError != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Text(
-              _goToError!,
-              key: const ValueKey<String>('manga-chapter-go-to-error'),
-              style: TextStyle(color: colors.error, fontSize: 12),
-            ),
-          ),
         const SizedBox(height: 10),
         _filterChips(context),
       ],
@@ -787,6 +754,7 @@ class _MangaChapterListState extends ConsumerState<MangaChapterList> {
     final chapters = ordered
         .where((chapter) {
           if (inRange != null && !inRange.contains(chapter.id)) return false;
+          if (!mangaChapterMatchesQuery(chapter, _query)) return false;
           return switch (_filter) {
             MangaChapterFilter.all => true,
             MangaChapterFilter.unread =>

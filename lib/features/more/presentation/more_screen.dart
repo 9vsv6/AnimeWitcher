@@ -16,7 +16,6 @@ import '../../settings/presentation/widgets/settings_widgets.dart';
 import 'broadcast_schedule_screen.dart';
 import 'coming_soon_screen.dart';
 import 'global_statistics_screen.dart';
-import 'recent_watched_screen.dart';
 import 'seasons_screen.dart';
 import '../../../core/utils/localized_text.dart';
 import '../../../core/utils/layout_constants.dart';
@@ -130,11 +129,6 @@ class MoreScreen extends ConsumerWidget {
               heading: moreHeadingWatching(context),
               items: <MoreDestination>[
                 MoreDestination(
-                  icon: Icons.history_rounded,
-                  label: isArabic ? 'آخر المشاهدات' : 'Recently watched',
-                  builder: (_) => const RecentWatchedScreen(),
-                ),
-                MoreDestination(
                   icon: Icons.groups_rounded,
                   label: isArabic ? 'الشخصيات' : 'Characters',
                   builder: (_) => const CharactersScreen(),
@@ -231,18 +225,6 @@ class MoreScreen extends ConsumerWidget {
                 onTap: () => Navigator.of(context, rootNavigator: true).push(
                   MaterialPageRoute<void>(
                     builder: (_) => const AnimeWitcherAccountScreen(),
-                  ),
-                ),
-              ),
-              _MoreTile(
-                icon: Icons.history_rounded,
-                title: isArabic ? 'آخر المشاهدات' : 'Recently watched',
-                subtitle: isArabic
-                    ? 'آخر الأنميات والأفلام التي شاهدتها'
-                    : 'Anime and movies you watched recently',
-                onTap: () => Navigator.of(context, rootNavigator: true).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const RecentWatchedScreen(),
                   ),
                 ),
               ),

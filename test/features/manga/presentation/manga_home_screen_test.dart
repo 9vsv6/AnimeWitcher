@@ -6,7 +6,10 @@ import 'package:animewitcher/core/extensions/providers/animewitcher_native_provi
 import 'package:animewitcher/core/navigation/taskbar_destination.dart';
 import 'package:animewitcher/core/storage/settings_repository.dart';
 import 'package:animewitcher/core/storage/storage_service.dart';
+import 'package:animewitcher/features/home/presentation/widgets/home_section_header.dart';
 import 'package:animewitcher/features/manga/presentation/manga_home_screen.dart';
+import 'package:animewitcher/features/manga/presentation/manga_view_all_screen.dart';
+import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:animewitcher/features/settings/presentation/general_settings_provider.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -43,9 +46,11 @@ final class _MangaSource extends AnimeWitcherNativeProvider {
   }) async {
     popularCalls++;
     return ProviderMediaPage(
-      items: <MultimediaItem>[_manga('Popular One'), _manga('Popular Two')],
-      nextOffset: offset + 2,
-      hasMore: false,
+      items: <MultimediaItem>[
+        for (var i = offset; i < offset + 20; i++) _manga('Popular $i'),
+      ],
+      nextOffset: offset + 20,
+      hasMore: offset < 20,
     );
   }
 
@@ -101,9 +106,7 @@ void main() {
     expect(TaskbarDestination.manga.route, '/manga');
   });
 
-  testWidgets('the manga page shows new chapters and the popular grid', (
-    tester,
-  ) async {
+  Future<_MangaSource> pumpPage(WidgetTester tester) async {
     tester.view.physicalSize = const Size(1400, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -115,17 +118,66 @@ void main() {
         overrides: [
           extensionManagerProvider.overrideWith(() => _Manager(source)),
         ],
-        child: const MaterialApp(home: MangaHomeScreen()),
+        child: MaterialApp(
+          locale: const Locale('ar'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const MangaHomeScreen(),
+        ),
       ),
     );
     await tester.pump();
     await tester.pump();
+    return source;
+  }
 
-    expect(find.text('Manga'), findsOneWidget);
-    expect(find.text('New chapters'), findsOneWidget);
+  testWidgets('the manga page shows new chapters and two rows of most read', (
+    tester,
+  ) async {
+    final source = await pumpPage(tester);
+
+    expect(find.text('المانجا'), findsOneWidget);
+    expect(find.text('فصول جديدة'), findsOneWidget);
     expect(find.text('Fresh Chapter Manga'), findsWidgets);
-    expect(find.text('Most read'), findsOneWidget);
-    expect(find.text('Popular One'), findsWidgets);
+    expect(find.text('الأكثر قراءة'), findsOneWidget);
+    expect(find.text('Popular 0'), findsWidgets);
+    // Two rows only; the rest are behind "عرض الكل".
+    expect(find.text('Popular 19'), findsNothing);
+    expect(find.byType(HomeViewAllButton), findsNWidgets(2));
     expect(source.popularCalls, 1);
+    await tester.pump(const Duration(milliseconds: 100));
+  });
+
+  testWidgets('عرض الكل on most read opens every manga, a page at a time', (
+    tester,
+  ) async {
+    final source = await pumpPage(tester);
+
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('manga-popular-header')),
+        matching: find.byType(HomeViewAllButton),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MangaViewAllScreen<MultimediaItem>), findsOneWidget);
+    expect(find.text('Popular 0'), findsWidgets);
+    expect(source.popularCalls, greaterThan(1));
+    await tester.pump(const Duration(milliseconds: 100));
+  });
+
+  testWidgets('عرض الكل on new chapters opens them all', (tester) async {
+    await pumpPage(tester);
+
+    await tester.tap(find.byType(HomeViewAllButton).first);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byType(MangaViewAllScreen<MangaLatestChapter>),
+      findsOneWidget,
+    );
+    expect(find.text('Fresh Chapter Manga'), findsWidgets);
+    await tester.pump(const Duration(milliseconds: 100));
   });
 }
