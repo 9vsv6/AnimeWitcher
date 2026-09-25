@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_displaymode/flutter_displaymode.dart';
+import 'package:flutter/gestures.dart' show kDoubleTapSlop, kDoubleTapTimeout;
 import 'package:flutter/material.dart';
 import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter/services.dart'; // LogicalKeyboardKey, KeyDownEvent
@@ -286,16 +287,15 @@ class _MyAppState extends ConsumerState<MyApp>
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(
-        ref
-            .read(downloadManagerV2Provider)
-            .initialize()
-            .catchError((Object error) {
-              if (kDebugMode) {
-                debugPrint(
-                  '[DownloadManagerV2] Startup initialization deferred: $error',
-                );
-              }
-            }),
+        ref.read(downloadManagerV2Provider).initialize().catchError((
+          Object error,
+        ) {
+          if (kDebugMode) {
+            debugPrint(
+              '[DownloadManagerV2] Startup initialization deferred: $error',
+            );
+          }
+        }),
       );
       _checkAppUpdates();
       // The first-launch welcome (theme, skipping, sign-in) is part of the
@@ -472,9 +472,7 @@ class _MyAppState extends ConsumerState<MyApp>
           theme: lightDynamic != null
               ? AppTheme.createLightTheme(lightDynamic)
               : AppTheme.createLightTheme(null),
-          darkTheme: themeStyle == AppThemeStyle.amber
-              ? AppTheme.createAmberTheme()
-              : AppTheme.createDarkTheme(darkScheme),
+          darkTheme: AppTheme.darkThemeFor(themeStyle, darkScheme),
           routerConfig: appRouter,
           locale: locale,
           localizationsDelegates: const [
@@ -852,12 +850,15 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
             right: 0,
             top: 0,
             bottom: 0,
-            child: GestureDetector(
+            // A double click maximises. It is counted from the raw pointer
+            // events: a tap or double-tap recognizer here joins the gesture
+            // arena ahead of everything under this strip, so the back
+            // button and the top bar's buttons either waited on it or, with
+            // a plain tap recognizer, never got their clicks at all.
+            child: Listener(
               behavior: HitTestBehavior.translucent,
-              onPanStart: (_) {
-                windowManager.startDragging();
-              },
-              onDoubleTap: () async {
+              onPointerUp: (event) async {
+                if (!_titleBarDoubleClick.isSecond(event.position)) return;
                 final isMax = await windowManager.isMaximized();
                 if (isMax) {
                   await windowManager.unmaximize();
@@ -865,6 +866,12 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
                   await windowManager.maximize();
                 }
               },
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onPanStart: (_) {
+                  windowManager.startDragging();
+                },
+              ),
             ),
           ),
           // Right-side window controls (minimize, maximize/restore, close).
@@ -1064,5 +1071,28 @@ class _CloseButtonState extends State<_CloseButton> {
         ),
       ),
     );
+  }
+}
+
+final _titleBarDoubleClick = _DoubleClick();
+
+/// Two clicks close together in time and place, recognised without a
+/// double-tap recognizer and the delay it puts on every single click.
+class _DoubleClick {
+  DateTime? _last;
+  Offset? _point;
+
+  bool isSecond(Offset position) {
+    final now = DateTime.now();
+    final last = _last;
+    final point = _point;
+    final second =
+        last != null &&
+        point != null &&
+        now.difference(last) <= kDoubleTapTimeout &&
+        (position - point).distance <= kDoubleTapSlop;
+    _last = second ? null : now;
+    _point = second ? null : position;
+    return second;
   }
 }

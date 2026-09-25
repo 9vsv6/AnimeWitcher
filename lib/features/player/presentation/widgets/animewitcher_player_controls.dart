@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart' show kDoubleTapSlop, kDoubleTapTimeout;
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
@@ -143,6 +144,30 @@ class AnimeWitcherPlayerControlsState
 
   late final PlayerPlatformService _platformService;
   Offset? _tapPosition;
+
+  /// Double taps are told apart by hand. A double-tap recognizer holds every
+  /// tap under it for the double-tap timeout to see whether a second comes,
+  /// which made each button, and each tap on the picture, answer about a
+  /// third of a second late.
+  DateTime? _lastTapAt;
+  Offset? _lastTapPoint;
+  bool _visibleBeforeTap = false;
+
+  /// True, and forgets the first, when [details] completes a double tap.
+  bool _isSecondTap(TapUpDetails details) {
+    final now = DateTime.now();
+    final last = _lastTapAt;
+    final point = _lastTapPoint;
+    final second =
+        last != null &&
+        point != null &&
+        now.difference(last) <= kDoubleTapTimeout &&
+        (details.globalPosition - point).distance <= kDoubleTapSlop;
+    _lastTapAt = second ? null : now;
+    _lastTapPoint = second ? null : details.globalPosition;
+    return second;
+  }
+
   Duration _animDuration = HotstarPlayerStyle.controlFadeDuration;
   bool _isFullscreen = false;
   bool get isFullscreen => _isFullscreen;
@@ -662,7 +687,7 @@ class AnimeWitcherPlayerControlsState
   }
 
   void _toggleVisibility() {
-    _animDuration = const Duration(milliseconds: 300);
+    _animDuration = HotstarPlayerStyle.controlFadeDuration;
     setState(() {
       _isVisible = !_isVisible;
     });
@@ -1292,6 +1317,7 @@ class AnimeWitcherPlayerControlsState
                 LucideIcons.chevronsLeft200,
                 color: Colors.white,
                 size: 34,
+                shadows: HotstarPlayerStyle.glyphShadows,
               ),
             Text(
               label,
@@ -1300,6 +1326,7 @@ class AnimeWitcherPlayerControlsState
                 fontWeight: FontWeight.w700,
                 fontSize: 28,
                 fontFeatures: [FontFeature.tabularFigures()],
+                shadows: HotstarPlayerStyle.glyphShadows,
               ),
             ),
             if (!_isSeekingLeft)
@@ -1307,6 +1334,7 @@ class AnimeWitcherPlayerControlsState
                 LucideIcons.chevronsRight200,
                 color: Colors.white,
                 size: 34,
+                shadows: HotstarPlayerStyle.glyphShadows,
               ),
           ],
         ),
@@ -1460,14 +1488,24 @@ class AnimeWitcherPlayerControlsState
         onHorizontalDragStart: _handleHorizontalDragStart,
         onHorizontalDragUpdate: _handleHorizontalDragUpdate,
         onHorizontalDragEnd: _handleHorizontalDragEnd,
-        onDoubleTapDown: (d) => _tapPosition = d.globalPosition,
-        onDoubleTap: _handleDoubleTap,
         onLongPressStart: (_) => _startTouchSpeedHold(),
         onLongPressEnd: (_) => _endTouchSpeedHold(),
         onLongPressCancel: _endTouchSpeedHold,
         child: GestureDetector(
-          onTap: () {
+          onTapUp: (details) {
             if (_panelOpen) return; // the panel's scrim owns dismiss taps
+            if (_isSecondTap(details)) {
+              // The first tap already showed or hid the controls at once;
+              // put them back as they were, then seek or go fullscreen.
+              if (_isVisible != _visibleBeforeTap && !_isLocked) {
+                setState(() => _isVisible = _visibleBeforeTap);
+                widget.onVisibilityChanged?.call(_isVisible);
+              }
+              _tapPosition = details.globalPosition;
+              unawaited(_handleDoubleTap());
+              return;
+            }
+            _visibleBeforeTap = _isVisible;
             final gestureState = ref.read(playerGestureHandlerProvider);
             if (gestureState.showOSD) {
               ref.read(playerGestureHandlerProvider.notifier).dismissOSD();
@@ -2175,9 +2213,10 @@ class AnimeWitcherPlayerControlsState
   /// (which would toggle visibility or fire brightness/volume swipes). Deeper
   /// widgets (slider, buttons) still win the gesture arena.
   Widget _absorbGestures(Widget child) {
+    // No double tap here: it would hold every button in the bars for the
+    // double-tap timeout before its press went through.
     return GestureDetector(
       onTap: () {},
-      onDoubleTap: () {},
       onVerticalDragStart: (_) {},
       onHorizontalDragStart: (_) {},
       child: child,
@@ -2186,7 +2225,11 @@ class AnimeWitcherPlayerControlsState
 
   Widget _buildLoadingUI({required String title, String? episodeLabel}) {
     return GestureDetector(
-      onDoubleTap: _handleDoubleTap,
+      onTapUp: (details) {
+        if (!_isSecondTap(details)) return;
+        _tapPosition = details.globalPosition;
+        unawaited(_handleDoubleTap());
+      },
       behavior: HitTestBehavior.translucent,
       child: Stack(
         fit: StackFit.expand,
