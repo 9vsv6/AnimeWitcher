@@ -122,6 +122,15 @@ final class _ReaderSettingsNotifier extends MangaReaderSettingsNotifier {
   MangaReaderSettings build() => const MangaReaderSettings();
 }
 
+/// Keeps what the reader saves in memory, for reading back.
+final class _MemoryReaderSettingsNotifier extends MangaReaderSettingsNotifier {
+  @override
+  MangaReaderSettings build() => const MangaReaderSettings();
+
+  @override
+  Future<void> setSettings(MangaReaderSettings value) async => state = value;
+}
+
 final class _OverlayReaderSettingsNotifier extends MangaReaderSettingsNotifier {
   @override
   MangaReaderSettings build() =>
@@ -655,22 +664,39 @@ void main() {
       expect(find.byIcon(Icons.bookmark_border_rounded), findsNothing);
       expect(find.byIcon(Icons.refresh_rounded), findsOneWidget);
 
+      // The mode's name shows for a moment as the reader opens; let it go.
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pump(const Duration(milliseconds: 300));
+
       // The reading modes live in the settings panel now, in Arabic.
       await tester.tap(
         find.byKey(const ValueKey<String>('manga-reader-settings-button')),
       );
       await tester.pump();
-      for (final label in <String>[
-        'وضع القراءة',
-        'ويب تون',
-        'عمودي مستمر',
-        'عمودي',
-        'من اليمين لليسار',
-        'من اليسار لليمين',
-        'أفقي مستمر',
-        'أفقي مستمر (RTL)',
+      // The tab and the heading under it.
+      expect(find.text('وضع القراءة'), findsNWidgets(2));
+      expect(
+        find.byKey(const ValueKey<String>('manga-reader-choice-mode-default')),
+        findsOneWidget,
+      );
+      // Each mode under the name the reader has always given it.
+      for (final (mode, label) in <(String, String)>[
+        ('vertical', 'عمودي'),
+        ('pagedLtr', 'من اليسار لليمين'),
+        ('pagedRtl', 'من اليمين لليسار'),
+        ('verticalContinuous', 'عمودي مستمر'),
+        ('webtoon', 'ويب تون'),
+        ('horizontalContinuous', 'أفقي مستمر'),
+        ('horizontalContinuousRtl', 'أفقي مستمر (RTL)'),
       ]) {
-        expect(find.text(label), findsOneWidget, reason: label);
+        expect(
+          find.descendant(
+            of: find.byKey(ValueKey<String>('manga-reader-choice-mode-$mode')),
+            matching: find.text(label),
+          ),
+          findsOneWidget,
+          reason: label,
+        );
       }
     },
   );
@@ -883,9 +909,10 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      final hiddenByLongPress = applePersistentGlassHeaderController.value;
-      expect(hiddenByLongPress, isNotNull);
-      expect(hiddenByLongPress!.onBack, isNull);
+      // A long press is for the page's actions, as in Mihon; the bars stay.
+      final afterLongPress = applePersistentGlassHeaderController.value;
+      expect(afterLongPress, isNotNull);
+      expect(afterLongPress!.onBack, isNotNull);
     } finally {
       final header = applePersistentGlassHeaderController.value;
       if (header != null) {
@@ -956,8 +983,10 @@ void main() {
 
     expect(topChrome, findsOneWidget);
     expect(bottomChrome, findsOneWidget);
-    expect(tester.getRect(topChrome).top, 0);
-    expect(tester.getRect(bottomChrome).bottom, 844);
+    // Floating, inside the safe areas: clear of the status bar and the
+    // gesture bar rather than running under them.
+    expect(tester.getRect(topChrome).top, greaterThanOrEqualTo(40));
+    expect(tester.getRect(bottomChrome).bottom, lessThanOrEqualTo(844 - 30));
   });
 
   test('reader retry button sits slightly right of center', () {
@@ -986,5 +1015,183 @@ void main() {
       File('lib/core/services/manga_reader_diagnostic_log.dart').existsSync(),
       isFalse,
     );
+  });
+
+  group('Mihon bar', () {
+    Future<ProviderContainer> pumpReader(WidgetTester tester) async {
+      final provider = _ReaderProvider(emptyPages: true);
+      const chapter = MangaChapter(
+        id: 'c1',
+        mangaId: 'm1',
+        url: 'https://example.test/chapter/1',
+        name: 'الفصل 1',
+      );
+      final manga = MultimediaItem(
+        title: 'Reader Manga',
+        url: 'https://animewitcher.com/manga/m1',
+        posterUrl: '',
+        contentType: MultimediaContentType.manga,
+        provider: provider.packageName,
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            extensionManagerProvider.overrideWith(
+              () => _ReaderManager(provider),
+            ),
+            mangaReadingRepositoryProvider.overrideWithValue(
+              _ReaderProgressRepository(),
+            ),
+            mangaReaderSettingsProvider.overrideWith(
+              _MemoryReaderSettingsNotifier.new,
+            ),
+          ],
+          child: MaterialApp(
+            locale: const Locale('ar'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: MangaReaderScreen(
+              manga: manga,
+              chapter: chapter,
+              chapters: const <MangaChapter>[chapter],
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      return ProviderScope.containerOf(
+        tester.element(find.byType(MangaReaderScreen)),
+      );
+    }
+
+    testWidgets('names the reading mode as the reader opens', (tester) async {
+      await pumpReader(tester);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('manga-reader-toast')),
+          matching: find.text('عمودي'),
+        ),
+        findsOneWidget,
+      );
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(
+        find.byKey(const ValueKey<String>('manga-reader-toast')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('chapter buttons around the page slider, tools below', (
+      tester,
+    ) async {
+      final container = await pumpReader(tester);
+      for (final key in <String>[
+        'manga-reader-previous-chapter',
+        'manga-reader-page-pill',
+        'manga-reader-next-chapter',
+        'manga-reader-bar-mode',
+        'manga-reader-bar-rotate',
+        'manga-reader-bar-crop',
+        'manga-reader-settings-button',
+      ]) {
+        expect(find.byKey(ValueKey<String>(key)), findsOneWidget, reason: key);
+      }
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('manga-reader-bar-crop')),
+      );
+      await tester.pump();
+      expect(container.read(mangaReaderSettingsProvider).cropBorders, isTrue);
+
+      // The screen's turning, for this manga, named as it changes.
+      await tester.tap(
+        find.byKey(const ValueKey<String>('manga-reader-bar-rotate')),
+      );
+      await tester.pump();
+      expect(
+        container.read(mangaReaderSettingsProvider).orientationForManga('m1'),
+        MangaReaderOrientation.portrait,
+      );
+      expect(find.text('الشاشة طولية'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('manga-reader-bar-mode')),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.tap(
+        find.byKey(const ValueKey<String>('manga-reader-bar-mode-webtoon')),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(
+        container.read(mangaReaderSettingsProvider).modeForManga('m1'),
+        MangaReaderMode.webtoon,
+      );
+    });
+
+    testWidgets('scrolling the settings sheet keeps it open', (tester) async {
+      await pumpReader(tester);
+      await tester.pump(const Duration(seconds: 2));
+      await tester.tap(
+        find.byKey(const ValueKey<String>('manga-reader-settings-button')),
+      );
+      await tester.pump();
+      final sheet = find.byKey(
+        const ValueKey<String>('manga-reader-settings-panel'),
+      );
+      expect(sheet, findsOneWidget);
+
+      await tester.drag(
+        find.descendant(of: sheet, matching: find.byType(Scrollable)).first,
+        const Offset(0, -300),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(sheet, findsOneWidget);
+    });
+
+    testWidgets('a computer has no rotate button', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      try {
+        await pumpReader(tester);
+        expect(
+          find.byKey(const ValueKey<String>('manga-reader-bar-rotate')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const ValueKey<String>('manga-reader-bar-crop')),
+          findsOneWidget,
+        );
+        await tester.pump(const Duration(seconds: 3));
+        // Nor the phone's options: system bars, keeping awake, long taps.
+        await tester.tap(
+          find.byKey(const ValueKey<String>('manga-reader-settings-button')),
+        );
+        await tester.pump();
+        await tester.tap(
+          find.byKey(const ValueKey<String>('manga-reader-panel-tab-general')),
+        );
+        await tester.pump();
+        for (final key in <String>[
+          'fullscreen',
+          'keep-on',
+          'long-tap-actions',
+        ]) {
+          expect(
+            find.byKey(ValueKey<String>('manga-reader-switch-$key')),
+            findsNothing,
+            reason: key,
+          );
+        }
+        expect(
+          find.byKey(const ValueKey<String>('manga-reader-switch-page-number')),
+          findsOneWidget,
+        );
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
   });
 }

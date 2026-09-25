@@ -29,6 +29,10 @@ void main() {
     }) async {
       pickedMode = null;
       pickedDouble = null;
+      // Tall enough for a whole tab of the sheet.
+      tester.view.physicalSize = const Size(900, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
       settings = const MangaReaderSettings();
       await tester.pumpWidget(
         MaterialApp(
@@ -83,25 +87,13 @@ void main() {
       expect(pickedMode, MangaReaderMode.webtoon);
     });
 
-    testWidgets('direction is offered only where it applies', (tester) async {
-      await pump(tester, mode: MangaReaderMode.webtoon);
-
-      await tester.tap(
-        find.byKey(const ValueKey<String>('manga-reader-panel-tab-direction')),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(
-        find.byKey(const ValueKey<String>('manga-reader-choice-rtl')),
-      );
-      expect(pickedMode, isNull, reason: 'a strip has no direction');
-
+    testWidgets('both directions are modes of their own, as in Mihon', (
+      tester,
+    ) async {
       await pump(tester, mode: MangaReaderMode.pagedLtr);
+
       await tester.tap(
-        find.byKey(const ValueKey<String>('manga-reader-panel-tab-direction')),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(
-        find.byKey(const ValueKey<String>('manga-reader-choice-rtl')),
+        find.byKey(const ValueKey<String>('manga-reader-choice-mode-pagedRtl')),
       );
       expect(pickedMode, MangaReaderMode.pagedRtl);
     });
@@ -110,17 +102,13 @@ void main() {
       await pump(tester);
 
       await tester.tap(
-        find.byKey(const ValueKey<String>('manga-reader-panel-tab-fit')),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(
         find.byKey(const ValueKey<String>('manga-reader-choice-fit-fitWidth')),
       );
       await tester.pumpAndSettle();
       expect(settings.scaleType, MangaReaderScaleType.fitWidth);
 
       await tester.tap(
-        find.byKey(const ValueKey<String>('manga-reader-panel-tab-background')),
+        find.byKey(const ValueKey<String>('manga-reader-panel-tab-general')),
       );
       await tester.pumpAndSettle();
       await tester.tap(
@@ -132,19 +120,29 @@ void main() {
       expect(settings.background, MangaReaderBackground.white);
     });
 
-    testWidgets('the page bar can be put down the side', (tester) async {
+    testWidgets('the vertical navigator is chosen per mode, as in Mihon', (
+      tester,
+    ) async {
       await pump(tester);
 
       await tester.tap(
-        find.byKey(const ValueKey<String>('manga-reader-panel-tab-more')),
+        find.byKey(const ValueKey<String>('manga-reader-panel-tab-general')),
       );
       await tester.pumpAndSettle();
       await tester.tap(
-        find.byKey(const ValueKey<String>('manga-reader-switch-vertical-bar')),
+        find.byKey(const ValueKey<String>('manga-reader-vertical-bar-webtoon')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('manga-reader-switch-vertical-bar-left'),
+        ),
       );
       await tester.pumpAndSettle();
 
-      expect(settings.verticalPageBar, isTrue);
+      expect(settings.usesVerticalBar(MangaReaderMode.webtoon), isTrue);
+      expect(settings.usesVerticalBar(MangaReaderMode.pagedLtr), isFalse);
+      expect(settings.verticalBarLeft, isTrue);
     });
   });
 }
