@@ -89,8 +89,13 @@ class _FirstRunSetupScreenState extends ConsumerState<FirstRunSetupScreen> {
   late bool _mangaTab;
   int _index = 0;
 
-  /// Desktops and tablets choose a layout; phones always have the dock.
+  /// Desktops and tablets choose among three layouts; phones have one.
   bool get _isDesktop => appLayoutsAvailable(context);
+
+  /// [_layout] as this screen can draw it: a choice another kind of screen
+  /// made reads as the dock here.
+  AppLayoutStyle get _effectiveLayout =>
+      effectiveAppLayout(stored: _layout, isDesktopPlatform: _isDesktop);
 
   List<_Step> get _steps => [
     _Step.appearance,
@@ -125,7 +130,9 @@ class _FirstRunSetupScreenState extends ConsumerState<FirstRunSetupScreen> {
     // Held before the awaits below: the download outlives this screen, so it
     // is started on the app's container rather than on this widget.
     final container = ProviderScope.containerOf(context, listen: false);
-    if (_isDesktop) ref.read(appLayoutStyleProvider.notifier).select(_layout);
+    if (_isDesktop) {
+      ref.read(appLayoutStyleProvider.notifier).select(_effectiveLayout);
+    }
     ref.read(seasonsBarStyleProvider.notifier).select(_seasons);
     if (_mangaTab != ref.read(mangaHasOwnTabProvider)) {
       await ref.read(generalSettingsProvider.notifier).setMangaTab(_mangaTab);
@@ -244,12 +251,12 @@ class _FirstRunSetupScreenState extends ConsumerState<FirstRunSetupScreen> {
             onSelected: (style) =>
                 ref.read(appThemeStyleProvider.notifier).select(style),
           ),
-          // Phones always use the bottom bar.
+          // Phones have no layout to choose: the bar and the side menu.
           if (_isDesktop) ...[
             _Heading(arabic ? 'شكل التطبيق' : 'App layout'),
-            for (final style in AppLayoutStyle.values)
+            for (final style in appLayoutChoices(wide: true))
               _OptionTile(
-                selected: style == _layout,
+                selected: style == _effectiveLayout,
                 icon: switch (style) {
                   AppLayoutStyle.dock => Icons.call_to_action_rounded,
                   AppLayoutStyle.sideRail => Icons.view_sidebar_rounded,
@@ -465,7 +472,7 @@ class _FirstRunSetupScreenState extends ConsumerState<FirstRunSetupScreen> {
       },
     );
 
-    // A phone sees its own home: upright, with the dock.
+    // A phone sees its own home: upright, in the layout it picked.
     final phoneHome = !_isDesktop && step == _Step.appearance;
     final preview = LivePreviewFrame(
       caption: arabic ? 'معاينة مباشرة' : 'Live preview',
@@ -481,7 +488,7 @@ class _FirstRunSetupScreenState extends ConsumerState<FirstRunSetupScreen> {
           key: ValueKey(step),
           child: switch (step) {
             _Step.appearance => HomeLayoutPreview(
-              layout: phoneHome ? AppLayoutStyle.dock : _layout,
+              layout: _effectiveLayout,
               theme: themeStyle,
               phone: phoneHome,
             ),

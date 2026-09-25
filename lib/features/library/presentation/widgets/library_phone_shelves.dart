@@ -9,7 +9,10 @@ import '../../../../core/storage/library_category.dart';
 import '../../../../core/storage/library_repository.dart';
 import '../../../../core/storage/storage_service.dart';
 import '../../../../shared/widgets/multimedia_card.dart';
+import '../../../../shared/widgets/app_side_menu.dart';
+import '../../../home/presentation/widgets/home_section_header.dart';
 import '../../../../shared/widgets/underline_segment_tabs.dart';
+import '../../../characters/presentation/characters_screen.dart';
 import '../../../more/presentation/recent_watched_screen.dart';
 import '../history_provider.dart';
 import '../library_lists.dart';
@@ -43,6 +46,11 @@ class _LibraryPhoneShelvesState extends ConsumerState<LibraryPhoneShelves>
   late final LibraryShelfPrefs _prefs;
   final TextEditingController _search = TextEditingController();
   String _query = '';
+
+  /// Waits for a pause in the typing before searching, so every letter does
+  /// not redraw the grid with a crowd of titles holding it.
+  Timer? _typing;
+  static const Duration _typingPause = Duration(milliseconds: 500);
 
   @override
   void initState() {
@@ -78,10 +86,30 @@ class _LibraryPhoneShelvesState extends ConsumerState<LibraryPhoneShelves>
     _tabs
       ..removeListener(_onTab)
       ..dispose();
+    _typing?.cancel();
     _search.dispose();
     _prefs.dispose();
     super.dispose();
   }
+
+  /// Each list, sorted, kept until the library or the sort changes. The
+  /// rows, the tab counts and the search all read the same lists, and each
+  /// read went back to storage and sorted again on every redraw.
+  final Map<(LibraryMediaKind, LibraryCategory), List<MultimediaItem>> _lists =
+      <(LibraryMediaKind, LibraryCategory), List<MultimediaItem>>{};
+  Object? _listsFor;
+
+  List<MultimediaItem> _list(
+    LibraryRepository repository,
+    LibraryMediaKind kind,
+    LibraryCategory category,
+  ) => _lists.putIfAbsent(
+    (kind, category),
+    () => sortLibraryItems(
+      libraryItemsFor(repository, category, kind),
+      _prefs.sort,
+    ),
+  );
 
   /// Every title the lists shown hold for [kind], each with its list's name,
   /// the history last; a title in two lists shows once, under the first.
@@ -95,11 +123,7 @@ class _LibraryPhoneShelvesState extends ConsumerState<LibraryPhoneShelves>
     for (final category in LibraryCategory.values) {
       if (!_prefs.shows(category)) continue;
       final label = libraryCategoryLabel(context, category, kind);
-      for (final item in sortLibraryItems(
-        libraryItemsFor(repository, category, kind),
-        _prefs.sort,
-        repository,
-      )) {
+      for (final item in _list(repository, kind, category)) {
         if (seen.add(item.url)) entries.add((item, label));
       }
     }
@@ -126,7 +150,7 @@ class _LibraryPhoneShelvesState extends ConsumerState<LibraryPhoneShelves>
   Widget build(BuildContext context) {
     // The library notifier hands out a new state on every change to a list,
     // which is what brings the rows up to date.
-    ref.watch(libraryProvider);
+    final library = ref.watch(libraryProvider);
     final history = ref.watch(watchHistoryProvider);
     final repository = ref.read(libraryRepositoryProvider);
     final colors = Theme.of(context).colorScheme;
@@ -134,11 +158,23 @@ class _LibraryPhoneShelvesState extends ConsumerState<LibraryPhoneShelves>
     return ListenableBuilder(
       listenable: _prefs,
       builder: (context, _) {
+        // The kept lists last until the library or the sort changes.
+        final listsFor = (library, _prefs.sort);
+        if (listsFor != _listsFor) {
+          _lists.clear();
+          _listsFor = listsFor;
+        }
         final entriesByKind = {
           for (final kind in LibraryMediaKind.values)
             kind: _entries(kind, repository, history),
         };
         final searching = _query.trim().isNotEmpty;
+        // Matched once, for both the tab's count and its grid.
+        final matchesByKind = {
+          if (searching)
+            for (final kind in LibraryMediaKind.values)
+              kind: _matches(entriesByKind[kind]!),
+        };
         return Scaffold(
           appBar: AppBar(
             titleSpacing: 12,
@@ -147,7 +183,16 @@ class _LibraryPhoneShelvesState extends ConsumerState<LibraryPhoneShelves>
               child: TextField(
                 key: const ValueKey<String>('library-search'),
                 controller: _search,
-                onChanged: (value) => setState(() => _query = value),
+                onChanged: (value) {
+                  _typing?.cancel();
+                  _typing = Timer(_typingPause, () {
+                    if (mounted) setState(() => _query = value);
+                  });
+                },
+                onSubmitted: (value) {
+                  _typing?.cancel();
+                  setState(() => _query = value);
+                },
                 textInputAction: TextInputAction.search,
                 decoration: InputDecoration(
                   hintText: _t(
@@ -162,6 +207,7 @@ class _LibraryPhoneShelvesState extends ConsumerState<LibraryPhoneShelves>
                           icon: const Icon(Icons.close_rounded, size: 18),
                           onPressed: () {
                             _search.clear();
+                            _typing?.cancel();
                             setState(() => _query = '');
                           },
                         )
@@ -185,6 +231,10 @@ class _LibraryPhoneShelvesState extends ConsumerState<LibraryPhoneShelves>
                 icon: Icon(Icons.tune_rounded, color: colors.primary),
                 onPressed: () => _openFilterSheet(context),
               ),
+              // The side menu's button, in the corner the menu comes from.
+              const AppSideMenuButton(
+                padding: EdgeInsetsDirectional.only(start: 2, end: 4),
+              ),
               const SizedBox(width: 4),
             ],
             bottom: FilterStyleTabBar(
@@ -196,7 +246,7 @@ class _LibraryPhoneShelvesState extends ConsumerState<LibraryPhoneShelves>
                   FilterStyleTab(
                     label: searching
                         ? '${libraryKindLabel(context, kind)} '
-                              '${_matches(entriesByKind[kind]!).length}'
+                              '${matchesByKind[kind]!.length}'
                         : libraryKindLabel(context, kind),
                   ),
               ],
@@ -206,7 +256,13 @@ class _LibraryPhoneShelvesState extends ConsumerState<LibraryPhoneShelves>
             controller: _tabs,
             children: [
               for (final kind in LibraryMediaKind.values)
-                _kindBody(kind, entriesByKind[kind]!, repository, history),
+                _kindBody(
+                  kind,
+                  entriesByKind[kind]!,
+                  repository,
+                  history,
+                  matches: matchesByKind[kind],
+                ),
             ],
           ),
         );
@@ -218,10 +274,13 @@ class _LibraryPhoneShelvesState extends ConsumerState<LibraryPhoneShelves>
     LibraryMediaKind kind,
     List<(MultimediaItem, String)> entries,
     LibraryRepository repository,
-    List<HistoryItem> history,
-  ) {
+    List<HistoryItem> history, {
+    List<(MultimediaItem, String)>? matches,
+  }) {
     if (_query.trim().isNotEmpty || _prefs.view == LibraryView.grid) {
-      final shown = _query.trim().isEmpty ? entries : _matches(entries);
+      final shown = _query.trim().isEmpty
+          ? entries
+          : (matches ?? _matches(entries));
       if (shown.isEmpty) {
         return _query.trim().isEmpty
             ? LibraryEmptyState(mediaKind: kind)
@@ -280,6 +339,33 @@ class _LibraryPhoneShelvesState extends ConsumerState<LibraryPhoneShelves>
           if (_prefs.shows(category))
             ..._categoryShelf(kind, category, repository),
     ];
+    // The favourite characters moved here from the More page: a row that
+    // opens them, under the anime lists.
+    if (kind == LibraryMediaKind.anime) {
+      rows.add(
+        ListTile(
+          key: const ValueKey<String>('library-characters'),
+          contentPadding: EdgeInsets.symmetric(
+            horizontal:
+                MultimediaCardLayout.catalogGridHorizontalPadding(context) + 4,
+          ),
+          leading: Icon(
+            Icons.face_rounded,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+          title: Text(
+            libraryCharactersLabel(context),
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: () => Navigator.of(context, rootNavigator: true).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const CharactersScreen(favoritesOnly: true),
+            ),
+          ),
+        ),
+      );
+    }
     if (rows.isEmpty) return LibraryEmptyState(mediaKind: kind);
     return ListView(
       key: ValueKey<String>('library-shelves-${kind.storageKey}'),
@@ -293,11 +379,7 @@ class _LibraryPhoneShelvesState extends ConsumerState<LibraryPhoneShelves>
     LibraryCategory category,
     LibraryRepository repository,
   ) {
-    final items = sortLibraryItems(
-      libraryItemsFor(repository, category, kind),
-      _prefs.sort,
-      repository,
-    );
+    final items = _list(repository, kind, category);
     if (items.isEmpty && _prefs.hideEmpty) return const <Widget>[];
     final title = libraryCategoryLabel(context, category, kind);
     return <Widget>[
@@ -483,6 +565,9 @@ class _Shelf extends StatelessWidget {
   final List<double>? progress;
 
   static const double _cardWidth = 112;
+
+  /// Titles a row shows; "عرض الكل" has the rest.
+  static const int limit = 10;
   static const double _spacing = 10;
 
   @override
@@ -505,15 +590,8 @@ class _Shelf extends StatelessWidget {
               ),
             ),
           ),
-          if (items.isNotEmpty)
-            TextButton(
-              onPressed: onSeeAll,
-              style: TextButton.styleFrom(
-                visualDensity: VisualDensity.compact,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-              ),
-              child: Text(_t(context, 'See all', 'عرض الكل')),
-            ),
+          // The same pill as home's rows.
+          if (items.isNotEmpty) HomeViewAllButton(onTap: onSeeAll),
         ],
       ),
     );
@@ -526,7 +604,7 @@ class _Shelf extends StatelessWidget {
         ],
       );
     }
-    final posterHeight = _cardWidth * 1.5;
+    const posterHeight = _cardWidth * 1.5;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -536,7 +614,7 @@ class _Shelf extends StatelessWidget {
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: EdgeInsets.symmetric(horizontal: side),
-            itemCount: items.length,
+            itemCount: items.length.clamp(0, limit),
             separatorBuilder: (_, _) => const SizedBox(width: _spacing),
             itemBuilder: (context, index) {
               final item = items[index];
@@ -603,7 +681,6 @@ class LibraryListPage extends ConsumerWidget {
     final items = sortLibraryItems(
       libraryItemsFor(repository, category, kind),
       sort,
-      repository,
     );
     return Scaffold(
       appBar: AppBar(title: Text(title)),

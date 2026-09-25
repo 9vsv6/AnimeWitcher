@@ -149,6 +149,12 @@ class DetailsDesktopHero extends ConsumerWidget {
             ? (constraints.maxHeight * 0.56 - 150).clamp(160.0, 410.0)
             : (constraints.maxHeight * 0.56).clamp(300.0, 560.0);
 
+        // How far the picture runs on below the name and the buttons, under
+        // the first lines of the synopsis, fading out as it goes. A fixed
+        // run rather than the synopsis's own height: tied to that, "show
+        // more" made the box taller and the picture, filling it, zoomed in.
+        final pictureRunOn = compact ? 150.0 : 200.0;
+
         final lazy = slivers;
         final page = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -158,17 +164,19 @@ class DetailsDesktopHero extends ConsumerWidget {
             // scroll the picture never went anywhere, and the synopsis
             // and episodes read as if they were sliding over a window.
             Stack(
+              // The picture runs on past this block, under the synopsis.
+              clipBehavior: Clip.none,
               children: [
                 // The picture, behind the words and as tall as they make
-                // this section — short of its foot by a hair, so the fade
-                // below is the last thing drawn there. Ending on the same
-                // edge, a fractional pixel row let a line of the picture
-                // show through under the fade.
+                // this section plus the run-on — short of its foot by a
+                // hair, so the fade below is the last thing drawn there.
+                // Ending on the same edge, a fractional pixel row let a line
+                // of the picture show through under the fade.
                 Positioned(
                   left: 0,
                   top: 0,
                   right: 0,
-                  bottom: 3,
+                  bottom: 3 - pictureRunOn,
                   child: ArtworkDecode(
                     paintedWidth: MediaQuery.sizeOf(context).width,
                     builder: (BuildContext context, int? decodeWidth) =>
@@ -219,7 +227,11 @@ class DetailsDesktopHero extends ConsumerWidget {
 
                 // The picture goes to ground before the page's own
                 // content starts, so nothing below is read against art.
-                Positioned.fill(
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  right: 0,
+                  bottom: -pictureRunOn,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -240,7 +252,11 @@ class DetailsDesktopHero extends ConsumerWidget {
                 // A lean toward the side the words are on, so a title
                 // over a pale frame keeps its contrast without dimming
                 // the whole shot.
-                Positioned.fill(
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  right: 0,
+                  bottom: -pictureRunOn,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -293,17 +309,30 @@ class DetailsDesktopHero extends ConsumerWidget {
                                               int? decodeWidth,
                                             ) => CachedNetworkImage(
                                               imageUrl: displayItem.logoUrl!,
-                                              height: compact ? 56 : 96,
-                                              // This widget takes a resolved
-                                              // alignment, so the start edge is
-                                              // worked out here.
-                                              alignment:
-                                                  Directionality.of(context) ==
-                                                      TextDirection.rtl
-                                                  ? Alignment.centerRight
-                                                  : Alignment.centerLeft,
-                                              fit: BoxFit.contain,
                                               memCacheWidth: decodeWidth,
+                                              // Only the logo is held to its
+                                              // height. The name standing in
+                                              // for it, while it loads or when
+                                              // it fails, was held to it too,
+                                              // and a name of three lines lost
+                                              // its last one under the details.
+                                              imageBuilder: (context, image) =>
+                                                  Image(
+                                                    image: image,
+                                                    height: compact ? 56 : 96,
+                                                    // This widget takes a
+                                                    // resolved alignment, so
+                                                    // the start edge is worked
+                                                    // out here.
+                                                    alignment:
+                                                        Directionality.of(
+                                                              context,
+                                                            ) ==
+                                                            TextDirection.rtl
+                                                        ? Alignment.centerRight
+                                                        : Alignment.centerLeft,
+                                                    fit: BoxFit.contain,
+                                                  ),
                                               placeholder: (_, _) =>
                                                   _buildTitle(textColor),
                                               errorWidget: (_, _, _) =>
@@ -332,22 +361,31 @@ class DetailsDesktopHero extends ConsumerWidget {
                           const SizedBox(height: 16),
                           nextAiring!,
                         ],
-                        if (story != null) ...[
-                          SizedBox(height: compact ? 18 : 28),
-                          // Held to a readable measure rather than run to
-                          // the width of the window, where the eye loses
-                          // its way back to the start of the next line.
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 880),
-                            child: story!,
-                          ),
-                        ],
                       ],
                     ),
                   ),
                 ),
               ],
             ),
+
+            // The synopsis, below the block whose height sizes the picture,
+            // so opening it lengthens the page rather than the picture.
+            if (story != null)
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  _side,
+                  compact ? 18 : 28,
+                  _side,
+                  0,
+                ),
+                // Held to a readable measure rather than run to the width
+                // of the window, where the eye loses its way back to the
+                // start of the next line.
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 880),
+                  child: story!,
+                ),
+              ),
 
             SizedBox(height: compact ? 24 : 44),
 

@@ -1,8 +1,9 @@
-/// Where the app's navigation sits on a desktop window or a tablet.
+/// Where the app's navigation sits.
 ///
 /// Chosen once, on the first launch, from a picker; changeable later in
-/// settings. Phones keep the floating bar: a rail eats width a handset does
-/// not have, and a top bar sits under the thumb's least reachable edge.
+/// settings, on a desktop window or a tablet: the floating bar, a side rail
+/// or a top bar. A phone has no choice to make: it always has the floating
+/// bar and, pulled out from the left, the side menu.
 library;
 
 import 'package:flutter/widgets.dart';
@@ -51,14 +52,24 @@ enum AppLayoutStyle {
   };
 }
 
-/// The style actually drawn: a stored choice on a desktop, the dock anywhere
-/// else or before anything was chosen.
+/// The layouts offered: the three for a desktop or a tablet ([wide]); a
+/// phone has only its own.
+List<AppLayoutStyle> appLayoutChoices({required bool wide}) => wide
+    ? AppLayoutStyle.values
+    : const <AppLayoutStyle>[AppLayoutStyle.dock];
+
+/// The style actually drawn: the stored choice when this kind of screen
+/// offers it ([isDesktopPlatform] for a desktop or a tablet), the dock
+/// otherwise or before anything was chosen.
 AppLayoutStyle effectiveAppLayout({
   required AppLayoutStyle? stored,
   required bool isDesktopPlatform,
 }) {
-  if (!isDesktopPlatform) return AppLayoutStyle.dock;
-  return stored ?? AppLayoutStyle.dock;
+  if (stored != null &&
+      appLayoutChoices(wide: isDesktopPlatform).contains(stored)) {
+    return stored;
+  }
+  return AppLayoutStyle.dock;
 }
 
 /// Whether to put the picker in front of the viewer: a desktop that has
@@ -102,7 +113,7 @@ class AppLayoutStyleNotifier extends Notifier<AppLayoutStyle?> {
   }
 }
 
-/// Whether this screen can use the side rail and the top bar: a desktop, or
+/// Whether this screen offers the side rail and the top bar: a desktop, or
 /// a tablet — a screen whose short side is at least 600 points, which a
 /// phone in either orientation is not. A tablet has the width a rail takes
 /// and still leaves a comfortable page; a phone does not.

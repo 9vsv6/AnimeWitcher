@@ -225,7 +225,7 @@ Future<void> _pumpUntil(
   fail(reason);
 }
 
-/// The two tabs are the phone layout; a window this narrow keeps them.
+/// A phone-sized window, which draws the page's compact header.
 void _usePhoneWindow(WidgetTester tester) {
   tester.view.physicalSize = const Size(390, 844);
   tester.view.devicePixelRatio = 1;
@@ -266,21 +266,6 @@ void main() {
     );
   });
 
-  testWidgets('manga details keeps horizontal tab swiping enabled', (
-    tester,
-  ) async {
-    _usePhoneWindow(tester);
-    await tester.pumpWidget(_app(_MangaProvider()));
-    await _pumpUntil(
-      tester,
-      () => find.byType(TabBarView).evaluate().isNotEmpty,
-      reason: 'manga tab view did not render',
-    );
-
-    final tabView = tester.widget<TabBarView>(find.byType(TabBarView));
-    expect(tabView.physics, isNot(isA<NeverScrollableScrollPhysics>()));
-  });
-
   testWidgets('long pressing manga title copies it like anime details', (
     tester,
   ) async {
@@ -311,9 +296,10 @@ void main() {
       reason: 'manga title did not render',
     );
 
-    final title = find.descendant(
-      of: find.byKey(const ValueKey('manga-details-hero')),
-      matching: find.text('Solo Leveling'),
+    // The name in the header, not the small one on the poster's stand-in.
+    final title = find.byWidgetPredicate(
+      (widget) =>
+          widget is Text && widget.data == 'Solo Leveling' && widget.maxLines == 3,
     );
     expect(title, findsOneWidget);
 
@@ -344,7 +330,7 @@ void main() {
     expect(item.fullPosterUrl, custom);
   });
 
-  testWidgets('manga details renders only details and chapters tabs', (
+  testWidgets('a phone gets the anime page layout, compact, on one page', (
     tester,
   ) async {
     _usePhoneWindow(tester);
@@ -355,39 +341,24 @@ void main() {
       reason: 'manga details content did not render',
     );
 
-    final tabBar = tester.widget<TabBar>(find.byType(TabBar));
-    expect(tabBar.indicatorSize, isNull);
-
-    expect(find.text('التفاصيل'), findsOneWidget);
-    expect(find.textContaining('الفصول'), findsOneWidget);
-    expect(find.text('Solo Leveling'), findsWidgets);
-    expect(find.text('Manga description'), findsOneWidget);
-    expect(find.text('9.2'), findsOneWidget);
-    expect(find.byKey(const ValueKey('manga-details-hero')), findsOneWidget);
-    expect(find.byKey(const ValueKey('manga-rate-action')), findsOneWidget);
-    expect(find.byIcon(Icons.favorite_border_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.bookmark_border_rounded), findsOneWidget);
-    expect(find.text('المراجعات'), findsNothing);
-
-    final actionGenre = find.byKey(const ValueKey('manga-genre-Action'));
-    expect(actionGenre, findsOneWidget);
     expect(
-      find.ancestor(of: actionGenre, matching: find.byType(InkWell)),
-      findsNothing,
+      find.byKey(const ValueKey<String>('manga-details-wide')),
+      findsOneWidget,
     );
+    // One page, not the old two tabs.
+    expect(find.byType(TabBarView), findsNothing);
+    expect(find.text('Solo Leveling'), findsWidgets);
+    expect(find.byIcon(Icons.favorite_border_rounded), findsWidgets);
 
-    await tester.tap(find.textContaining('الفصول'));
-    await _pumpUntil(
-      tester,
-      () => find.text('الفصل 12.5').evaluate().isNotEmpty,
-      reason: 'chapter tab did not render loaded chapter',
+    final page = find.byType(Scrollable).first;
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey<String>('manga-chapter-row-12.5')),
+      200,
+      scrollable: page,
     );
-
     expect(find.text('الفصل 12.5'), findsOneWidget);
+    // Nothing of the anime page's own sections.
     expect(find.text('الحلقات'), findsNothing);
-    expect(find.text('التعليقات'), findsNothing);
-    expect(find.text('المراجعات'), findsNothing);
-    expect(find.text('الشخصيات'), findsNothing);
     expect(find.text('متشابهة'), findsNothing);
     expect(find.text('ذات صلة'), findsNothing);
   });

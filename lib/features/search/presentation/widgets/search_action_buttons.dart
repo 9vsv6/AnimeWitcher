@@ -156,14 +156,11 @@ class _SearchActionButtonsState extends State<SearchActionButtons> {
               : AppleLiquidGlassSurface(
                   borderRadius: BorderRadius.circular(height / 2),
                   interactive: true,
+                  // The search field's own fill, so the two read as one.
                   fallbackColor: Theme.of(context)
                       .colorScheme
                       .surfaceContainerHighest
-                      .withValues(alpha: 0.5),
-                  fallbackBorder: BorderSide(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant
-                        .withValues(alpha: 0.12),
-                  ),
+                      .withValues(alpha: 0.6),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[

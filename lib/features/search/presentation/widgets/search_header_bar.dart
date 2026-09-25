@@ -63,7 +63,11 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
-    final searchResults = ref.watch(searchPagedResultsProvider);
+    // Only whether a search is running: watching the whole results state
+    // rebuilt the bar with every page of results that came in.
+    final searching = ref.watch(
+      searchPagedResultsProvider.select((state) => state.isLoading),
+    );
     final isCompact = widget.isCompact;
     final isDark = theme.brightness == Brightness.dark;
     // The same wording the home bar uses, so the two read as one control.
@@ -98,7 +102,7 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                         child: ValueListenableBuilder<TextEditingValue>(
                           valueListenable: widget.textController,
                           builder: (context, value, child) {
-                            final isSearching = searchResults.isLoading;
+                            final isSearching = searching;
 
                             // Empty and idle, the field carries the same keyboard
                             // hint the home bar shows, so the two read as one control.

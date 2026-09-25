@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:animewitcher/shared/widgets/app_side_menu.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/account/account_providers.dart';
@@ -9,7 +10,6 @@ import '../../../shared/widgets/live_previews.dart';
 import '../../details/presentation/widgets/details_seasons_bar.dart';
 import '../../manga/reader/manga_reader_settings_screen.dart';
 import '../../../core/account/animewitcher_account_models.dart';
-import '../../characters/presentation/characters_screen.dart';
 import '../../settings/presentation/account_screen.dart';
 import '../../settings/presentation/settings_screen.dart';
 import '../../settings/presentation/widgets/settings_widgets.dart';
@@ -20,6 +20,49 @@ import 'seasons_screen.dart';
 import '../../../core/utils/localized_text.dart';
 import '../../../core/utils/layout_constants.dart';
 import 'more_sidebar_shell.dart';
+
+/// The pages the phone's More tab held, as rows of the side menu that took
+/// its place: the account heads the menu already, so these are the rest.
+List<AppSideMenuEntry> phoneMoreMenuEntries(BuildContext context) {
+  final isArabic =
+      Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+  void open(Widget page) => Navigator.of(
+    context,
+    rootNavigator: true,
+  ).push(MaterialPageRoute<void>(builder: (_) => page));
+  return <AppSideMenuEntry>[
+    AppSideMenuEntry(
+      id: 'coming-soon',
+      icon: Icons.upcoming_rounded,
+      label: isArabic ? 'القادم قريبًا' : 'Coming soon',
+      onTap: () => open(const ComingSoonScreen()),
+    ),
+    AppSideMenuEntry(
+      id: 'global-statistics',
+      icon: Icons.query_stats_rounded,
+      label: isArabic ? 'الإحصائيات العالمية' : 'Global statistics',
+      onTap: () => open(const GlobalStatisticsScreen()),
+    ),
+    AppSideMenuEntry(
+      id: 'seasons',
+      icon: Icons.calendar_month_rounded,
+      label: isArabic ? 'المواسم' : 'Seasons',
+      onTap: () => open(const SeasonsScreen()),
+    ),
+    AppSideMenuEntry(
+      id: 'broadcast-schedule',
+      icon: Icons.calendar_view_week_rounded,
+      label: isArabic ? 'جدول البث' : 'Broadcast schedule',
+      onTap: () => open(const BroadcastScheduleScreen()),
+    ),
+    AppSideMenuEntry(
+      id: 'settings',
+      icon: Icons.settings_rounded,
+      label: isArabic ? 'الإعدادات' : 'Settings',
+      onTap: () => open(const SettingsScreen()),
+    ),
+  ];
+}
 
 class MoreScreen extends ConsumerWidget {
   const MoreScreen({super.key});
@@ -126,16 +169,6 @@ class MoreScreen extends ConsumerWidget {
               ],
             ),
             MoreDestinationGroup(
-              heading: moreHeadingWatching(context),
-              items: <MoreDestination>[
-                MoreDestination(
-                  icon: Icons.groups_rounded,
-                  label: isArabic ? 'الشخصيات' : 'Characters',
-                  builder: (_) => const CharactersScreen(),
-                ),
-              ],
-            ),
-            MoreDestinationGroup(
               heading: moreHeadingBrowse(context),
               items: <MoreDestination>[
                 MoreDestination(
@@ -175,8 +208,14 @@ class MoreScreen extends ConsumerWidget {
 
     return Scaffold(
       // No title: the window's caption buttons are painted over this same
-      // corner, and the two collided. The bar stays for its spacing.
-      appBar: AppBar(centerTitle: false),
+      // corner, and the two collided. The bar stays for its spacing, and
+      // holds the side menu's button when that layout is on.
+      appBar: AppBar(
+        centerTitle: false,
+        actions: const <Widget>[
+          AppSideMenuButton(padding: EdgeInsetsDirectional.only(end: 12)),
+        ],
+      ),
       body: ListView(
         padding: EdgeInsets.fromLTRB(16, 12, 16, bottomPadding),
         children: [
@@ -225,18 +264,6 @@ class MoreScreen extends ConsumerWidget {
                 onTap: () => Navigator.of(context, rootNavigator: true).push(
                   MaterialPageRoute<void>(
                     builder: (_) => const AnimeWitcherAccountScreen(),
-                  ),
-                ),
-              ),
-              _MoreTile(
-                icon: Icons.groups_rounded,
-                title: isArabic ? 'الشخصيات' : 'Characters',
-                subtitle: isArabic
-                    ? 'تصفح الشخصيات وابحث عنها وأدر المفضلة'
-                    : 'Browse, search, and favorite characters',
-                onTap: () => Navigator.of(context, rootNavigator: true).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const CharactersScreen(),
                   ),
                 ),
               ),

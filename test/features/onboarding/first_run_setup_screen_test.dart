@@ -113,9 +113,22 @@ void main() {
     tester,
   ) async {
     await pumpAt(tester, const Size(390, 844));
-    // Home is drawn as an upright phone, not a wide window.
+    // Home is drawn as an upright phone, not a wide window, under the
+    // choices.
+    await tester.scrollUntilVisible(
+      find.byType(HomeLayoutPreview),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     final home = tester.getSize(find.byType(HomeLayoutPreview));
     expect(home.height, greaterThan(home.width));
+    // A phone has no layout to pick: it has the bar and the side menu.
+    expect(find.text('شكل التطبيق'), findsNothing);
+    await tester.scrollUntilVisible(
+      find.text('المظهر'),
+      -200,
+      scrollable: find.byType(Scrollable).first,
+    );
 
     final seen = await walkSteps(tester);
     expect(seen, containsAllInOrder(['المظهر', 'المشغل', 'الحساب']));

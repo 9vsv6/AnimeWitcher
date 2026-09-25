@@ -1,7 +1,10 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
+import 'package:animewitcher/shared/widgets/app_side_menu.dart';
 import 'package:animewitcher/core/navigation/taskbar_destination.dart';
+
 import '../../settings/presentation/general_settings_provider.dart';
+
 import 'package:animewitcher/shared/widgets/mouse_drag_refresh_indicator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animewitcher/core/navigation/app_layout_style.dart';
@@ -165,11 +168,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       child: Scaffold(
         // The theme's page colour, so the amber theme reaches home too.
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        body: _buildBody(
-          context,
-          homeDataAsync,
-          continueWatching,
-          isWidescreen: isWidescreen,
+        body: Stack(
+          children: [
+            Positioned.fill(
+              child: _buildBody(
+                context,
+                homeDataAsync,
+                continueWatching,
+                isWidescreen: isWidescreen,
+              ),
+            ),
+            // The side menu's button, over the artwork in the corner the
+            // menu comes from; nothing in the other layouts.
+            Positioned(
+              top: MediaQuery.viewPaddingOf(context).top + 8,
+              left: 12,
+              child: const AppSideMenuButton(overArtwork: true),
+            ),
+          ],
         ),
       ),
     );

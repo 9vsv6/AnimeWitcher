@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:animewitcher/features/home/presentation/widgets/home_section_header.dart';
+import 'package:animewitcher/shared/widgets/app_side_menu.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animewitcher/core/navigation/taskbar_destination.dart';
@@ -634,7 +636,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       context,
       ref.watch(searchDomainProvider),
     );
-    final searchResultsState = ref.watch(searchPagedResultsProvider);
+    // Only whether a search is running: watching the whole results state
+    // rebuilt the field with every page of results that came in.
+    final searching = ref.watch(
+      searchPagedResultsProvider.select((state) => state.isLoading),
+    );
 
     return GestureDetector(
       onTap: () {
@@ -647,7 +653,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         child: ValueListenableBuilder<TextEditingValue>(
           valueListenable: _controller,
           builder: (context, value, child) {
-            final isSearching = searchResultsState.isLoading;
+            final isSearching = searching;
 
             Widget? suffix;
             if (isSearching) {
@@ -777,6 +783,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           textDirection: TextDirection.ltr,
           child: Row(
             children: [
+              // The side menu's button, in the corner the menu comes from.
+              const AppSideMenuButton(padding: EdgeInsets.only(right: 8)),
               Expanded(child: _buildMobileSearchField(context)),
               const SizedBox(width: 2),
               _buildMobileSearchActionGroup(context),
@@ -1594,12 +1602,8 @@ class _AllSearchHeading extends StatelessWidget {
               ),
             ),
           ),
-          TextButton(
-            onPressed: onSeeAll,
-            child: Text(
-              appText(context, english: 'See all', arabic: 'عرض الكل'),
-            ),
-          ),
+          // The same pill as home's rows.
+          HomeViewAllButton(onTap: onSeeAll),
         ],
       ),
     );

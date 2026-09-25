@@ -10,7 +10,6 @@ import '../../../../core/utils/responsive_breakpoints.dart';
 import '../../../../shared/widgets/catalog_direction.dart';
 import '../../../../shared/widgets/multimedia_card.dart';
 import '../../../settings/presentation/account_screen.dart';
-import '../../../../core/storage/library_repository.dart';
 import '../library_auth.dart';
 import '../library_lists.dart';
 import '../library_provider.dart';
@@ -45,11 +44,7 @@ class _BookmarksTabState extends ConsumerState<BookmarksTab>
       LibrarySuccess(items: final items) => LibraryItemsGrid(
         items: widget.sort == null
             ? items
-            : sortLibraryItems(
-                items,
-                widget.sort!,
-                ref.read(libraryRepositoryProvider),
-              ),
+            : sortLibraryItems(items, widget.sort!),
       ),
     };
   }

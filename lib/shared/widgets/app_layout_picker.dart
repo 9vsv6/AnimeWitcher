@@ -16,7 +16,14 @@ Future<void> showAppLayoutPicker(
 }) {
   final arabic =
       Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
-  var selected = ref.read(appLayoutStyleProvider) ?? AppLayoutStyle.dock;
+  // A desktop or a tablet picks from three, a phone from the dock and the
+  // side menu.
+  final wide = appLayoutsAvailable(context);
+  final choices = appLayoutChoices(wide: wide);
+  var selected = effectiveAppLayout(
+    stored: ref.read(appLayoutStyleProvider),
+    isDesktopPlatform: wide,
+  );
 
   return showGlassDialog<void>(
     context: context,
@@ -30,6 +37,9 @@ Future<void> showAppLayoutPicker(
               .toDouble();
           return AlertDialog(
             surfaceTintColor: Colors.transparent,
+            // A short phone scrolls rather than running the cards into the
+            // buttons.
+            scrollable: true,
             title: Text(
               firstRun
                   ? (arabic ? 'اختر شكل التطبيق' : 'Choose a layout')
@@ -48,22 +58,45 @@ Future<void> showAppLayoutPicker(
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: [
-                      for (final style in AppLayoutStyle.values)
-                        SizedBox(
-                          width: width >= 600 ? (width - 24) / 3 : width,
-                          child: AppLayoutOptionCard(
-                            style: style,
-                            arabic: arabic,
-                            selected: style == selected,
-                            onTap: () => setState(() => selected = style),
+                  // A phone's two side by side, each an upright phone: a row
+                  // shares the width out exactly, where two halves in a wrap
+                  // could round over and fold onto a second line.
+                  if (!wide)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (var i = 0; i < choices.length; i++) ...[
+                          if (i > 0) const SizedBox(width: 12),
+                          Expanded(
+                            child: AppLayoutOptionCard(
+                              style: choices[i],
+                              arabic: arabic,
+                              selected: choices[i] == selected,
+                              phone: true,
+                              onTap: () =>
+                                  setState(() => selected = choices[i]),
+                            ),
                           ),
-                        ),
-                    ],
-                  ),
+                        ],
+                      ],
+                    )
+                  else
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        for (final style in choices)
+                          SizedBox(
+                            width: width >= 600 ? (width - 24) / 3 : width,
+                            child: AppLayoutOptionCard(
+                              style: style,
+                              arabic: arabic,
+                              selected: style == selected,
+                              onTap: () => setState(() => selected = style),
+                            ),
+                          ),
+                      ],
+                    ),
                 ],
               ),
             ),
@@ -97,12 +130,16 @@ class AppLayoutOptionCard extends StatelessWidget {
     required this.arabic,
     required this.selected,
     required this.onTap,
+    this.phone = false,
   });
 
   final AppLayoutStyle style;
   final bool arabic;
   final bool selected;
   final VoidCallback onTap;
+
+  /// Drawn as an upright phone.
+  final bool phone;
 
   @override
   Widget build(BuildContext context) {
@@ -128,8 +165,12 @@ class AppLayoutOptionCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               AspectRatio(
-                aspectRatio: 16 / 10,
-                child: AppLayoutPreview(style: style, accent: colors.primary),
+                aspectRatio: phone ? 10 / 16 : 16 / 10,
+                child: AppLayoutPreview(
+                  style: style,
+                  accent: colors.primary,
+                  phone: phone,
+                ),
               ),
               const SizedBox(height: 10),
               Row(
@@ -152,7 +193,8 @@ class AppLayoutOptionCard extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 style.description(arabic: arabic),
-                maxLines: 2,
+                // A phone's card is narrow: room for the whole line.
+                maxLines: phone ? 3 : 2,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall
                     ?.copyWith(color: colors.onSurfaceVariant),
@@ -172,10 +214,14 @@ class AppLayoutPreview extends StatelessWidget {
     super.key,
     required this.style,
     required this.accent,
+    this.phone = false,
   });
 
   final AppLayoutStyle style;
   final Color accent;
+
+  /// Drawn upright, with fewer posters to a row.
+  final bool phone;
 
   static const _screen = Color(0xFF141412);
   static const _chrome = Color(0xFF2A2927);
@@ -191,9 +237,9 @@ class AppLayoutPreview extends StatelessWidget {
         children: [
           Expanded(flex: 5, child: _block(_banner)),
           const SizedBox(height: 4),
-          Expanded(flex: 2, child: _row(4)),
+          Expanded(flex: 2, child: _row(phone ? 2 : 4)),
           const SizedBox(height: 4),
-          Expanded(flex: 3, child: _row(6)),
+          Expanded(flex: 3, child: _row(phone ? 3 : 6)),
         ],
       ),
     );

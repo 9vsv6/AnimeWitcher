@@ -11,6 +11,7 @@ import '../../../core/storage/storage_service.dart';
 import '../../../core/utils/layout_constants.dart';
 import '../../../core/utils/responsive_breakpoints.dart';
 import '../../../shared/widgets/apple_liquid_glass.dart';
+import '../../characters/presentation/characters_screen.dart';
 import '../../more/presentation/recent_watched_screen.dart';
 import 'history_provider.dart';
 import 'library_lists.dart';
@@ -33,6 +34,9 @@ class LibraryScreen extends ConsumerStatefulWidget {
 class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   /// The side column's "آخر المشاهدات" is picked rather than a list.
   bool _recent = false;
+
+  /// The favourite characters are picked rather than a list.
+  bool _characters = false;
 
   /// The filter's settings, shared with the phone's shelves.
   late final LibraryShelfPrefs _prefs;
@@ -107,7 +111,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       history,
       LibraryMediaKind.anime,
     ).length;
-    final title = _recent
+    final title = _characters
+        ? libraryCharactersLabel(context)
+        : _recent
         ? libraryRecentLabel(context)
         : libraryCategoryLabel(context, category, kind);
     final theme = Theme.of(context);
@@ -125,13 +131,24 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                 kind: kind,
                 category: category,
                 recentSelected: _recent,
+                charactersSelected: _characters,
+                onCharacters: () => setState(() {
+                  _recent = false;
+                  _characters = true;
+                }),
                 counts: counts,
                 recentCount: recentCount,
                 prefs: _prefs,
                 onFilter: () => _openFilter(kind),
-                onRecent: () => setState(() => _recent = true),
+                onRecent: () => setState(() {
+                  _recent = true;
+                  _characters = false;
+                }),
                 onSelect: (listKind, listCategory) {
-                  setState(() => _recent = false);
+                  setState(() {
+                    _recent = false;
+                    _characters = false;
+                  });
                   unawaited(
                     ref
                         .read(libraryProvider.notifier)
@@ -153,7 +170,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                     ),
                     alignment: AlignmentDirectional.centerStart,
                     child: Text(
-                      _recent
+                      _recent || _characters
                           ? title
                           : '${libraryKindLabel(context, kind)} · $title',
                       key: const ValueKey<String>('library-pane-title'),
@@ -163,7 +180,13 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                     ),
                   ),
                   Expanded(
-                    child: _recent
+                    child: _characters
+                        ? const CharactersScreen(
+                            key: ValueKey<String>('library-characters'),
+                            favoritesOnly: true,
+                            embedded: true,
+                          )
+                        : _recent
                         ? RecentWatchedBody(
                             key: const ValueKey<String>('library-recent'),
                             sort: _prefs.sort,

@@ -6,6 +6,7 @@ import 'package:animewitcher/core/storage/secure_token_storage.dart';
 import 'package:animewitcher/core/storage/storage_service.dart';
 import 'package:animewitcher/features/library/presentation/history_provider.dart';
 import 'package:animewitcher/features/library/presentation/library_screen.dart';
+import 'package:animewitcher/features/library/presentation/widgets/library_phone_shelves.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -48,13 +49,27 @@ final class _LibraryStorage extends MemoryStorageService {
     selectedCategory = category;
   }
 
+  int reads = 0;
+  int dateLookups = 0;
+
   @override
-  List<MultimediaItem> getLibraryItems({String? category}) => category == null
+  List<MultimediaItem> getLibraryItems({String? category}) =>
+      _read(category);
+
+  List<MultimediaItem> _read(String? category) {
+    reads++;
+    return _items(category);
+  }
+
+  List<MultimediaItem> _items(String? category) => category == null
       ? [for (final list in lists.values) ...list]
       : lists[category] ?? const <MultimediaItem>[];
 
   @override
-  int getLibraryItemUpdatedAt(String url) => 0;
+  int getLibraryItemUpdatedAt(String url) {
+    dateLookups++;
+    return 0;
+  }
 
   @override
   bool isLibraryItemFavorite(String url) => false;
@@ -82,16 +97,17 @@ Future<_LibraryStorage> _pump(
   List<HistoryItem> history = const <HistoryItem>[],
   Map<String, String> strings = const <String, String>{},
 }) async {
-  final storage = _LibraryStorage({
-    'watching': [
-      _item('Frieren'),
-      _item('Berserk', type: MultimediaContentType.manga, year: 1989),
-      _item('Vagabond', type: MultimediaContentType.manga, year: 1998),
-    ],
-    'pinned': [_item('Dandadan', type: MultimediaContentType.manga)],
-  })
-    ..strings['library_media_kind'] = kind
-    ..strings.addAll(strings);
+  final storage =
+      _LibraryStorage({
+          'watching': [
+            _item('Frieren'),
+            _item('Berserk', type: MultimediaContentType.manga, year: 1989),
+            _item('Vagabond', type: MultimediaContentType.manga, year: 1998),
+          ],
+          'pinned': [_item('Dandadan', type: MultimediaContentType.manga)],
+        })
+        ..strings['library_media_kind'] = kind
+        ..strings.addAll(strings);
   final account = AnimeWitcherAccountService(
     storage: storage,
     secureStorage: SecureTokenStorage(storage),
@@ -147,7 +163,10 @@ void main() {
     await _pump(tester, size: const Size(400, 860));
 
     await tester.enterText(find.byKey(const ValueKey('library-search')), 'vag');
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    // Still typing: the rows stay until the pause.
+    expect(find.byKey(const ValueKey('library-grid-manga')), findsNothing);
+    await tester.pump(const Duration(milliseconds: 400));
 
     expect(find.byKey(const ValueKey('library-grid-manga')), findsOneWidget);
     expect(find.text('Vagabond'), findsWidgets);
@@ -181,10 +200,7 @@ void main() {
     await _pump(
       tester,
       size: const Size(400, 860),
-      strings: {
-        'library_shelves_view': 'grid',
-        'library_shelves_sort': 'year',
-      },
+      strings: {'library_shelves_view': 'grid', 'library_shelves_sort': 'year'},
     );
 
     final vagabond = tester.getTopRight(find.text('Vagabond').first);
@@ -195,9 +211,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
   });
 
-  testWidgets('PC: every list in the side column, both halves', (
-    tester,
-  ) async {
+  testWidgets('PC: every list in the side column, both halves', (tester) async {
     await _pump(
       tester,
       size: const Size(1400, 900),
@@ -218,9 +232,7 @@ void main() {
     expect(find.text('آخر المشاهدات'), findsOneWidget);
     expect(find.text('Frieren'), findsWidgets);
 
-    await tester.tap(
-      find.byKey(const ValueKey('library-side-manga-pinned')),
-    );
+    await tester.tap(find.byKey(const ValueKey('library-side-manga-pinned')));
     await tester.pump();
     await tester.pump();
     expect(find.text('Dandadan'), findsWidgets);
@@ -299,6 +311,108 @@ void main() {
     final older = tester.getTopRight(find.text('Older').first);
     // By year, not by when it was watched: 2026 first, on the right.
     expect(newer.dx, greaterThan(older.dx));
+    await tester.pump(const Duration(milliseconds: 100));
+  });
+
+  testWidgets('phone: a row shows ten titles, عرض الكل shows every one', (
+    tester,
+  ) async {
+    final storage = _LibraryStorage({
+      'pinned': [
+        for (var i = 1; i <= 12; i++)
+          _item('Manga $i', type: MultimediaContentType.manga),
+      ],
+    })..strings['library_media_kind'] = 'manga';
+    final account = AnimeWitcherAccountService(
+      storage: storage,
+      secureStorage: SecureTokenStorage(storage),
+    );
+    tester.view.physicalSize = const Size(400, 860);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          storageServiceProvider.overrideWithValue(storage),
+          animeWitcherAccountServiceProvider.overrideWithValue(account),
+          watchHistoryProvider.overrideWith(() => _History(const [])),
+        ],
+        child: MaterialApp(
+          locale: const Locale('ar'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const LibraryScreen(),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    final row = find.byKey(const ValueKey('library-shelf-manga-pinned'));
+    expect(find.text('أرغب بقراءتها · 12'), findsOneWidget);
+    final list = tester.widget<ListView>(
+      find.descendant(of: row, matching: find.byType(ListView)),
+    );
+    // Ten posters and the nine gaps between them.
+    expect(list.childrenDelegate.estimatedChildCount, 10 + 9);
+
+    await tester.tap(find.descendant(of: row, matching: find.text('عرض الكل')));
+    await tester.pumpAndSettle();
+    expect(find.byType(LibraryListPage), findsOneWidget);
+    final grid = tester.widget<GridView>(find.byType(GridView));
+    expect(grid.childrenDelegate.estimatedChildCount, 12);
+    await tester.pump(const Duration(milliseconds: 100));
+  });
+
+  testWidgets('PC: favourite characters sit under the anime lists', (
+    tester,
+  ) async {
+    await _pump(tester, size: const Size(1400, 900), kind: 'anime');
+
+    await tester.tap(find.byKey(const ValueKey('library-side-characters')));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('library-characters')), findsOneWidget);
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('library-pane-title')))
+          .data,
+      'الشخصيات المفضلة',
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+  });
+
+  testWidgets('phone: the anime tab ends with the favourite characters', (
+    tester,
+  ) async {
+    await _pump(tester, size: const Size(400, 860), kind: 'anime');
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('library-characters')),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('الشخصيات المفضلة'), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 100));
+  });
+
+  testWidgets('phone: typing a search does not read the library again', (
+    tester,
+  ) async {
+    final storage = await _pump(tester, size: const Size(400, 860));
+    final before = storage.reads;
+
+    await tester.enterText(find.byKey(const ValueKey('library-search')), 'ber');
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.text('Berserk'), findsWidgets);
+    await tester.enterText(find.byKey(const ValueKey('library-search')), '');
+    await tester.pump(const Duration(milliseconds: 600));
+
+    // The lists are kept: searching and clearing read nothing from storage,
+    // and newest-first needs no date looked up per title.
+    expect(storage.reads, before);
+    expect(storage.dateLookups, 0);
     await tester.pump(const Duration(milliseconds: 100));
   });
 }

@@ -17,6 +17,8 @@ class LibrarySideList extends StatelessWidget {
     required this.counts,
     required this.recentCount,
     required this.onRecent,
+    this.charactersSelected = false,
+    this.onCharacters,
     required this.onSelect,
     required this.prefs,
     required this.onFilter,
@@ -28,6 +30,13 @@ class LibrarySideList extends StatelessWidget {
   final Map<LibraryMediaKind, Map<LibraryCategory, int>> counts;
   final int recentCount;
   final VoidCallback onRecent;
+
+  /// The favourite characters, which moved here from the More page, are
+  /// showing rather than a list.
+  final bool charactersSelected;
+
+  /// Shows the favourite characters; no row without it.
+  final VoidCallback? onCharacters;
   final void Function(LibraryMediaKind kind, LibraryCategory category) onSelect;
 
   /// Which lists get a row, and whether empty ones do; the one picked always
@@ -63,6 +72,7 @@ class LibrarySideList extends StatelessWidget {
         ],
       ),
     );
+    final special = recentSelected || charactersSelected;
     bool shown(bool listShown, int count, bool selected) =>
         selected || (listShown && (count > 0 || !prefs.hideEmpty));
 
@@ -99,7 +109,7 @@ class LibrarySideList extends StatelessWidget {
             if (shown(
               prefs.shows(listCategory),
               counts[listKind]?[listCategory] ?? 0,
-              !recentSelected && listKind == kind && listCategory == category,
+              !special && listKind == kind && listCategory == category,
             ))
               LibrarySideRow(
                 key: ValueKey<String>(
@@ -109,11 +119,18 @@ class LibrarySideList extends StatelessWidget {
                 label: libraryCategoryLabel(context, listCategory, listKind),
                 count: counts[listKind]?[listCategory] ?? 0,
                 selected:
-                    !recentSelected &&
-                    listKind == kind &&
-                    listCategory == category,
+                    !special && listKind == kind && listCategory == category,
                 onTap: () => onSelect(listKind, listCategory),
               ),
+          // The characters are anime's: last under its heading.
+          if (listKind == LibraryMediaKind.anime && onCharacters != null)
+            LibrarySideRow(
+              key: const ValueKey<String>('library-side-characters'),
+              icon: Icons.face_rounded,
+              label: libraryCharactersLabel(context),
+              selected: charactersSelected,
+              onTap: onCharacters!,
+            ),
         ],
       ],
     );
@@ -127,14 +144,16 @@ class LibrarySideRow extends StatefulWidget {
     super.key,
     required this.icon,
     required this.label,
-    required this.count,
+    this.count,
     required this.selected,
     required this.onTap,
   });
 
   final IconData icon;
   final String label;
-  final int count;
+
+  /// How many it holds; left off where that is not known up front.
+  final int? count;
   final bool selected;
   final VoidCallback onTap;
 
@@ -213,13 +232,14 @@ class _LibrarySideRowState extends State<LibrarySideRow> {
                       ),
                     ),
                   ),
-                  Text(
-                    '${widget.count}',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: selected ? accent : colors.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
+                  if (widget.count case final count?)
+                    Text(
+                      '$count',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: selected ? accent : colors.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),

@@ -57,6 +57,11 @@ String libraryRecentLabel(BuildContext context) =>
 
 const IconData libraryRecentIcon = Icons.history_rounded;
 
+/// "الشخصيات المفضلة", the favourite characters that moved here from the
+/// More page.
+String libraryCharactersLabel(BuildContext context) =>
+    _arabic(context) ? 'الشخصيات المفضلة' : 'Favorite characters';
+
 String libraryKindLabel(BuildContext context, LibraryMediaKind kind) =>
     switch (kind) {
       LibraryMediaKind.anime => _arabic(context) ? 'أنمي' : 'Anime',
@@ -94,20 +99,18 @@ enum LibrarySort { added, name, year }
 /// Shelves, one row per list, or every list in one grid.
 enum LibraryView { shelves, grid }
 
-/// [items] in [sort] order.
+/// [items] in [sort] order. [items] come from the library newest-added
+/// first already, so that order costs nothing; looking each title's date
+/// up again scanned the whole library per comparison, and a few hundred
+/// titles made every redraw of the library stall.
 List<MultimediaItem> sortLibraryItems(
   List<MultimediaItem> items,
   LibrarySort sort,
-  LibraryRepository repository,
 ) {
   final sorted = List<MultimediaItem>.of(items);
   switch (sort) {
     case LibrarySort.added:
-      sorted.sort(
-        (a, b) => repository
-            .getLibraryItemUpdatedAt(b.url)
-            .compareTo(repository.getLibraryItemUpdatedAt(a.url)),
-      );
+      break;
     case LibrarySort.name:
       sorted.sort(
         (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),

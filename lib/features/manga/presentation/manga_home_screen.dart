@@ -10,6 +10,7 @@ import '../../../core/extensions/base_provider.dart';
 import '../../../core/extensions/extension_manager.dart';
 import '../../../core/router/app_router.dart';
 import '../../../shared/widgets/anime_catalog_shimmer.dart';
+import '../../../shared/widgets/app_side_menu.dart';
 import '../../../shared/widgets/catalog_direction.dart';
 import '../../../shared/widgets/multimedia_card.dart';
 import '../../home/presentation/widgets/home_section_header.dart';
@@ -187,6 +188,8 @@ class _MangaHomeScreenState extends ConsumerState<MangaHomeScreen> {
                         ),
                       ),
                     ),
+                    // The side menu's button, in the corner it comes from.
+                    const AppSideMenuButton(),
                   ],
                 ),
               ),

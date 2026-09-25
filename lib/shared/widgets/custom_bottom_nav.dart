@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import 'package:animewitcher/core/navigation/taskbar_destination.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:animewitcher/shared/widgets/account_avatar_button.dart';
-import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 
 class CustomBottomNavBar extends StatelessWidget {
   final int currentBranchIndex;
@@ -33,8 +32,9 @@ class CustomBottomNavBar extends StatelessWidget {
 
   static const double height = 64;
 
-  static bool get usesNativeAppleTabBar =>
-      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+  /// Off: iOS has the same bar as every other platform, not the native
+  /// glass tab bar.
+  static bool get usesNativeAppleTabBar => false;
 
   static double nativeAppleHeight(BuildContext context) =>
       49 + MediaQuery.viewPaddingOf(context).bottom;
@@ -140,10 +140,35 @@ class CustomBottomNavBar extends StatelessWidget {
           child: SizedBox(
             width: fullWidth,
             height: height,
-            child: defaultTargetPlatform == TargetPlatform.iOS
-                ? AppleLiquidGlassSurface(
-                    borderRadius: BorderRadius.circular(height / 2),
-                    interactive: true,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(height / 2),
+                // Same hairline the home search bar carries, so the two
+                // floating controls read as one family.
+                border: Border.all(
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.12),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.12),
+                    blurRadius: 24,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(height / 2),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                  child: Container(
+                    height: height,
+                    // Matches the home search bar's fill. It sits over
+                    // artwork, so it leans on the blur behind it rather
+                    // than on being opaque.
+                    color: colorScheme.surfaceContainerHighest.withValues(
+                      alpha: 0.5,
+                    ),
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
@@ -151,51 +176,10 @@ class CustomBottomNavBar extends StatelessWidget {
                         Row(children: tabs),
                       ],
                     ),
-                  )
-                : Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(height / 2),
-                      // Same hairline the home search bar carries, so the two
-                      // floating controls read as one family.
-                      border: Border.all(
-                        color: colorScheme.onSurfaceVariant.withValues(
-                          alpha: 0.12,
-                        ),
-                        width: 1,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(
-                            alpha: isDark ? 0.35 : 0.12,
-                          ),
-                          blurRadius: 24,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(height / 2),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                        child: Container(
-                          height: height,
-                          // Matches the home search bar's fill. It sits over
-                          // artwork, so it leans on the blur behind it rather
-                          // than on being opaque.
-                          color: colorScheme.surfaceContainerHighest.withValues(
-                            alpha: 0.5,
-                          ),
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              highlight,
-                              Row(children: tabs),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
                   ),
+                ),
+              ),
+            ),
           ),
         );
       },

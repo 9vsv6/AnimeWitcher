@@ -22,7 +22,6 @@ import '../../../l10n/generated/app_localizations.dart';
 import '../../../shared/widgets/apple_liquid_glass.dart';
 import '../../../shared/widgets/expandable_text.dart';
 import '../../../shared/widgets/loading_indicator.dart';
-import '../../../shared/widgets/underline_segment_tabs.dart';
 import '../../details/presentation/widgets/details_desktop_hero.dart';
 import '../../details/presentation/widgets/details_hero_actions.dart';
 import '../../details/presentation/widgets/details_rating_actions.dart';
@@ -36,7 +35,6 @@ import 'manga_details_controller.dart';
 import 'manga_details_state.dart';
 import 'manga_resume_chapter.dart';
 import 'widgets/manga_chapter_list.dart';
-import 'widgets/manga_details_hero.dart';
 import 'widgets/manga_information_section.dart';
 
 @visibleForTesting
@@ -81,16 +79,12 @@ class MangaDetailsScreen extends ConsumerStatefulWidget {
   ConsumerState<MangaDetailsScreen> createState() => _MangaDetailsScreenState();
 }
 
-class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen>
-    with SingleTickerProviderStateMixin {
+class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen> {
   static const String _removeLibraryAction = '__remove_from_library__';
-
-  late final TabController _tabs;
 
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ref
@@ -101,7 +95,6 @@ class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen>
 
   @override
   void dispose() {
-    _tabs.dispose();
     super.dispose();
   }
 
@@ -302,73 +295,6 @@ class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen>
     }
   }
 
-  PreferredSizeWidget _appBar(
-    BuildContext context,
-    List<AppleLiquidGlassToolbarButton> buttons,
-  ) {
-    final colors = Theme.of(context).colorScheme;
-    return PreferredSize(
-      preferredSize: const Size.fromHeight(kToolbarHeight),
-      child: Directionality(
-        textDirection: TextDirection.ltr,
-        child: AppBar(
-          backgroundColor: Colors.black,
-          automaticallyImplyLeading: false,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          leadingWidth: appleUsesPersistentLiquidGlassHeader ? 0 : 64,
-          leading: appleUsesPersistentLiquidGlassHeader
-              ? null
-              : Padding(
-                  padding: EdgeInsets.only(
-                    left: 8 + windowControlsLeadingInset,
-                  ),
-                  child: AppleLiquidGlassBackButton(
-                    size: 46,
-                    onPressed: () => Navigator.of(context).maybePop(),
-                  ),
-                ),
-          actions: appleUsesPersistentLiquidGlassHeader
-              ? const <Widget>[]
-              : <Widget>[
-                  Padding(
-                    padding: EdgeInsets.only(
-                      right: 8 + windowControlsTrailingInset,
-                    ),
-                    child: AppleLiquidGlassActionGroup(
-                      height: 46,
-                      fallbackColor: colors.surfaceContainerHigh,
-                      children: buttons,
-                    ),
-                  ),
-                ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTabs(BuildContext context, int chapterCount) {
-    final l10n = AppLocalizations.of(context);
-    final ar = Localizations.localeOf(context).languageCode == 'ar';
-    final chapterLabel = chapterCount > 0
-        ? '${l10n?.chapters ?? (ar ? 'الفصول' : 'Chapters')} ($chapterCount)'
-        : l10n?.chapters ?? (ar ? 'الفصول' : 'Chapters');
-    return Directionality(
-      textDirection: ar ? TextDirection.rtl : TextDirection.ltr,
-      child: FilterStyleTabBar(
-        controller: _tabs,
-        isScrollable: false,
-        tabs: <Widget>[
-          FilterStyleTab(
-            icon: Icons.info_outline_rounded,
-            label: l10n?.mangaDetails ?? (ar ? 'التفاصيل' : 'Details'),
-          ),
-          FilterStyleTab(icon: Icons.menu_book_outlined, label: chapterLabel),
-        ],
-      ),
-    );
-  }
-
   Future<void> _openChapter(
     MultimediaItem item,
     MangaChapter chapter,
@@ -391,19 +317,6 @@ class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen>
         localChapterDirectory: completedDownload?.destinationPath,
       ),
     ).push<void>(context);
-  }
-
-  Future<void> _copyMangaTitle(BuildContext context, String title) async {
-    await Clipboard.setData(ClipboardData(text: title));
-    await HapticFeedback.selectionClick();
-
-    if (!context.mounted) return;
-
-    ref
-        .read(notificationServiceProvider)
-        .showSuccess(
-          appText(context, english: 'Title copied', arabic: 'تم نسخ العنوان'),
-        );
   }
 
   Future<void> _showPoster(MultimediaItem item) async {
@@ -761,6 +674,9 @@ class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen>
         isMovie: false,
         manga: true,
         showPoster: true,
+        // A phone gets the same page with the header drawn smaller, as the
+        // phone anime page has it.
+        compact: !context.isTabletOrLarger,
         itemUrl: widget.item.url,
         onRefresh: controller.retry,
         onPosterTap: () => _showPoster(item),
@@ -843,7 +759,6 @@ class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen>
       ),
     );
     final item = mangaDetailsItemWithCustomCover(baseItem, customCover);
-    final chapterCount = state.chapters.asData?.value.length ?? 0;
     final downloads =
         ref.watch(downloadsProvider).value ?? const <DownloadItem>[];
 
@@ -867,26 +782,17 @@ class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen>
       isFavorite: isFavorite,
       currentCategory: currentCategory,
     );
-    // Tablets and desktops take the anime page's layout; a phone keeps the
-    // two tabs, like the phone anime page.
-    final scaffold = context.isTabletOrLarger
-        ? _wideScaffold(
-            context,
-            item: item,
-            state: state,
-            downloads: downloads,
-            libraryNotifier: libraryNotifier,
-            isFavorite: isFavorite,
-            currentCategory: currentCategory,
-          )
-        : _narrowScaffold(
-            context,
-            item: item,
-            state: state,
-            chapterCount: chapterCount,
-            downloads: downloads,
-            buttons: buttons,
-          );
+    // Every size takes the anime page's layout: the artwork, the details
+    // and the chapters on one page.
+    final scaffold = _wideScaffold(
+      context,
+      item: item,
+      state: state,
+      downloads: downloads,
+      libraryNotifier: libraryNotifier,
+      isFavorite: isFavorite,
+      currentCategory: currentCategory,
+    );
 
     if (!appleUsesPersistentLiquidGlassHeader) return scaffold;
     return ApplePersistentGlassHeaderScope(
@@ -895,271 +801,6 @@ class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen>
       backFallbackColor: Theme.of(context).colorScheme.surfaceContainerHigh,
       trailingButtons: buttons,
       child: scaffold,
-    );
-  }
-
-  Widget _narrowScaffold(
-    BuildContext context, {
-    required MultimediaItem item,
-    required MangaDetailsState state,
-    required int chapterCount,
-    required List<DownloadItem> downloads,
-    required List<AppleLiquidGlassToolbarButton> buttons,
-  }) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: _appBar(context, buttons),
-      body: Column(
-        children: <Widget>[
-          _buildTabs(context, chapterCount),
-          Expanded(
-            child: TabBarView(
-              controller: _tabs,
-              children: <Widget>[
-                _MangaDetailsTab(
-                  item: item,
-                  loading: state.details.isLoading,
-                  error: state.details.hasError,
-                  onRetry: () => ref
-                      .read(
-                        mangaDetailsControllerProvider(widget.item.url)
-                            .notifier,
-                      )
-                      .retry(),
-                  onPosterTap: () => _showPoster(item),
-                  onTitleLongPress: () => _copyMangaTitle(context, item.title),
-                  onRate: () => _rateManga(item),
-                ),
-                state.chapters.when(
-                  loading: () => const Center(child: AppLoadingIndicator()),
-                  error: (_, __) => _RetryPanel(
-                    onRetry: () => ref
-                        .read(
-                          mangaDetailsControllerProvider(widget.item.url)
-                              .notifier,
-                        )
-                        .retry(),
-                  ),
-                  data: (chapters) => MangaChapterList(
-                    chapters: chapters,
-                    downloads: downloads,
-                    onDeleteDownload: (download) => unawaited(
-                      confirmAndRemoveDownload(context, ref, download),
-                    ),
-                    onOpen:
-                        widget.onOpenChapter ??
-                        (chapter) =>
-                            unawaited(_openChapter(item, chapter, chapters)),
-                    onDownload:
-                        widget.onDownloadChapter ??
-                        (chapter) => unawaited(
-                          ref
-                              .read(
-                                mangaDetailsControllerProvider(widget.item.url)
-                                    .notifier,
-                              )
-                              .downloadChapter(chapter),
-                        ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MangaDetailsTab extends StatelessWidget {
-  const _MangaDetailsTab({
-    required this.item,
-    required this.loading,
-    required this.error,
-    required this.onRetry,
-    required this.onPosterTap,
-    required this.onTitleLongPress,
-    required this.onRate,
-  });
-
-  final MultimediaItem item;
-  final bool loading;
-  final bool error;
-  final Future<void> Function() onRetry;
-  final VoidCallback onPosterTap;
-  final VoidCallback onTitleLongPress;
-  final VoidCallback onRate;
-
-  List<String> _genres() => _mangaGenres(item);
-
-  @override
-  Widget build(BuildContext context) {
-    final ar = Localizations.localeOf(context).languageCode == 'ar';
-    final l10n = AppLocalizations.of(context);
-    final genres = _genres();
-
-    return CustomScrollView(
-      key: const PageStorageKey<String>('manga-details-info-tab'),
-      physics: const AlwaysScrollableScrollPhysics(),
-      slivers: <Widget>[
-        SliverToBoxAdapter(
-          child: MangaDetailsHero(
-            key: const ValueKey('manga-details-hero'),
-            item: item,
-            isLoading: loading,
-            onPosterTap: onPosterTap,
-            onTitleLongPress: onTitleLongPress,
-          ),
-        ),
-        if (error)
-          SliverFillRemaining(
-            hasScrollBody: false,
-            child: _RetryPanel(onRetry: onRetry),
-          )
-        else
-          SliverToBoxAdapter(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 760),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: <Widget>[
-                      _MangaRateAction(onPressed: onRate),
-                      const SizedBox(height: 16),
-                      DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .surfaceContainerHighest
-                              .withValues(alpha: 0.55),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: Theme.of(context).colorScheme.outlineVariant
-                                .withValues(alpha: 0.38),
-                          ),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 15, 16, 16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: <Widget>[
-                              ExpandableText(
-                                text: (item.description ?? '').trim().isEmpty
-                                    ? (l10n?.noDescription ??
-                                          (ar
-                                              ? 'لا يوجد وصف'
-                                              : 'No description'))
-                                    : item.description!.trim(),
-                                maxLines: 5,
-                                style: Theme.of(context).textTheme.bodyLarge
-                                    ?.copyWith(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant,
-                                      height: 1.55,
-                                    ),
-                              ),
-                              if (genres.isNotEmpty) ...<Widget>[
-                                const SizedBox(height: 14),
-                                Wrap(
-                                  spacing: 7,
-                                  runSpacing: 7,
-                                  children: <Widget>[
-                                    for (final genre in genres)
-                                      Container(
-                                        key: ValueKey<String>(
-                                          'manga-genre-$genre',
-                                        ),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .primary,
-                                          borderRadius: BorderRadius.circular(
-                                            999,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          genre,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .labelMedium
-                                              ?.copyWith(
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .onPrimary,
-                                                fontWeight: FontWeight.w600,
-                                                height: 1,
-                                              ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _MangaRateAction extends StatelessWidget {
-  const _MangaRateAction({required this.onPressed});
-
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final ar = Localizations.localeOf(context).languageCode == 'ar';
-    final colors = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerHighest.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: colors.outlineVariant.withValues(alpha: 0.38),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: SizedBox(
-          height: 62,
-          child: Material(
-            color: colors.surfaceContainerHigh.withValues(alpha: 0.70),
-            borderRadius: BorderRadius.circular(14),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              key: const ValueKey('manga-rate-action'),
-              onTap: onPressed,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  const Icon(Icons.star_border_rounded),
-                  const SizedBox(width: 10),
-                  Text(
-                    ar ? 'قيّم' : 'Rate',
-                    style: Theme.of(context).textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

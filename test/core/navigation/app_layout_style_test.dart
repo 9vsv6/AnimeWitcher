@@ -13,6 +13,7 @@ void main() {
   });
 
   test('phones always get the bottom bar', () {
+    expect(appLayoutChoices(wide: false), [AppLayoutStyle.dock]);
     for (final stored in <AppLayoutStyle?>[null, ...AppLayoutStyle.values]) {
       expect(
         effectiveAppLayout(stored: stored, isDesktopPlatform: false),
@@ -22,11 +23,16 @@ void main() {
   });
 
   test('a desktop draws its choice, and the bottom bar before one', () {
+    expect(appLayoutChoices(wide: true), [
+      AppLayoutStyle.dock,
+      AppLayoutStyle.sideRail,
+      AppLayoutStyle.topBar,
+    ]);
     expect(
       effectiveAppLayout(stored: null, isDesktopPlatform: true),
       AppLayoutStyle.dock,
     );
-    for (final style in AppLayoutStyle.values) {
+    for (final style in appLayoutChoices(wide: true)) {
       expect(effectiveAppLayout(stored: style, isDesktopPlatform: true), style);
     }
   });
@@ -56,7 +62,7 @@ void main() {
             children: [
               for (final style in AppLayoutStyle.values)
                 SizedBox(
-                  width: 220,
+                  width: 180,
                   child: AppLayoutOptionCard(
                     style: style,
                     arabic: true,
@@ -73,6 +79,36 @@ void main() {
     expect(find.text('شريط جانبي'), findsOneWidget);
     expect(find.text('شريط علوي'), findsOneWidget);
     expect(find.text('الشريط السفلي'), findsOneWidget);
+  });
+
+  testWidgets('the phone cards draw upright without overflowing', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final style in appLayoutChoices(wide: false))
+                SizedBox(
+                  width: 160,
+                  child: AppLayoutOptionCard(
+                    style: style,
+                    arabic: true,
+                    selected: style == AppLayoutStyle.dock,
+                    phone: true,
+                    onTap: () {},
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    expect(tester.takeException(), isNull);
+    final preview = tester.getSize(find.byType(AppLayoutPreview).first);
+    expect(preview.height, greaterThan(preview.width));
   });
 
   testWidgets('tablets get the layouts, phones keep the dock', (tester) async {
