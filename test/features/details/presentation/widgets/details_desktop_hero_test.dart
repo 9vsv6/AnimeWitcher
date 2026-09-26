@@ -49,21 +49,28 @@ void main() {
       );
       await tester.pump();
 
+      final isolation = find.byKey(
+        const ValueKey<String>('details-hero-top-isolation'),
+      );
       final banner = find.byKey(
         const ValueKey<String>('details-hero-portrait-banner'),
       );
       final poster = find.byKey(const ValueKey<String>('details-hero-poster'));
       final info = find.byKey(const ValueKey<String>('details-hero-info'));
 
+      expect(isolation, findsOneWidget);
       expect(banner, findsOneWidget);
       expect(poster, findsOneWidget);
       expect(info, findsOneWidget);
 
+      final isolationRect = tester.getRect(isolation);
       final bannerRect = tester.getRect(banner);
       final posterRect = tester.getRect(poster);
       final infoRect = tester.getRect(info);
 
-      expect(bannerRect.top, closeTo(44, 0.5));
+      expect(isolationRect.top, closeTo(0, 0.5));
+      expect(isolationRect.height, closeTo(44, 0.5));
+      expect(bannerRect.top, closeTo(isolationRect.bottom, 0.5));
       expect(bannerRect.width, closeTo(390, 0.5));
       expect(bannerRect.height, closeTo(390 * 9 / 16, 1));
       expect(posterRect.width, greaterThanOrEqualTo(118));

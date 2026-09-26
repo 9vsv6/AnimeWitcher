@@ -152,8 +152,11 @@ class DetailsDesktopHero extends ConsumerWidget {
         final viewport = MediaQuery.sizeOf(context);
         final isPortraitPhone =
             compact && viewport.height > viewport.width;
+        final mediaTopInset = MediaQuery.viewPaddingOf(context).top;
+        final view = View.of(context);
+        final rawTopInset = view.viewPadding.top / view.devicePixelRatio;
         final topIsolation = isPortraitPhone
-            ? MediaQuery.viewPaddingOf(context).top
+            ? (rawTopInset > mediaTopInset ? rawTopInset : mediaTopInset)
             : 0.0;
         final portraitBannerHeight = isPortraitPhone
             ? constraints.maxWidth * 9 / 16
@@ -165,9 +168,7 @@ class DetailsDesktopHero extends ConsumerWidget {
         final heroBand = isPortraitPhone
             // Match Home's protected status-bar band, keep the artwork itself
             // in a true wide frame, then overlap the poster into the fade.
-            ? topIsolation +
-                  portraitBannerHeight -
-                  portraitPosterHeight * 0.58
+            ? portraitBannerHeight - portraitPosterHeight * 0.58
             : compact
             ? (constraints.maxWidth * 0.5).clamp(150.0, 280.0)
             : showPoster
@@ -225,6 +226,13 @@ class DetailsDesktopHero extends ConsumerWidget {
         final page = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (isPortraitPhone && topIsolation > 0)
+              SizedBox(
+                key: const ValueKey<String>('details-hero-top-isolation'),
+                width: double.infinity,
+                height: topIsolation,
+                child: ColoredBox(color: scaffoldColor),
+              ),
             // The artwork and what sits on it are one piece of the page,
             // so they leave together as it is scrolled. Pinned behind the
             // scroll the picture never went anywhere, and the synopsis
@@ -239,17 +247,9 @@ class DetailsDesktopHero extends ConsumerWidget {
                 // Ending on the same edge, a fractional pixel row let a line
                 // of the picture show through under the fade.
                 if (isPortraitPhone) ...[
-                  if (topIsolation > 0)
-                    Positioned(
-                      left: 0,
-                      top: 0,
-                      right: 0,
-                      height: topIsolation,
-                      child: ColoredBox(color: scaffoldColor),
-                    ),
                   Positioned(
                     left: 0,
-                    top: topIsolation,
+                    top: 0,
                     right: 0,
                     height: portraitBannerHeight,
                     child: SizedBox(
@@ -272,7 +272,7 @@ class DetailsDesktopHero extends ConsumerWidget {
                 // content starts, so nothing below is read against art.
                 Positioned(
                   left: 0,
-                  top: isPortraitPhone ? topIsolation : 0,
+                  top: 0,
                   right: 0,
                   height: isPortraitPhone ? portraitBannerHeight : null,
                   bottom: isPortraitPhone ? null : -pictureRunOn,
@@ -302,7 +302,7 @@ class DetailsDesktopHero extends ConsumerWidget {
                 // the whole shot.
                 Positioned(
                   left: 0,
-                  top: isPortraitPhone ? topIsolation : 0,
+                  top: 0,
                   right: 0,
                   height: isPortraitPhone ? portraitBannerHeight : null,
                   bottom: isPortraitPhone ? null : -pictureRunOn,
