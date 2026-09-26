@@ -394,106 +394,103 @@ class AppSideMenuPanel extends ConsumerWidget {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
-              // Left to right on purpose: ✕ in the top-left corner, the
-              // account across from it, whichever way the text reads.
-              child: Row(
-                textDirection: TextDirection.ltr,
+              child: Stack(
                 children: [
-                  IconButton(
-                    key: const ValueKey<String>('app-side-menu-close'),
-                    tooltip: arabic ? 'إغلاق' : 'Close',
-                    onPressed: onClose,
-                    icon: Icon(
-                      Icons.close_rounded,
-                      color: colors.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: InkWell(
-                      key: const ValueKey<String>('app-side-menu-account'),
+                  InkWell(
+                    key: const ValueKey<String>('app-side-menu-account'),
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: onAccount,
+                    child: ClipRRect(
+                      key: const ValueKey<String>(
+                        'app-side-menu-account-banner',
+                      ),
                       borderRadius: BorderRadius.circular(16),
-                      onTap: onAccount,
-                      child: ClipRRect(
-                        key: const ValueKey<String>(
-                          'app-side-menu-account-banner',
-                        ),
-                        borderRadius: BorderRadius.circular(16),
-                        child: SizedBox(
-                          height: 132,
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              ColoredBox(
-                                color: colors.surfaceContainerHighest,
+                      child: SizedBox(
+                        height: 156,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            ColoredBox(
+                              color: colors.surfaceContainerHighest,
+                            ),
+                            if (cover.isNotEmpty)
+                              Image.network(
+                                cover,
+                                key: const ValueKey<String>(
+                                  'app-side-menu-account-cover',
+                                ),
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) =>
+                                    const SizedBox.shrink(),
                               ),
-                              if (cover.isNotEmpty)
-                                Image.network(
-                                  cover,
-                                  key: const ValueKey<String>(
-                                    'app-side-menu-account-cover',
+                            if (cover.isNotEmpty)
+                              ColoredBox(
+                                color: Colors.black.withValues(alpha: 0.38),
+                              ),
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(56, 10, 12, 10),
+                              child: Row(
+                                children: [
+                                  AccountAvatarButton(
+                                    onTap: onAccount,
+                                    size: 80,
                                   ),
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) =>
-                                      const SizedBox.shrink(),
-                                ),
-                              if (cover.isNotEmpty)
-                                ColoredBox(
-                                  color: Colors.black.withValues(alpha: 0.38),
-                                ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 8,
-                                ),
-                                child: Row(
-                                  children: [
-                                    AccountAvatarButton(
-                                      onTap: onAccount,
-                                      size: 72,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          title,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: theme.textTheme.titleLarge
+                                              ?.copyWith(
+                                                color: cover.isNotEmpty
+                                                    ? Colors.white
+                                                    : colors.onSurface,
+                                                fontSize: 22,
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                        ),
+                                        if (subtitle.isNotEmpty)
                                           Text(
-                                            title,
+                                            subtitle,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
-                                            style: theme.textTheme.titleLarge
+                                            style: theme.textTheme.bodySmall
                                                 ?.copyWith(
                                                   color: cover.isNotEmpty
-                                                      ? Colors.white
-                                                      : colors.onSurface,
-                                                  fontSize: 22,
-                                                  fontWeight: FontWeight.w800,
+                                                      ? Colors.white70
+                                                      : colors
+                                                            .onSurfaceVariant,
                                                 ),
                                           ),
-                                          if (subtitle.isNotEmpty)
-                                            Text(
-                                              subtitle,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: theme.textTheme.bodySmall
-                                                  ?.copyWith(
-                                                    color: cover.isNotEmpty
-                                                        ? Colors.white70
-                                                        : colors
-                                                              .onSurfaceVariant,
-                                                  ),
-                                            ),
-                                        ],
-                                      ),
+                                      ],
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 4,
+                    top: 4,
+                    child: IconButton(
+                      key: const ValueKey<String>('app-side-menu-close'),
+                      tooltip: arabic ? 'إغلاق' : 'Close',
+                      onPressed: onClose,
+                      icon: Icon(
+                        Icons.close_rounded,
+                        color: cover.isNotEmpty
+                            ? Colors.white
+                            : colors.onSurfaceVariant,
                       ),
                     ),
                   ),
