@@ -106,8 +106,16 @@ class DetailsDesktopHero extends ConsumerWidget {
   final bool compact;
 
   double get _side => compact ? 16 : 60;
-  double get _posterWidth => compact ? 104 : 170;
-  double get _posterHeight => compact ? 150 : 245;
+
+  double _posterWidthFor(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    return compact && size.height > size.width ? 120 : compact ? 104 : 170;
+  }
+
+  double _posterHeightFor(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    return compact && size.height > size.width ? 174 : compact ? 150 : 245;
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -141,9 +149,26 @@ class DetailsDesktopHero extends ConsumerWidget {
         // and enough room below for the synopsis to start on the same screen.
         // With the poster beside the name the block is taller, so it starts
         // higher and the synopsis still begins on the first screen.
-        final heroBand = compact
-            // A phone keeps a wide slice of the picture above the poster:
-            // about half the screen's width, so the frame still reads.
+        final viewport = MediaQuery.sizeOf(context);
+        final isPortraitPhone =
+            compact && viewport.height > viewport.width;
+        final topIsolation = isPortraitPhone
+            ? MediaQuery.viewPaddingOf(context).top
+            : 0.0;
+        final portraitBannerHeight = isPortraitPhone
+            ? constraints.maxWidth * 9 / 16
+            : 0.0;
+        final portraitPosterHeight = isPortraitPhone
+            ? _posterHeightFor(context)
+            : 0.0;
+
+        final heroBand = isPortraitPhone
+            // Match Home's protected status-bar band, keep the artwork itself
+            // in a true wide frame, then overlap the poster into the fade.
+            ? topIsolation +
+                  portraitBannerHeight -
+                  portraitPosterHeight * 0.58
+            : compact
             ? (constraints.maxWidth * 0.5).clamp(150.0, 280.0)
             : showPoster
             ? (constraints.maxHeight * 0.56 - 150).clamp(160.0, 410.0)
@@ -153,7 +178,48 @@ class DetailsDesktopHero extends ConsumerWidget {
         // the first lines of the synopsis, fading out as it goes. A fixed
         // run rather than the synopsis's own height: tied to that, "show
         // more" made the box taller and the picture, filling it, zoomed in.
-        final pictureRunOn = compact ? 150.0 : 200.0;
+        final pictureRunOn = isPortraitPhone ? 0.0 : compact ? 150.0 : 200.0;
+
+        Widget backdropArtwork() => ArtworkDecode(
+          paintedWidth: MediaQuery.sizeOf(context).width,
+          builder: (BuildContext context, int? decodeWidth) =>
+              FallbackPosterImage(
+                imageUrl: backdrop,
+                preferBanner: true,
+                manga: manga,
+                malId: displayItem.artworkLookupMalId,
+                title: displayItem.artworkLookupTitle,
+                fit: BoxFit.cover,
+                alignment: Alignment.topCenter,
+                memCacheWidth: decodeWidth,
+                filterQuality: FilterQuality.medium,
+                placeholder: (_) => ColoredBox(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                ),
+                errorWidget: (_) {
+                  if ((providedBannerUrl != null || manga) &&
+                      posterUrl != null &&
+                      providedBannerUrl != posterUrl) {
+                    return CachedNetworkImage(
+                      imageUrl: posterUrl,
+                      fit: BoxFit.cover,
+                      alignment: Alignment.topCenter,
+                      memCacheWidth: decodeWidth,
+                      filterQuality: FilterQuality.medium,
+                      errorWidget: (_, _, _) =>
+                          ThumbnailErrorPlaceholder(
+                            label: displayItem.title,
+                            isBackdrop: true,
+                          ),
+                    );
+                  }
+                  return ThumbnailErrorPlaceholder(
+                    label: displayItem.title,
+                    isBackdrop: true,
+                  );
+                },
+              ),
+        );
 
         final lazy = slivers;
         final page = Column(
@@ -172,66 +238,44 @@ class DetailsDesktopHero extends ConsumerWidget {
                 // hair, so the fade below is the last thing drawn there.
                 // Ending on the same edge, a fractional pixel row let a line
                 // of the picture show through under the fade.
-                Positioned(
-                  left: 0,
-                  top: 0,
-                  right: 0,
-                  bottom: 3 - pictureRunOn,
-                  child: ArtworkDecode(
-                    paintedWidth: MediaQuery.sizeOf(context).width,
-                    builder: (BuildContext context, int? decodeWidth) =>
-                        FallbackPosterImage(
-                          imageUrl: backdrop,
-                          // Wide art, looked up the way Harbor does when
-                          // the catalog has none and the viewer asked for
-                          // other sources: AniList's banner, then what
-                          // AniZip knows of TheTVDB and Kitsu.
-                          preferBanner: true,
-                          manga: manga,
-                          malId: displayItem.artworkLookupMalId,
-                          title: displayItem.artworkLookupTitle,
-                          fit: BoxFit.cover,
-                          alignment: Alignment.topCenter,
-                          memCacheWidth: decodeWidth,
-                          filterQuality: FilterQuality.medium,
-                          placeholder: (_) => ColoredBox(
-                            color: theme.colorScheme.surfaceContainerHighest,
-                          ),
-                          errorWidget: (_) {
-                            // A manga with no banner anywhere keeps its
-                            // poster behind the title, as before.
-                            if ((providedBannerUrl != null || manga) &&
-                                posterUrl != null &&
-                                providedBannerUrl != posterUrl) {
-                              return CachedNetworkImage(
-                                imageUrl: posterUrl,
-                                fit: BoxFit.cover,
-                                alignment: Alignment.topCenter,
-                                memCacheWidth: decodeWidth,
-                                filterQuality: FilterQuality.medium,
-                                errorWidget: (_, _, _) =>
-                                    ThumbnailErrorPlaceholder(
-                                      label: displayItem.title,
-                                      isBackdrop: true,
-                                    ),
-                              );
-                            }
-                            return ThumbnailErrorPlaceholder(
-                              label: displayItem.title,
-                              isBackdrop: true,
-                            );
-                          },
-                        ),
+                if (isPortraitPhone) ...[
+                  if (topIsolation > 0)
+                    Positioned(
+                      left: 0,
+                      top: 0,
+                      right: 0,
+                      height: topIsolation,
+                      child: ColoredBox(color: scaffoldColor),
+                    ),
+                  Positioned(
+                    left: 0,
+                    top: topIsolation,
+                    right: 0,
+                    height: portraitBannerHeight,
+                    child: SizedBox(
+                      key: const ValueKey<String>(
+                        'details-hero-portrait-banner',
+                      ),
+                      child: backdropArtwork(),
+                    ),
                   ),
-                ),
+                ] else
+                  Positioned(
+                    left: 0,
+                    top: 0,
+                    right: 0,
+                    bottom: 3 - pictureRunOn,
+                    child: backdropArtwork(),
+                  ),
 
                 // The picture goes to ground before the page's own
                 // content starts, so nothing below is read against art.
                 Positioned(
                   left: 0,
-                  top: 0,
+                  top: isPortraitPhone ? topIsolation : 0,
                   right: 0,
-                  bottom: -pictureRunOn,
+                  height: isPortraitPhone ? portraitBannerHeight : null,
+                  bottom: isPortraitPhone ? null : -pictureRunOn,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -239,11 +283,15 @@ class DetailsDesktopHero extends ConsumerWidget {
                         end: Alignment.bottomCenter,
                         colors: [
                           Colors.transparent,
-                          scaffoldColor.withValues(alpha: 0.15),
-                          scaffoldColor.withValues(alpha: 0.78),
+                          Colors.transparent,
+                          scaffoldColor.withValues(
+                            alpha: isPortraitPhone ? 0.62 : 0.15,
+                          ),
                           scaffoldColor,
                         ],
-                        stops: const [0.0, 0.34, 0.62, 0.9],
+                        stops: isPortraitPhone
+                            ? const [0.0, 0.50, 0.78, 1.0]
+                            : const [0.0, 0.34, 0.62, 0.9],
                       ),
                     ),
                   ),
@@ -254,9 +302,10 @@ class DetailsDesktopHero extends ConsumerWidget {
                 // the whole shot.
                 Positioned(
                   left: 0,
-                  top: 0,
+                  top: isPortraitPhone ? topIsolation : 0,
                   right: 0,
-                  bottom: -pictureRunOn,
+                  height: isPortraitPhone ? portraitBannerHeight : null,
+                  bottom: isPortraitPhone ? null : -pictureRunOn,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -431,13 +480,17 @@ class DetailsDesktopHero extends ConsumerWidget {
   Widget _withPoster(BuildContext context, String? posterUrl, Widget title) {
     if (!showPoster) return title;
     final colors = Theme.of(context).colorScheme;
+    final size = MediaQuery.sizeOf(context);
+    final isPortraitPhone = compact && size.height > size.width;
+    final posterWidth = _posterWidthFor(context);
+    final posterHeight = _posterHeightFor(context);
     final poster = GestureDetector(
       key: const ValueKey<String>('details-hero-poster'),
       behavior: HitTestBehavior.opaque,
       onTap: onPosterTap,
       child: Container(
-        width: _posterWidth,
-        height: _posterHeight,
+        width: posterWidth,
+        height: posterHeight,
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: colors.surfaceContainerHighest,
@@ -452,7 +505,7 @@ class DetailsDesktopHero extends ConsumerWidget {
           ],
         ),
         child: ArtworkDecode(
-          paintedWidth: _posterWidth,
+          paintedWidth: posterWidth,
           builder: (BuildContext context, int? decodeWidth) =>
               FallbackPosterImage(
                 imageUrl: posterUrl ?? '',
@@ -470,11 +523,16 @@ class DetailsDesktopHero extends ConsumerWidget {
       ),
     );
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
+      crossAxisAlignment: isPortraitPhone
+          ? CrossAxisAlignment.center
+          : CrossAxisAlignment.end,
       children: [
         poster,
         SizedBox(width: compact ? 14 : 28),
-        Expanded(child: title),
+        Expanded(
+          key: const ValueKey<String>('details-hero-info'),
+          child: title,
+        ),
       ],
     );
   }

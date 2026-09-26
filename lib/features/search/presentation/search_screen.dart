@@ -31,6 +31,7 @@ import '../../../shared/widgets/anime_catalog_shimmer.dart';
 import '../../../shared/widgets/multimedia_card.dart';
 import '../../../shared/widgets/apple_liquid_glass.dart';
 import '../../../shared/widgets/recoverable_network_state.dart';
+import '../../../shared/widgets/glass_dialog.dart';
 
 import 'package:animewitcher/core/utils/localized_text.dart';
 
@@ -224,7 +225,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
       // Use the exact same filter surface as the Home page so both entry
       // points have identical tabs, spacing, selection behavior, and glass.
-      selected = await showDialog<ProviderSearchFilters>(
+      selected = await showGlassDialog<ProviderSearchFilters>(
         context: context,
         builder: (dialogContext) => ProviderSearchFilterDialog(
           options: options,
