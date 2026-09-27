@@ -1,4 +1,5 @@
 import '../domain/entity/multimedia_item.dart';
+import 'digit_normalization.dart';
 
 enum CatalogRatingSource { mal, imdb, animeWitcher }
 
@@ -50,7 +51,7 @@ String formatCatalogRatingScore(double score) {
 }
 
 double? _positiveScore(String? raw) {
-  final normalized = _normalizeDigits((raw ?? '').trim());
+  final normalized = normalizeLocalizedDigits((raw ?? '').trim());
   if (normalized.isEmpty) return null;
   final match = RegExp(r'[0-9]+(?:[.][0-9]+)?').firstMatch(normalized);
   final score = match == null ? null : double.tryParse(match.group(0)!);
@@ -58,16 +59,3 @@ double? _positiveScore(String? raw) {
   return score;
 }
 
-String _normalizeDigits(String value) {
-  const arabic = '٠١٢٣٤٥٦٧٨٩';
-  const eastern = '۰۱۲۳۴۵۶۷۸۹';
-  return value
-      .replaceAllMapped(
-        RegExp(r'[٠-٩]'),
-        (match) => '${arabic.indexOf(match.group(0)!)}',
-      )
-      .replaceAllMapped(
-        RegExp(r'[۰-۹]'),
-        (match) => '${eastern.indexOf(match.group(0)!)}',
-      );
-}
