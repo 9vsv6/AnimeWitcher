@@ -2,7 +2,7 @@ name: Flutter Checks
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, feat/manga-manhwa]
   push:
     branches: [main, fix/download-manager-performance-v2]
 
