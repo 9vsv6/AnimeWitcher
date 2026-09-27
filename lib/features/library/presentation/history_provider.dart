@@ -76,41 +76,6 @@ class WatchHistory extends _$WatchHistory {
     refresh();
   }
 
-  Future<void> saveProgress(
-    MultimediaItem item,
-    int position,
-    int duration, {
-    String? lastStreamUrl,
-    String? lastEpisodeUrl,
-    int? season,
-    int? episode,
-    String? episodeTitle,
-    String? episodeServerName,
-    String? episodePosterUrl,
-  }) async {
-    // For livestreams, we don't save progress but we still want it in history
-    final isLivestream = item.contentType == MultimediaContentType.livestream;
-    final finalPosition = isLivestream ? 0 : position;
-    final finalDuration = isLivestream ? 0 : duration;
-
-    // Playback progress belongs exclusively to Continue Watching. Recently
-    // Watched is updated by recordOpened(), so progress ticks cannot reorder or
-    // recreate items in that independent history list.
-    final repository = ref.read(historyRepositoryProvider);
-    await repository.saveContinueWatchingProgress(
-      item,
-      finalPosition,
-      finalDuration,
-      lastStreamUrl: lastStreamUrl,
-      lastEpisodeUrl: lastEpisodeUrl,
-      season: season,
-      episode: episode,
-      episodeTitle: episodeTitle,
-      episodeServerName: episodeServerName,
-      episodePosterUrl: episodePosterUrl,
-    );
-    ref.read(continueWatchingProvider.notifier).refresh();
-  }
 }
 
 class ContinueWatchingNotifier extends Notifier<List<HistoryItem>> {
