@@ -19,9 +19,18 @@
 - Long-running CI must not block independent audit work.
 - Do not merge PR #253.
 
+### Task 1 evidence — corrected baseline
+
+- PR #253 currently targets `feat/manga-manhwa@f792a6ddd5b95d3ce48946b55105f67f35aafb68` from `refactor/project-cleanup-2026-09-26`.
+- Corrected-branch repository map at `ece762ec3fc5f7611f6660e723333359fa8f404d`: 1,065 tracked files, including 357 `lib/**/*.dart` files and 306 `test/**/*.dart` files.
+- Platform/native map: Android 46 files, iOS 49, macOS 30, Windows 19, `native/**` 13.
+- Vendored boundary: `packages/video_view/**` contains 158 tracked files and stays outside ordinary app cleanup unless fork-local debris is proven safe to remove.
+- Generated scope includes generated localization/output files and `*.g.dart`/other generated Dart; generated/plugin registration output is regenerated through project tooling rather than hand-cleaned.
+- The historical Flutter Checks run `36314643667` is not evidence for the corrected baseline: its checkout log merged head `ece762e` into stale `main@0ec75a8` immediately before the PR base retarget. A fresh head commit is required to obtain CI on the corrected PR merge ref.
+
 ### Task 1: Re-establish corrected baseline and repository map
-- [ ] Record corrected base commit/branch and refresh tree/file/subsystem metrics.
-- [ ] Classify first-party, generated, vendored, and platform/native scopes.
+- [x] Record corrected base commit/branch and refresh tree/file/subsystem metrics.
+- [x] Classify first-party, generated, vendored, and platform/native scopes.
 - [ ] Capture a green CI baseline on the corrected branch.
 - [ ] Verify a Build Preview from this branch contains the latest `feat/manga-manhwa` UI baseline.
 
