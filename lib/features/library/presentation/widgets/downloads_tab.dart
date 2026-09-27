@@ -1,15 +1,17 @@
 import 'dart:async';
+
 import 'package:background_downloader/background_downloader.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:animewitcher/shared/widgets/app_side_menu.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animewitcher/core/utils/artwork_quality.dart';
 import 'package:animewitcher/core/utils/image_fallbacks.dart';
 import 'package:animewitcher/core/utils/episode_label.dart';
 import 'package:animewitcher/core/utils/episode_order.dart';
 import 'package:animewitcher/core/providers/episode_sort_provider.dart';
+
 import '../../../../core/domain/entity/manga.dart';
-import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/services/download_v2/download_v2_models.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/services/download_concurrency.dart';
@@ -83,12 +85,22 @@ class _DownloadsTabState extends ConsumerState<DownloadsTab>
           children: [
             Directionality(
               textDirection: TextDirection.rtl,
-              child: FilterStyleTabBar(
-                controller: _tabs,
-                isScrollable: false,
-                tabs: [
-                  FilterStyleTab(label: l10n.downloads),
-                  FilterStyleTab(label: l10n.downloadsTabCompleted),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: FilterStyleTabBar(
+                      controller: _tabs,
+                      isScrollable: false,
+                      tabs: [
+                        FilterStyleTab(label: l10n.downloads),
+                        FilterStyleTab(label: l10n.downloadsTabCompleted),
+                      ],
+                    ),
+                  ),
+                  // The side menu's button, in the corner it comes from.
+                  const AppSideMenuButton(
+                    padding: EdgeInsetsDirectional.only(start: 4, end: 12),
+                  ),
                 ],
               ),
             ),
@@ -257,24 +269,22 @@ class _GroupedDownloadTile extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final firstItem = items.first;
     final episodeSortAscending = ref.watch(episodeSortAscendingProvider);
-    final isManga =
-        firstItem.mediaKind == DownloadMediaKind.mangaChapter;
+    final isManga = firstItem.mediaKind == DownloadMediaKind.mangaChapter;
     final orderedItems = isManga
-        ? (List<DownloadItem>.from(items)
-            ..sort((a, b) {
-              final an = a.chapter?.number;
-              final bn = b.chapter?.number;
-              if (an != null && bn != null) {
-                final compare = an.compareTo(bn);
-                if (compare != 0) {
-                  return episodeSortAscending ? compare : -compare;
-                }
+        ? (List<DownloadItem>.from(items)..sort((a, b) {
+            final an = a.chapter?.number;
+            final bn = b.chapter?.number;
+            if (an != null && bn != null) {
+              final compare = an.compareTo(bn);
+              if (compare != 0) {
+                return episodeSortAscending ? compare : -compare;
               }
-              final compare = (a.chapter?.name ?? '').compareTo(
-                b.chapter?.name ?? '',
-              );
-              return episodeSortAscending ? compare : -compare;
-            }))
+            }
+            final compare = (a.chapter?.name ?? '').compareTo(
+              b.chapter?.name ?? '',
+            );
+            return episodeSortAscending ? compare : -compare;
+          }))
         : episodeItemsInDisplayOrder(
             items,
             episodeOf: (item) => item.episode,
@@ -309,10 +319,7 @@ class _GroupedDownloadTile extends ConsumerWidget {
                 builder: (BuildContext context, int? decodeWidth) =>
                     CachedNetworkImage(
                       imageUrl:
-                          AppImageFallbacks.poster(
-                            firstItem.item.posterUrl,
-                            label: firstItem.item.title,
-                          ) ??
+                          AppImageFallbacks.poster(firstItem.item.posterUrl) ??
                           '',
                       width: 80,
                       height: 120,
@@ -355,9 +362,9 @@ class _GroupedDownloadTile extends ConsumerWidget {
                         completedDownloadUnitCountLabel(
                           kind: firstItem.mediaKind,
                           count: items.length,
-                          isArabic: Localizations.localeOf(context)
-                              .languageCode
-                              .toLowerCase() ==
+                          isArabic:
+                              Localizations.localeOf(context).languageCode
+                                  .toLowerCase() ==
                               'ar',
                         ),
                         style: theme.textTheme.bodySmall?.copyWith(
@@ -398,21 +405,20 @@ class _GroupedDownloadTile extends ConsumerWidget {
                     ? CompletedDownloadChapterCard(
                         key: ValueKey(download.id),
                         item: download,
-                        onOpen: () => _openMangaChapter(
-                          context,
-                          download,
-                          orderedItems,
+                        onOpen: () =>
+                            _openMangaChapter(context, download, orderedItems),
+                        onDelete: () => unawaited(
+                          confirmAndRemoveDownload(context, ref, download),
                         ),
-                        onDelete: () =>
-                            unawaited(confirmAndRemoveDownload(context, ref, download)),
                       )
                     : CompletedDownloadEpisodeCard(
                         key: ValueKey(download.id),
                         item: download,
                         onPlay: () =>
                             _playLocalFile(context, ref, download, l10n),
-                        onDelete: () =>
-                            unawaited(confirmAndRemoveDownload(context, ref, download)),
+                        onDelete: () => unawaited(
+                          confirmAndRemoveDownload(context, ref, download),
+                        ),
                       ),
               ),
               if (!isLast)
@@ -519,14 +525,12 @@ class _DownloadItemTile extends ConsumerWidget {
   final double progress;
   final TaskStatus status;
   final DownloadProgressData? progressData;
-  final bool isInsideGroup;
 
   const _DownloadItemTile({
     required this.item,
     required this.progress,
     required this.status,
     this.progressData,
-    this.isInsideGroup = false,
   });
 
   @override
@@ -566,12 +570,7 @@ class _DownloadItemTile extends ConsumerWidget {
       child: ArtworkDecode(
         paintedWidth: 80,
         builder: (BuildContext context, int? decodeWidth) => CachedNetworkImage(
-          imageUrl:
-              AppImageFallbacks.poster(
-                item.item.posterUrl,
-                label: item.item.title,
-              ) ??
-              '',
+          imageUrl: AppImageFallbacks.poster(item.item.posterUrl) ?? '',
           width: 80,
           height: 120,
           fit: BoxFit.cover,
@@ -598,9 +597,7 @@ class _DownloadItemTile extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                (isInsideGroup && unitLabel != null)
-                    ? unitLabel
-                    : item.item.title,
+                item.item.title,
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: theme.colorScheme.primary,
@@ -608,7 +605,7 @@ class _DownloadItemTile extends ConsumerWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              if (!isInsideGroup && unitLabel != null) ...[
+              if (unitLabel != null) ...[
                 const SizedBox(height: 2),
                 Text(
                   unitLabel,
@@ -702,11 +699,7 @@ class _DownloadItemTile extends ConsumerWidget {
                       ),
                       const SizedBox(width: LayoutConstants.spacingSm),
                       Text(
-                        formatDownloadTimeRemaining(
-                          context,
-                          progressData!,
-                          l10n,
-                        ),
+                        formatDownloadTimeRemaining(progressData!, l10n),
                         textDirection: isArabic
                             ? TextDirection.rtl
                             : TextDirection.ltr,
@@ -768,10 +761,6 @@ class _DownloadItemTile extends ConsumerWidget {
       child: content,
     );
 
-    if (isInsideGroup) {
-      return tile;
-    }
-
     return Card(
       elevation: 0,
       margin: EdgeInsets.zero,
@@ -788,10 +777,7 @@ class _DownloadItemTile extends ConsumerWidget {
     );
   }
 
-  Future<void> _resumeDownload(
-    BuildContext context,
-    WidgetRef ref,
-  ) async {
+  Future<void> _resumeDownload(BuildContext context, WidgetRef ref) async {
     try {
       await ref
           .read(downloadsProvider.notifier)

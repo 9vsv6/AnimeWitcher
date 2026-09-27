@@ -18,6 +18,11 @@ void main() {
       expect(isGenericEpisodeTitle('Episode 3 Final'), isTrue);
     });
 
+    test('normalizes Arabic and Persian digits in placeholders', () {
+      expect(isGenericEpisodeTitle('الحلقة ١٦'), isTrue);
+      expect(isGenericEpisodeTitle('Episode ۱۲'), isTrue);
+    });
+
     test('keeps creative titles and standalone labels', () {
       expect(isGenericEpisodeTitle('رفقاء جدد'), isFalse);
       expect(isGenericEpisodeTitle('مترجم'), isFalse);
@@ -233,19 +238,11 @@ void main() {
         'الفيلم: بداية المغامرة',
       );
       expect(
-        formatEpisodeLabel(
-          episode: 0,
-          isArabic: true,
-          serverName: 'مترجم',
-        ),
+        formatEpisodeLabel(episode: 0, isArabic: true, serverName: 'مترجم'),
         'مترجم',
       );
       expect(
-        formatEpisodeLabel(
-          episode: 0,
-          isArabic: true,
-          serverName: 'مدبلج',
-        ),
+        formatEpisodeLabel(episode: 0, isArabic: true, serverName: 'مدبلج'),
         'مدبلج',
       );
     });

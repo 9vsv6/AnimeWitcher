@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -485,7 +484,7 @@ void main() {
         expect(await sibling.exists(), isTrue, reason: 'part $index was lost');
         expect(await sibling.length(), 4);
       }
-      final recoveredPrefix = File(await stuckChild!.filePath());
+      final recoveredPrefix = File(await stuckChild.filePath());
       expect(await recoveredPrefix.readAsBytes(), <int>[36, 37, 38]);
 
       await recoveredPrefix.writeAsBytes(
@@ -494,7 +493,7 @@ void main() {
         flush: true,
       );
       coordinator.handleUpdate(
-        TaskStatusUpdate(stuckChild!, TaskStatus.complete),
+        TaskStatusUpdate(stuckChild, TaskStatus.complete),
       );
       await waitUntil(
         () =>

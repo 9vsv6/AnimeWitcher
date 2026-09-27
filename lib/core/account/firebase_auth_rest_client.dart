@@ -6,15 +6,14 @@ import 'animewitcher_account_models.dart';
 class FirebaseAuthRestClient {
   FirebaseAuthRestClient({Dio? dio, String? apiKey})
     : _apiKey = apiKey ?? AnimeWitcherAccountConfig.apiKey,
-      _dio = dio ??
+      _dio =
+          dio ??
           Dio(
             BaseOptions(
               connectTimeout: const Duration(seconds: 15),
               receiveTimeout: const Duration(seconds: 20),
               sendTimeout: const Duration(seconds: 20),
-              headers: const <String, String>{
-                'Accept': 'application/json',
-              },
+              headers: const <String, String>{'Accept': 'application/json'},
             ),
           );
 
@@ -25,8 +24,7 @@ class FirebaseAuthRestClient {
       AnimeWitcherAccountConfig.projectId.trim().isNotEmpty &&
       _apiKey.trim().isNotEmpty;
 
-  String get _identityBase =>
-      'https://identitytoolkit.googleapis.com/v1';
+  String get _identityBase => 'https://identitytoolkit.googleapis.com/v1';
   String get _tokenBase => 'https://securetoken.googleapis.com/v1';
 
   Future<AnimeWitcherSession> signInWithEmail({
@@ -47,7 +45,6 @@ class FirebaseAuthRestClient {
     );
   }
 
-
   Future<AnimeWitcherSession> createEmailAccount({
     required String email,
     required String password,
@@ -60,7 +57,6 @@ class FirebaseAuthRestClient {
     }
     return _createEmailAccountRest(email: email, password: password);
   }
-
 
   Future<AnimeWitcherSession> signInWithGoogleIdToken(String idToken) async {
     if (!_configured) {
@@ -92,14 +88,12 @@ class FirebaseAuthRestClient {
     return _mergeUser(session, await lookup(session.idToken));
   }
 
-
   Future<void> sendEmailVerification(String idToken) async {
     await _identityPost('/accounts:sendOobCode', <String, dynamic>{
       'requestType': 'VERIFY_EMAIL',
       'idToken': idToken,
     });
   }
-
 
   Future<void> sendPasswordResetEmail(String email) async {
     if (!_configured) {
@@ -135,14 +129,11 @@ class FirebaseAuthRestClient {
     required AnimeWitcherSession previous,
     required String newPassword,
   }) async {
-    final payload = await _identityPost(
-      '/accounts:update',
-      <String, dynamic>{
-        'idToken': previous.idToken,
-        'password': newPassword,
-        'returnSecureToken': true,
-      },
-    );
+    final payload = await _identityPost('/accounts:update', <String, dynamic>{
+      'idToken': previous.idToken,
+      'password': newPassword,
+      'returnSecureToken': true,
+    });
     var updated = previous.copyWith(
       idToken: _optionalString(payload['idToken']) ?? previous.idToken,
       refreshToken:
@@ -170,23 +161,16 @@ class FirebaseAuthRestClient {
     required String email,
     required String newPassword,
   }) async {
-    final payload = await _identityPost(
-      '/accounts:signUp',
-      <String, dynamic>{
-        'idToken': previous.idToken,
-        'email': email.trim(),
-        'password': newPassword,
-        'returnSecureToken': true,
-      },
-    );
-    var linked = _sessionFromIdentityPayload(
-      payload,
-      previous.signInMethod,
-    );
+    final payload = await _identityPost('/accounts:signUp', <String, dynamic>{
+      'idToken': previous.idToken,
+      'email': email.trim(),
+      'password': newPassword,
+      'returnSecureToken': true,
+    });
+    var linked = _sessionFromIdentityPayload(payload, previous.signInMethod);
     linked = _mergeUser(linked, await lookup(linked.idToken));
     return linked;
   }
-
 
   Future<void> deleteAccount(String idToken) async {
     await _identityPost('/accounts:delete', <String, dynamic>{
@@ -194,12 +178,10 @@ class FirebaseAuthRestClient {
     });
   }
 
-
   Future<Map<String, dynamic>> lookup(String idToken) async {
-    final payload = await _identityPost(
-      '/accounts:lookup',
-      <String, dynamic>{'idToken': idToken},
-    );
+    final payload = await _identityPost('/accounts:lookup', <String, dynamic>{
+      'idToken': idToken,
+    });
     final users = payload['users'];
     if (users is! List || users.isEmpty || users.first is! Map) {
       throw const AnimeWitcherAccountException(
@@ -210,10 +192,7 @@ class FirebaseAuthRestClient {
     return Map<String, dynamic>.from(users.first as Map);
   }
 
-
-  Future<AnimeWitcherSession> refresh(
-    AnimeWitcherSession previous,
-  ) async {
+  Future<AnimeWitcherSession> refresh(AnimeWitcherSession previous) async {
     if (!_configured) {
       throw const AnimeWitcherAccountException(
         'not-configured',
@@ -223,9 +202,7 @@ class FirebaseAuthRestClient {
     try {
       final response = await _dio.post<dynamic>(
         '$_tokenBase/token',
-        queryParameters: <String, dynamic>{
-          'key': _apiKey,
-        },
+        queryParameters: <String, dynamic>{'key': _apiKey},
         data: <String, dynamic>{
           'grant_type': 'refresh_token',
           'refresh_token': previous.refreshToken,
@@ -236,8 +213,8 @@ class FirebaseAuthRestClient {
       final refreshed = previous.copyWith(
         uid: (payload['user_id'] ?? previous.uid).toString(),
         idToken: (payload['id_token'] ?? '').toString(),
-        refreshToken:
-            (payload['refresh_token'] ?? previous.refreshToken).toString(),
+        refreshToken: (payload['refresh_token'] ?? previous.refreshToken)
+            .toString(),
         expiresAt: DateTime.now().add(
           Duration(seconds: _intValue(payload['expires_in'], 3600)),
         ),
@@ -254,9 +231,7 @@ class FirebaseAuthRestClient {
     }
   }
 
-
   Future<void> signOut() async {}
-
 
   Future<AnimeWitcherSession> _signInWithEmailRest({
     required String email,
@@ -289,18 +264,12 @@ class FirebaseAuthRestClient {
     required String email,
     required String password,
   }) async {
-    final payload = await _identityPost(
-      '/accounts:signUp',
-      <String, dynamic>{
-        'email': email.trim(),
-        'password': password,
-        'returnSecureToken': true,
-      },
-    );
-    return _sessionFromIdentityPayload(
-      payload,
-      AnimeWitcherSignInMethod.email,
-    );
+    final payload = await _identityPost('/accounts:signUp', <String, dynamic>{
+      'email': email.trim(),
+      'password': password,
+      'returnSecureToken': true,
+    });
+    return _sessionFromIdentityPayload(payload, AnimeWitcherSignInMethod.email);
   }
 
   Future<AnimeWitcherSession> _signInWithGoogleIdTokenRest(
@@ -329,7 +298,6 @@ class FirebaseAuthRestClient {
     );
   }
 
-
   Future<Map<String, dynamic>> _identityPost(
     String path,
     Map<String, dynamic> data,
@@ -343,9 +311,7 @@ class FirebaseAuthRestClient {
     try {
       final response = await _dio.post<dynamic>(
         '$_identityBase$path',
-        queryParameters: <String, dynamic>{
-          'key': _apiKey,
-        },
+        queryParameters: <String, dynamic>{'key': _apiKey},
         data: data,
         options: Options(contentType: Headers.jsonContentType),
       );
@@ -394,13 +360,12 @@ class FirebaseAuthRestClient {
     AnimeWitcherSession session,
     Map<String, dynamic> user,
   ) {
+    final providerIds = _providerIds(user['providerUserInfo']);
     return session.copyWith(
       email: _optionalString(user['email']),
       displayName: _optionalString(user['displayName']),
       photoUrl: _optionalString(user['photoUrl']),
-      providerIds: _providerIds(user['providerUserInfo']).isEmpty
-          ? session.providerIds
-          : _providerIds(user['providerUserInfo']),
+      providerIds: providerIds.isEmpty ? session.providerIds : providerIds,
     );
   }
 }

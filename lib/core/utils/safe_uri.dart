@@ -2,18 +2,15 @@
 ///
 /// External signed media URLs should not be decoded/re-encoded with these
 /// helpers because changing their byte representation can invalidate signatures.
-String repairInvalidPercentEncoding(String value) {
+String _repairInvalidPercentEncoding(String value) {
   if (!value.contains('%')) return value;
-  return value.replaceAllMapped(
-    RegExp(r'%(?![0-9A-Fa-f]{2})'),
-    (_) => '%25',
-  );
+  return value.replaceAllMapped(RegExp(r'%(?![0-9A-Fa-f]{2})'), (_) => '%25');
 }
 
 String safeDecodeUriComponent(String value) {
   if (value.isEmpty) return value;
 
-  final repaired = repairInvalidPercentEncoding(value);
+  final repaired = _repairInvalidPercentEncoding(value);
   try {
     return Uri.decodeComponent(repaired);
   } catch (_) {
@@ -30,7 +27,7 @@ Uri? safeTryParseUri(String value) {
   final source = value.trim();
   if (source.isEmpty) return null;
 
-  final repaired = repairInvalidPercentEncoding(source);
+  final repaired = _repairInvalidPercentEncoding(source);
   try {
     return Uri.tryParse(repaired);
   } catch (_) {

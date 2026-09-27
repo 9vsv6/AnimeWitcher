@@ -68,9 +68,10 @@ String normalizePageEscapes(String input) {
 
 /// Post-cut cleanup: decode leftovers and drop broken `amp;` fragments.
 String cleanServerExtract(String value) {
-  return normalizePageEscapes(
-    value,
-  ).replaceAll('amp;', '').replaceAll('&amp;', '&').trim();
+  return normalizePageEscapes(value)
+      .replaceAll('amp;', '')
+      .replaceAll('&amp;', '&')
+      .trim();
 }
 
 /// Classic `indexOf(start) + start.length` … `indexOf(end)` slice.
@@ -117,18 +118,10 @@ String extractGenericServer(String input, String start, String end) {
   return extractBetweenMarkers(normalizedInput, normalizedStart, normalizedEnd);
 }
 
-/// Backward-compatible name used by the original audit tests.
-String extractServerUrlWithRetry({
-  required String body,
-  required String start,
-  required String end,
-}) => extractGenericServer(body, start, end);
-
 /// Prefix `//host/...` and strip wrapping quotes after a marker cut.
 String prepareExtractedMediaUrl(String raw) {
-  var value = cleanServerExtract(
-    raw,
-  ).replaceAll(RegExp(r'''^[\s"'`]+|[\s"'`]+$'''), '');
+  var value = cleanServerExtract(raw)
+      .replaceAll(RegExp(r'''^[\s"'`]+|[\s"'`]+$'''), '');
   if (value.startsWith('//')) value = 'https:$value';
   return value.trim();
 }

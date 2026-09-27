@@ -43,8 +43,7 @@ Dio _stubDio(Map<String, dynamic> animeFields) {
             requestOptions: options,
             statusCode: 200,
             data: <String, dynamic>{
-              'name':
-                  'projects/animewitcher-1c66d/databases/(default)/documents/anime_list/rated-show',
+              'name': 'projects/animewitcher-1c66d/databases/(default)/documents/anime_list/rated-show',
               'fields': animeFields,
             },
           ),
@@ -128,6 +127,22 @@ void main() {
     expect(item.syncData?['awMalScore'], isNull);
     expect(item.syncData?['awImdbId'], 'tt0283754');
     expect(item.syncData?['awImdbScore'], '7.4');
+  });
+
+  test('parses localized digits in duration metadata', () async {
+    final provider = AnimeWitcherNativeProvider(
+      _stubDio(<String, dynamic>{
+        'name': _stringField('Rated Show'),
+        'details': _mapField(<String, dynamic>{
+          'duration': _stringField('٢٤ دقيقة'),
+        }),
+      }),
+      SettingsRepository(_TestStorageService()),
+    );
+
+    final item = await provider.getDetails(url);
+
+    expect(item.duration, 24);
   });
 
   test('maps reviews_closed from the anime document', () async {

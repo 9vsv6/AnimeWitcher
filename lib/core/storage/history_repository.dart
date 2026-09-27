@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+
 import '../account/account_providers.dart';
 import '../account/animewitcher_account_service.dart';
 import '../domain/entity/multimedia_item.dart';
@@ -93,36 +94,6 @@ class HistoryRepository {
   final AnimeWitcherAccountService _accountService;
 
   HistoryRepository(this._storageService, this._accountService);
-
-  /// Saves playback progress only. Recently Watched is intentionally separate:
-  /// it is updated by [recordOpened] when an episode is opened, not while the
-  /// playback clock advances. This mirrors AnimeWitcher's split between
-  /// `last_watched` and `continue_watching`.
-  Future<void> saveProgress(
-    MultimediaItem item,
-    int position,
-    int duration, {
-    String? lastStreamUrl,
-    String? lastEpisodeUrl,
-    int? season,
-    int? episode,
-    String? episodeTitle,
-    String? episodeServerName,
-    String? episodePosterUrl,
-  }) {
-    return saveContinueWatchingProgress(
-      item,
-      position,
-      duration,
-      lastStreamUrl: lastStreamUrl,
-      lastEpisodeUrl: lastEpisodeUrl,
-      season: season,
-      episode: episode,
-      episodeTitle: episodeTitle,
-      episodeServerName: episodeServerName,
-      episodePosterUrl: episodePosterUrl,
-    );
-  }
 
   Future<void> removeFromHistory(String url) async {
     await _storageService.removeFromHistory(url);

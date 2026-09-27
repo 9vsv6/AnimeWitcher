@@ -61,22 +61,26 @@ void main() {
       expect(record?.failureMessage, 'empty');
     });
 
-    test('trustworthy size mismatch does not commit logical completion', () async {
-      final file = File('${temp.path}/mismatch.mp4');
-      await file.writeAsBytes(<int>[1, 2, 3], flush: true);
-      final f = _fixture(file.path, expectedBytes: 4);
-      await f.manager.start(f.request);
+    test(
+      'trustworthy size mismatch does not commit logical completion',
+      () async {
+        final file = File('${temp.path}/mismatch.mp4');
+        await file.writeAsBytes(<int>[1, 2, 3], flush: true);
+        final f = _fixture(file.path, expectedBytes: 4);
+        await f.manager.start(f.request);
 
-      f.gateway.emitComplete(f.gateway.startedSpecs.single.taskId);
-      final record = await _waitForRecord(
-        f.store,
-        f.request.logicalId,
-        (value) => value?.failureCategory == DownloadFailureCategory.integrity,
-      );
+        f.gateway.emitComplete(f.gateway.startedSpecs.single.taskId);
+        final record = await _waitForRecord(
+          f.store,
+          f.request.logicalId,
+          (value) =>
+              value?.failureCategory == DownloadFailureCategory.integrity,
+        );
 
-      expect(record?.completedAtMillis, isNull);
-      expect(record?.failureMessage, 'size-mismatch');
-    });
+        expect(record?.completedAtMillis, isNull);
+        expect(record?.failureMessage, 'size-mismatch');
+      },
+    );
 
     test('valid final file is the only path that commits completion', () async {
       final file = File('${temp.path}/valid.mp4');
@@ -114,8 +118,8 @@ _Fixture _fixture(
   );
   final request = DownloadStartRequestV2(
     logicalId: logicalId,
-    animeId: 'anilist:21',
-    episodeKey: '12',
+    mediaId: 'anilist:21',
+    unitKey: '12',
     variantKey: 'sub:1080p',
     destinationPath: destinationPath,
     sourceDescriptor: const <String, Object?>{

@@ -21,7 +21,7 @@ String? catalogTypeLabel(MultimediaItem item) {
   }
 }
 
-bool hasLatestEpisodeBadge(MultimediaItem item) {
+bool _hasLatestEpisodeBadge(MultimediaItem item) {
   final badge = item.episodeBadge?.trim() ?? '';
   return badge.isNotEmpty;
 }
@@ -29,7 +29,7 @@ bool hasLatestEpisodeBadge(MultimediaItem item) {
 /// Caption under a catalog poster: relative time for latest episodes,
 /// otherwise the work type from the server.
 String? multimediaCardSubtitle(MultimediaItem item) {
-  if (hasLatestEpisodeBadge(item)) {
+  if (_hasLatestEpisodeBadge(item)) {
     final time = formatArabicRelativeTime(item.publishedAt);
     return time.isEmpty ? null : time;
   }
@@ -38,18 +38,18 @@ String? multimediaCardSubtitle(MultimediaItem item) {
 
 /// Year overlay is hidden on latest-episode posters.
 int? multimediaCardYear(MultimediaItem item) {
-  if (hasLatestEpisodeBadge(item)) return null;
+  if (_hasLatestEpisodeBadge(item)) return null;
   final year = item.year;
   if (year == null || year <= 0) return null;
   return year;
 }
 
 String? dubbedPosterBadge(MultimediaItem item) {
-  if (hasLatestEpisodeBadge(item) || !item.isDubbed) return null;
+  if (_hasLatestEpisodeBadge(item) || !item.isDubbed) return null;
   return 'مدبلج';
 }
 
-String? relationPosterBadge(MultimediaItem item) {
+String? _relationPosterBadge(MultimediaItem item) {
   final explicit = item.relationLabel?.trim() ?? '';
   if (explicit.isNotEmpty) return explicit;
 
@@ -97,7 +97,7 @@ String? multimediaCardPosterBadge(
   bool showRelationBadge = false,
 }) {
   if (showRelationBadge) {
-    return relationPosterBadge(item) ?? dubbedPosterBadge(item);
+    return _relationPosterBadge(item) ?? dubbedPosterBadge(item);
   }
   return dubbedPosterBadge(item);
 }

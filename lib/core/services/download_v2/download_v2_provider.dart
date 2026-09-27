@@ -10,7 +10,6 @@ import '../../domain/entity/manga.dart';
 import '../../extensions/base_provider.dart';
 import '../../extensions/extension_manager.dart';
 import '../../storage/settings_repository.dart';
-import '../download_concurrency.dart';
 import '../download_continued_processing_service.dart';
 import '../download_url_refresh.dart';
 import 'background_downloader_gateway.dart';
@@ -32,9 +31,8 @@ final logicalDownloadStoreV2Provider = Provider<LogicalDownloadStoreV2>((ref) {
 final packageBackgroundDownloaderGatewayV2Provider =
     Provider<PackageBackgroundDownloaderGateway>((ref) {
       return PackageBackgroundDownloaderGateway(
-        notificationPreferences: () => ref
-            .read(settingsRepositoryProvider)
-            .getDownloadNotificationPrefs(),
+        notificationPreferences: () =>
+            ref.read(settingsRepositoryProvider).getDownloadNotificationPrefs(),
         diagnostics: ref.read(downloadDiagnosticsV2Provider),
       );
     });
@@ -54,30 +52,32 @@ final downloadSourceResolverV2Provider = Provider<DownloadSourceResolverV2>((
   );
 });
 
-final mangaChapterPageResolverV2Provider =
-    Provider<MangaChapterPageResolverV2>((ref) {
-      final extensions = ref.read(extensionManagerProvider.notifier);
-      return ProviderMangaChapterPageResolverV2(extensions.getProvider);
-    });
+final mangaChapterPageResolverV2Provider = Provider<MangaChapterPageResolverV2>(
+  (ref) {
+    final extensions = ref.read(extensionManagerProvider.notifier);
+    return ProviderMangaChapterPageResolverV2(extensions.getProvider);
+  },
+);
 
 /// Safe append-only V2 diagnostics. The user-facing download diagnostic switch
 /// remains the authority for whether anything is written at all. The sink only
 /// accepts the allowlisted V2 event DTO and writes inside the dedicated `log`
 /// directory, so signed URLs/headers/provider payloads never reach this file.
-final downloadDiagnosticsFileV2Provider =
-    Provider<FileDownloadDiagnosticsV2>((ref) {
-      final settings = ref.read(settingsRepositoryProvider);
-      unawaited(
-        configureNativeDownloadDiagnosticLog(settings.getDownloadDiagnosticLog()),
-      );
-      return FileDownloadDiagnosticsV2(
-        enabled: settings.getDownloadDiagnosticLog,
-        directoryProvider: () async {
-          final documents = await getApplicationDocumentsDirectory();
-          return Directory(p.join(documents.path, 'log'));
-        },
-      );
-    });
+final downloadDiagnosticsFileV2Provider = Provider<FileDownloadDiagnosticsV2>((
+  ref,
+) {
+  final settings = ref.read(settingsRepositoryProvider);
+  unawaited(
+    configureNativeDownloadDiagnosticLog(settings.getDownloadDiagnosticLog()),
+  );
+  return FileDownloadDiagnosticsV2(
+    enabled: settings.getDownloadDiagnosticLog,
+    directoryProvider: () async {
+      final documents = await getApplicationDocumentsDirectory();
+      return Directory(p.join(documents.path, 'log'));
+    },
+  );
+});
 
 final downloadDiagnosticsV2Provider = Provider<DownloadDiagnosticsV2>(
   (ref) => ref.watch(downloadDiagnosticsFileV2Provider),
@@ -108,9 +108,10 @@ final downloadManagerV2Provider = Provider<DownloadManagerV2>((ref) {
   }
 
   unawaited(
-    connectivity.checkConnectivity().then(recordNetworkPath).catchError(
-      (Object _, StackTrace __) {},
-    ),
+    connectivity
+        .checkConnectivity()
+        .then(recordNetworkPath)
+        .catchError((Object _, StackTrace __) {}),
   );
   final networkSubscription = connectivity.onConnectivityChanged.listen(
     recordNetworkPath,
@@ -119,19 +120,14 @@ final downloadManagerV2Provider = Provider<DownloadManagerV2>((ref) {
   final pauseReadiness = Platform.isIOS
       ? NativeParallelPauseReadinessV2()
       : null;
-  final packageGateway = ref.read(
-    packageBackgroundDownloaderGatewayV2Provider,
-  );
+  final packageGateway = ref.read(packageBackgroundDownloaderGatewayV2Provider);
   final continuedProcessing = IosDownloadContinuedProcessingObserverV2(
     pauseReadiness: pauseReadiness,
     nativeBackgroundPlans: packageGateway.nativeBackgroundPlansV2,
     releaseNativeBackgroundOffers:
         packageGateway.releaseNativeBackgroundOffersV2,
     onNativeNetworkSpeed:
-        ({
-          required String taskId,
-          required double bytesPerSecond,
-        }) {
+        ({required String taskId, required double bytesPerSecond}) {
           manager.observeNativeNetworkSpeed(
             taskId: taskId,
             bytesPerSecond: bytesPerSecond,
@@ -233,5 +229,4 @@ final class _ProviderDownloadSourceResolverV2
       headers: Map<String, String>.from(refreshed.headers),
     );
   }
-
 }

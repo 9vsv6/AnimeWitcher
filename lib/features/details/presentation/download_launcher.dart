@@ -305,11 +305,7 @@ class DownloadLauncher {
                           (e) => e.url == resolveUrl,
                         );
                     unawaited(
-                      cacheSkipSegmentsForDownloadV2(
-                        _ref,
-                        item,
-                        episodeData,
-                      ),
+                      cacheSkipSegmentsForDownloadV2(_ref, item, episodeData),
                     );
                     final notificationPrefs = _ref
                         .read(settingsRepositoryProvider)
@@ -383,8 +379,7 @@ class DownloadLauncher {
                         .read(settingsRepositoryProvider)
                         .getDownloadParallelParts();
                     final isIOS =
-                        !kIsWeb &&
-                        defaultTargetPlatform == TargetPlatform.iOS;
+                        !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
                     final selectedParallelChunks = selectV2DownloadParts(
                       preference: preference,
                       totalBytes: metadata.size ?? -1,
@@ -396,7 +391,9 @@ class DownloadLauncher {
                       isIOS: isIOS,
                     );
                     final absolutePath =
-                        await absoluteDownloadDestinationPathV2(destinationPath);
+                        await absoluteDownloadDestinationPathV2(
+                          destinationPath,
+                        );
                     final storage = _ref.read(storageServiceProvider);
                     await storage.saveDownloadMetadata(
                       logicalId.value,
@@ -407,13 +404,15 @@ class DownloadLauncher {
                       logicalId: logicalId.value,
                     );
 
-                    final downloadManager = _ref.read(downloadManagerV2Provider);
+                    final downloadManager = _ref.read(
+                      downloadManagerV2Provider,
+                    );
                     try {
                       await downloadManager.start(
                         DownloadStartRequestV2(
                           logicalId: logicalId,
-                          animeId: animeId,
-                          episodeKey: episodeKey,
+                          mediaId: animeId,
+                          unitKey: episodeKey,
                           variantKey: variantKey,
                           destinationPath: destinationPath,
                           sourceDescriptor: descriptor.toJson(),
@@ -465,12 +464,7 @@ class DownloadLauncher {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
-              launch(
-                context,
-                item,
-                episodeUrl: resolveUrl,
-                episode: episode,
-              );
+              launch(context, item, episodeUrl: resolveUrl, episode: episode);
             },
             child: Text(l10n.selectAnotherSource),
           ),

@@ -54,8 +54,10 @@ final class DownloadTransportSnapshot {
   final int? totalBytes;
   final double networkSpeedMBps;
   final Duration timeRemaining;
+
   /// Requested connection ceiling for this parent transfer when known.
   final int? configuredConnections;
+
   /// Currently owned native/range writers for this parent when observable.
   final int? activeConnections;
   final DownloadFailureCategory? failureCategory;
@@ -81,10 +83,8 @@ final class LogicalDownloadRecordV2 {
     required this.schemaVersion,
     required this.logicalId,
     this.mediaKind = DownloadMediaKind.videoEpisode,
-    String? mediaId,
-    String? unitKey,
-    String? animeId,
-    String? episodeKey,
+    required this.mediaId,
+    required this.unitKey,
     required this.variantKey,
     required this.generation,
     required this.taskId,
@@ -100,10 +100,8 @@ final class LogicalDownloadRecordV2 {
     this.retries = 2,
     this.parallelChunks = 1,
     this.awaitingAdmission = false,
-  }) : mediaId = mediaId ?? animeId ?? '',
-       unitKey = unitKey ?? episodeKey ?? '',
-       assert((mediaId ?? animeId ?? '') != ''),
-       assert((unitKey ?? episodeKey ?? '') != ''),
+  }) : assert(mediaId != ''),
+       assert(unitKey != ''),
        assert(retries >= 0),
        assert(parallelChunks > 0);
 
@@ -131,20 +129,12 @@ final class LogicalDownloadRecordV2 {
   final bool awaitingAdmission;
   final int updatedAtMillis;
 
-  @Deprecated('Use mediaId')
-  String get animeId => mediaId;
-
-  @Deprecated('Use unitKey')
-  String get episodeKey => unitKey;
-
   LogicalDownloadRecordV2 copyWith({
     int? schemaVersion,
     DownloadLogicalId? logicalId,
     DownloadMediaKind? mediaKind,
     String? mediaId,
     String? unitKey,
-    String? animeId,
-    String? episodeKey,
     String? variantKey,
     int? generation,
     String? taskId,
@@ -167,8 +157,8 @@ final class LogicalDownloadRecordV2 {
       schemaVersion: schemaVersion ?? this.schemaVersion,
       logicalId: logicalId ?? this.logicalId,
       mediaKind: mediaKind ?? this.mediaKind,
-      mediaId: mediaId ?? animeId ?? this.mediaId,
-      unitKey: unitKey ?? episodeKey ?? this.unitKey,
+      mediaId: mediaId ?? this.mediaId,
+      unitKey: unitKey ?? this.unitKey,
       variantKey: variantKey ?? this.variantKey,
       generation: generation ?? this.generation,
       taskId: taskId ?? this.taskId,
@@ -182,7 +172,9 @@ final class LogicalDownloadRecordV2 {
       failureCategory: clearFailure
           ? null
           : failureCategory ?? this.failureCategory,
-      failureMessage: clearFailure ? null : failureMessage ?? this.failureMessage,
+      failureMessage: clearFailure
+          ? null
+          : failureMessage ?? this.failureMessage,
       allowPause: allowPause ?? this.allowPause,
       retries: retries ?? this.retries,
       parallelChunks: parallelChunks ?? this.parallelChunks,
@@ -276,10 +268,9 @@ final class LogicalDownloadRecordV2 {
       allowPause: map['allowPause'] is bool ? map['allowPause']! as bool : true,
       retries: retries,
       parallelChunks: parallelChunks,
-      awaitingAdmission:
-          map['awaitingAdmission'] is bool
-              ? map['awaitingAdmission']! as bool
-              : false,
+      awaitingAdmission: map['awaitingAdmission'] is bool
+          ? map['awaitingAdmission']! as bool
+          : false,
       updatedAtMillis: updatedAtMillis,
     );
   }

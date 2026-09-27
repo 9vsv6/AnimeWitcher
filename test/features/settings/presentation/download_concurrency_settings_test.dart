@@ -38,134 +38,137 @@ void main() {
     }
   });
 
-  testWidgets('Settings downloads group uses sliders for episodes and connections', (
-    tester,
-  ) async {
-    final storage = MemoryStorageService();
-    await tester.runAsync(TestFonts.loadWalkthroughFonts);
+  testWidgets(
+    'Settings downloads group uses sliders for episodes and connections',
+    (tester) async {
+      final storage = MemoryStorageService();
+      await tester.runAsync(TestFonts.loadWalkthroughFonts);
 
-    await tester.binding.setSurfaceSize(const Size(390, 844));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          storageServiceProvider.overrideWithValue(storage),
-          appVersionProvider.overrideWith((ref) async => 'test'),
-          deviceProfileProvider.overrideWith(
-            (ref) async => const DeviceProfile(),
-          ),
-        ],
-        child: MaterialApp(
-          locale: const Locale('ar'),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          theme: ThemeData(
-            brightness: Brightness.dark,
-            fontFamily: 'NotoSansArabic',
-            scaffoldBackgroundColor: Colors.black,
-            colorScheme: const ColorScheme.dark(
-              primary: Color(0xFFEEC60A),
-              surface: Color(0xFF1A1A1A),
-              onSurface: Color(0xFFE5E7EB),
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            storageServiceProvider.overrideWithValue(storage),
+            appVersionProvider.overrideWith((ref) async => 'test'),
+            deviceProfileProvider.overrideWith(
+              (ref) async => const DeviceProfile(),
+            ),
+          ],
+          child: MaterialApp(
+            locale: const Locale('ar'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            theme: ThemeData(
+              brightness: Brightness.dark,
+              fontFamily: 'NotoSansArabic',
+              scaffoldBackgroundColor: Colors.black,
+              colorScheme: const ColorScheme.dark(
+                primary: Color(0xFFEEC60A),
+                surface: Color(0xFF1A1A1A),
+                onSurface: Color(0xFFE5E7EB),
+              ),
+            ),
+            home: const RepaintBoundary(
+              key: ValueKey('settings-download-concurrency'),
+              child: SettingsScreen(),
             ),
           ),
-          home: const RepaintBoundary(
-            key: ValueKey('settings-download-concurrency'),
-            child: SettingsScreen(),
-          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.dragUntilVisible(
-      find.text(downloadConcurrencyTitle()),
-      find.byType(Scrollable).first,
-      const Offset(0, -400),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('التنزيلات'), findsWidgets);
-    expect(find.text(downloadConcurrencyTitle()), findsOneWidget);
-    expect(find.text(downloadConcurrencySubtitle(1)), findsOneWidget);
-
-    await tester.tap(find.text(downloadConcurrencyTitle()));
-    await tester.pumpAndSettle();
-
-    final concurrencyFinder = find.byKey(
-      const ValueKey('download-concurrency-slider'),
-    );
-    expect(concurrencyFinder, findsOneWidget);
-    var concurrencySlider = tester.widget<CustomSlider>(concurrencyFinder);
-    expect(concurrencySlider.min, kDownloadConcurrencyMin.toDouble());
-    expect(concurrencySlider.max, kDownloadConcurrencyMax.toDouble());
-    expect(
-      concurrencySlider.divisions,
-      kDownloadConcurrencyMax - kDownloadConcurrencyMin,
-    );
-    expect(concurrencySlider.value, 1);
-
-    concurrencySlider.onChanged!(3);
-    await tester.pump();
-    expect(find.text('3 تحميلات في نفس الوقت'), findsOneWidget);
-    // Slider movement is provisional until Save, like upstream SkyStream.
-    expect(storage.getDownloadConcurrency(), 1);
-
-    await tester.tap(find.text('حفظ'));
-    await tester.pumpAndSettle();
-
-    expect(storage.getDownloadConcurrency(), 3);
-    expect(find.text(downloadConcurrencySubtitle(3)), findsOneWidget);
-    expect(find.text(downloadConcurrencySubtitle(1)), findsNothing);
-
-    await tester.dragUntilVisible(
-      find.text(downloadPartsTitle()),
-      find.byType(Scrollable).first,
-      const Offset(0, -240),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text(downloadPartsTitle()), findsOneWidget);
-    expect(find.text(downloadPartsSubtitle(kDownloadPartsAuto)), findsOneWidget);
-
-    await tester.tap(find.text(downloadPartsTitle()));
-    await tester.pumpAndSettle();
-
-    final partsFinder = find.byKey(const ValueKey('download-parts-slider'));
-    expect(partsFinder, findsOneWidget);
-    var partsSlider = tester.widget<CustomSlider>(partsFinder);
-    expect(partsSlider.min, kDownloadPartsAuto.toDouble());
-    expect(partsSlider.max, kDownloadPartsMax.toDouble());
-    expect(partsSlider.divisions, 16);
-    expect(partsSlider.value, 0);
-    expect(find.text('تلقائي'), findsWidgets);
-
-    partsSlider.onChanged!(4);
-    await tester.pump();
-    expect(find.text('4 اتصالات متوازية'), findsOneWidget);
-    expect(storage.getDownloadParallelParts(), kDownloadPartsAuto);
-
-    await tester.tap(find.text('حفظ'));
-    await tester.pumpAndSettle();
-
-    expect(storage.getDownloadParallelParts(), 4);
-    expect(find.text(downloadPartsSubtitle(4)), findsOneWidget);
-
-    final artifacts = debugShotDirectory();
-    if (artifacts == null) return;
-
-    await tester.runAsync(() async {
-      final boundary = tester.renderObject<RenderRepaintBoundary>(
-        find.byKey(const ValueKey('settings-download-concurrency')),
       );
-      final image = await boundary.toImage(pixelRatio: 2);
-      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      File(
-        '${artifacts.path}/settings_concurrent_downloads.png',
-      ).writeAsBytesSync(bytes!.buffer.asUint8List());
-    });
-  });
+      await tester.pumpAndSettle();
+
+      await tester.dragUntilVisible(
+        find.text(downloadConcurrencyTitle()),
+        find.byType(Scrollable).first,
+        const Offset(0, -400),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('التنزيلات'), findsWidgets);
+      expect(find.text(downloadConcurrencyTitle()), findsOneWidget);
+      expect(find.text(downloadConcurrencySubtitle(1)), findsOneWidget);
+
+      await tester.tap(find.text(downloadConcurrencyTitle()));
+      await tester.pumpAndSettle();
+
+      final concurrencyFinder = find.byKey(
+        const ValueKey('download-concurrency-slider'),
+      );
+      expect(concurrencyFinder, findsOneWidget);
+      final concurrencySlider = tester.widget<CustomSlider>(concurrencyFinder);
+      expect(concurrencySlider.min, kDownloadConcurrencyMin.toDouble());
+      expect(concurrencySlider.max, kDownloadConcurrencyMax.toDouble());
+      expect(
+        concurrencySlider.divisions,
+        kDownloadConcurrencyMax - kDownloadConcurrencyMin,
+      );
+      expect(concurrencySlider.value, 1);
+
+      concurrencySlider.onChanged!(3);
+      await tester.pump();
+      expect(find.text('3 تحميلات في نفس الوقت'), findsOneWidget);
+      // Slider movement is provisional until Save, like upstream SkyStream.
+      expect(storage.getDownloadConcurrency(), 1);
+
+      await tester.tap(find.text('حفظ'));
+      await tester.pumpAndSettle();
+
+      expect(storage.getDownloadConcurrency(), 3);
+      expect(find.text(downloadConcurrencySubtitle(3)), findsOneWidget);
+      expect(find.text(downloadConcurrencySubtitle(1)), findsNothing);
+
+      await tester.dragUntilVisible(
+        find.text(downloadPartsTitle()),
+        find.byType(Scrollable).first,
+        const Offset(0, -240),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text(downloadPartsTitle()), findsOneWidget);
+      expect(
+        find.text(downloadPartsSubtitle(kDownloadPartsAuto)),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text(downloadPartsTitle()));
+      await tester.pumpAndSettle();
+
+      final partsFinder = find.byKey(const ValueKey('download-parts-slider'));
+      expect(partsFinder, findsOneWidget);
+      final partsSlider = tester.widget<CustomSlider>(partsFinder);
+      expect(partsSlider.min, kDownloadPartsAuto.toDouble());
+      expect(partsSlider.max, kDownloadPartsMax.toDouble());
+      expect(partsSlider.divisions, 16);
+      expect(partsSlider.value, 0);
+      expect(find.text('تلقائي'), findsWidgets);
+
+      partsSlider.onChanged!(4);
+      await tester.pump();
+      expect(find.text('4 اتصالات متوازية'), findsOneWidget);
+      expect(storage.getDownloadParallelParts(), kDownloadPartsAuto);
+
+      await tester.tap(find.text('حفظ'));
+      await tester.pumpAndSettle();
+
+      expect(storage.getDownloadParallelParts(), 4);
+      expect(find.text(downloadPartsSubtitle(4)), findsOneWidget);
+
+      final artifacts = debugShotDirectory();
+      if (artifacts == null) return;
+
+      await tester.runAsync(() async {
+        final boundary = tester.renderObject<RenderRepaintBoundary>(
+          find.byKey(const ValueKey('settings-download-concurrency')),
+        );
+        final image = await boundary.toImage(pixelRatio: 2);
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        File('${artifacts.path}/settings_concurrent_downloads.png')
+            .writeAsBytesSync(bytes!.buffer.asUint8List());
+      });
+    },
+  );
 
   testWidgets('Settings can turn all download notifications off', (
     tester,
@@ -248,9 +251,8 @@ void main() {
         );
         final image = await boundary.toImage(pixelRatio: 2);
         final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-        File(
-          '${artifacts.path}/settings_download_notifications.png',
-        ).writeAsBytesSync(bytes!.buffer.asUint8List());
+        File('${artifacts.path}/settings_download_notifications.png')
+            .writeAsBytesSync(bytes!.buffer.asUint8List());
       });
     }
 

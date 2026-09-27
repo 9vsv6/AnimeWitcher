@@ -68,14 +68,13 @@ void main() {
     const settings = MangaReaderSettings();
 
     expect(settings.toJson()['autoReadDuplicateChapters'], isFalse);
-    expect(settings.toJson().containsKey('chapterSwipeStartAction'), isTrue);
-    expect(settings.toJson().containsKey('chapterSwipeEndAction'), isTrue);
     expect(settings.toJson().containsKey('readerHideThreshold'), isTrue);
     expect(settings.toJson().containsKey('flashColor'), isTrue);
+    // Mangayomi's per-page colour settings stay gone; the filter the reader
+    // has now is Mihon's, drawn once over the page (see the Mihon features
+    // test).
     for (final key in <String>[
       'invertColors',
-      'grayscale',
-      'brightness',
       'contrast',
       'saturation',
       'enableCustomColorFilter',
@@ -159,10 +158,7 @@ void main() {
 
   test('Mangayomi double-page spreads preserve logical page order', () {
     expect(
-      mangaReaderPageSpreads(
-        pageCount: 5,
-        singleFirst: true,
-      ),
+      mangaReaderPageSpreads(pageCount: 5, singleFirst: true),
       const <List<int>>[
         <int>[0],
         <int>[1, 2],
@@ -170,10 +166,7 @@ void main() {
       ],
     );
     expect(
-      mangaReaderPageSpreads(
-        pageCount: 4,
-        singleFirst: false,
-      ),
+      mangaReaderPageSpreads(pageCount: 4, singleFirst: false),
       const <List<int>>[
         <int>[0, 1],
         <int>[2, 3],
@@ -332,10 +325,7 @@ void main() {
   });
 
   test('Mangayomi landscape zoom respects start position', () {
-    const left = MangaReaderSettings(
-      landscapeZoom: true,
-      zoomStartPosition: 0,
-    );
+    const left = MangaReaderSettings(landscapeZoom: true, zoomStartPosition: 0);
     const right = MangaReaderSettings(
       landscapeZoom: true,
       zoomStartPosition: 1,
@@ -369,6 +359,4 @@ void main() {
     expect(rightTarget!.focalPoint.dx, viewport.width);
     expect(centerTarget!.focalPoint, viewport.center(Offset.zero));
   });
-
-
 }

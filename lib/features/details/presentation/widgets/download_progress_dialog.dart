@@ -186,7 +186,7 @@ class _DownloadProgressDialogState
                       context,
                       Icons.timer_outlined,
                       l10n.remaining,
-                      formatDownloadTimeRemaining(context, data, l10n),
+                      formatDownloadTimeRemaining(data, l10n),
                       valueTextDirection:
                           Localizations.localeOf(context).languageCode == 'ar'
                           ? TextDirection.rtl

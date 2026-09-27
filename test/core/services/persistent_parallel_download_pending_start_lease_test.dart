@@ -1,7 +1,5 @@
-import 'dart:async';
 import 'dart:io';
 
-import 'package:animewitcher/core/services/download_parallel.dart';
 import 'package:animewitcher/core/services/persistent_parallel_download.dart';
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -19,12 +17,14 @@ void main() {
     fail('Timed out waiting for pending-start lease condition');
   }
 
-  Future<({
-    Directory directory,
-    ParallelDownloadTask parent,
-    PersistentParallelDownload coordinator,
-    List<DownloadTask> starts,
-  })>
+  Future<
+    ({
+      Directory directory,
+      ParallelDownloadTask parent,
+      PersistentParallelDownload coordinator,
+      List<DownloadTask> starts,
+    })
+  >
   buildHarness({
     required String id,
     required Future<Set<String>> Function() livePartIds,
@@ -85,40 +85,37 @@ void main() {
     }
   }
 
-  test(
-    'accepted multipart start with no callback releases stale pending reservation',
-    () async {
-      final harness = await buildHarness(
-        id: 'pending-start-episode',
-        livePartIds: () async => <String>{},
+  test('accepted multipart start with no callback releases stale pending reservation', () async {
+    final harness = await buildHarness(
+      id: 'pending-start-episode',
+      livePartIds: () async => <String>{},
+    );
+    try {
+      expect(await harness.coordinator.start(harness.parent, 2 * mib), isTrue);
+      expect(harness.starts, hasLength(1));
+      final first = harness.starts.single;
+
+      // Another range may use the freed slot while this range observes its
+      // recovery backoff, but the original immutable Range must itself retry
+      // with a new attempt generation.
+      await waitUntil(
+        () =>
+            harness.starts
+                .where((task) => task.taskId == first.taskId)
+                .length >=
+            2,
       );
-      try {
-        expect(await harness.coordinator.start(harness.parent, 2 * mib), isTrue);
-        expect(harness.starts, hasLength(1));
-        final first = harness.starts.single;
 
-        // Another range may use the freed slot while this range observes its
-        // recovery backoff, but the original immutable Range must itself retry
-        // with a new attempt generation.
-        await waitUntil(
-          () =>
-              harness.starts
-                  .where((task) => task.taskId == first.taskId)
-                  .length >=
-              2,
-        );
-
-        final retriedFirstRange = harness.starts
-            .where((task) => task.taskId == first.taskId)
-            .skip(1)
-            .first;
-        expect(retriedFirstRange.metaData, isNot(first.metaData));
-        expect(harness.coordinator.isActive(harness.parent.taskId), isTrue);
-      } finally {
-        await disposeHarness(harness);
-      }
-    },
-  );
+      final retriedFirstRange = harness.starts
+          .where((task) => task.taskId == first.taskId)
+          .skip(1)
+          .first;
+      expect(retriedFirstRange.metaData, isNot(first.metaData));
+      expect(harness.coordinator.isActive(harness.parent.taskId), isTrue);
+    } finally {
+      await disposeHarness(harness);
+    }
+  });
 
   test('proven runtime ownership adopts pending start without duplicate writer', () async {
     final live = <String>{};
@@ -172,27 +169,33 @@ void main() {
     }
   });
 
-  test('reconcile during pending-start lease adopts real native ownership', () async {
-    final harness = await buildHarness(
-      id: 'pending-start-reconcile',
-      livePartIds: () async => <String>{},
-      lease: const Duration(milliseconds: 200),
-    );
-    try {
-      expect(await harness.coordinator.start(harness.parent, 2 * mib), isTrue);
-      final first = harness.starts.single;
-
-      await harness.coordinator.reconcile(() async => <String>{first.taskId});
-      await waitUntil(() => harness.starts.length >= 2);
-
-      expect(
-        harness.starts.where((task) => task.taskId == first.taskId),
-        hasLength(1),
+  test(
+    'reconcile during pending-start lease adopts real native ownership',
+    () async {
+      final harness = await buildHarness(
+        id: 'pending-start-reconcile',
+        livePartIds: () async => <String>{},
+        lease: const Duration(milliseconds: 200),
       );
-    } finally {
-      await disposeHarness(harness);
-    }
-  });
+      try {
+        expect(
+          await harness.coordinator.start(harness.parent, 2 * mib),
+          isTrue,
+        );
+        final first = harness.starts.single;
+
+        await harness.coordinator.reconcile(() async => <String>{first.taskId});
+        await waitUntil(() => harness.starts.length >= 2);
+
+        expect(
+          harness.starts.where((task) => task.taskId == first.taskId),
+          hasLength(1),
+        );
+      } finally {
+        await disposeHarness(harness);
+      }
+    },
+  );
 
   test('pause during pending-start lease cancels lease recovery', () async {
     final harness = await buildHarness(

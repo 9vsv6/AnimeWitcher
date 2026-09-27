@@ -11,13 +11,14 @@ import 'package:animewitcher/features/home/presentation/widgets/provider_search_
 import 'package:animewitcher/features/search/presentation/widgets/search_result_section.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
-import 'package:animewitcher/shared/widgets/catalog_ltr.dart';
+import 'package:animewitcher/shared/widgets/catalog_direction.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
 import '../../support/debug_shots.dart';
+import '../../support/test_fonts.dart';
 
 const Size _phoneLandscape = Size(800, 360);
 const Size _phonePortrait = Size(390, 844);
@@ -30,32 +31,6 @@ MultimediaItem _poster(int index) {
     catalogType: 'مسلسل',
     year: 2024,
   );
-}
-
-Future<ByteData> _fontBytes(String path) async {
-  return ByteData.sublistView(await File(path).readAsBytes());
-}
-
-Future<void> _loadFonts() async {
-  const arabicRegular =
-      '/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf';
-  if (!File(arabicRegular).existsSync()) return;
-  await (FontLoader('NotoSansArabic')
-        ..addFont(_fontBytes(arabicRegular))
-        ..addFont(
-          _fontBytes('/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf'),
-        ))
-      .load();
-  const roboto =
-      '/opt/flutter/bin/cache/artifacts/material_fonts/Roboto-Regular.ttf';
-  if (File(roboto).existsSync()) {
-    await (FontLoader('Roboto')..addFont(_fontBytes(roboto))).load();
-  }
-  const icons =
-      '/opt/flutter/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf';
-  if (File(icons).existsSync()) {
-    await (FontLoader('MaterialIcons')..addFont(_fontBytes(icons))).load();
-  }
 }
 
 Future<void> _setPhoneSurface(WidgetTester tester, {required Size size}) async {
@@ -83,8 +58,8 @@ ThemeData _darkTheme() {
   );
 }
 
-Widget _app({required Widget child, bool catalogLtr = false}) {
-  final body = catalogLtr ? CatalogLtr(child: child) : child;
+Widget _app({required Widget child, bool catalogDirection = false}) {
+  final body = catalogDirection ? CatalogDirection(child: child) : child;
   return ProviderScope(
     child: MaterialApp(
       locale: const Locale('ar'),
@@ -105,9 +80,8 @@ Future<void> _writeShot(WidgetTester tester, String filename, Key key) async {
     );
     final image = await boundary.toImage(pixelRatio: 2);
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-    File(
-      '${artifacts.path}/$filename',
-    ).writeAsBytesSync(bytes!.buffer.asUint8List());
+    File('${artifacts.path}/$filename')
+        .writeAsBytesSync(bytes!.buffer.asUint8List());
   });
 }
 
@@ -124,11 +98,11 @@ void main() {
     tester,
   ) async {
     await _setPhoneSurface(tester, size: const Size(800, 420));
-    await tester.runAsync(_loadFonts);
+    await tester.runAsync(TestFonts.loadWalkthroughFonts);
 
     await tester.pumpWidget(
       _app(
-        catalogLtr: true,
+        catalogDirection: true,
         child: RepaintBoundary(
           key: const ValueKey('search-landscape-grid-shot'),
           child: CustomScrollView(
@@ -152,7 +126,7 @@ void main() {
     ];
     for (var i = 1; i < 7; i++) {
       expect((rects[i].top - rects[0].top).abs(), lessThan(1));
-      expect(rects[i].left, greaterThan(rects[i - 1].left));
+      expect(rects[i].left, lessThan(rects[i - 1].left));
     }
     expect(rects[7].top, greaterThan(rects[0].bottom - 1));
     expect(rects[0].width, lessThan(800 / 6));
@@ -172,7 +146,7 @@ void main() {
 
     await tester.pumpWidget(
       _app(
-        catalogLtr: true,
+        catalogDirection: true,
         child: CustomScrollView(
           slivers: [
             SearchResultSection(
@@ -237,7 +211,7 @@ void main() {
 
   testWidgets('episode list is 2 columns in phone landscape', (tester) async {
     await _setPhoneSurface(tester, size: _phoneLandscape);
-    await tester.runAsync(_loadFonts);
+    await tester.runAsync(TestFonts.loadWalkthroughFonts);
 
     await tester.pumpWidget(
       _app(
@@ -326,7 +300,7 @@ void main() {
     tester,
   ) async {
     await _setPhoneSurface(tester, size: _phoneLandscape);
-    await tester.runAsync(_loadFonts);
+    await tester.runAsync(TestFonts.loadWalkthroughFonts);
 
     const options = ProviderSearchFilterOptions(
       genres: <String>[

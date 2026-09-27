@@ -1,57 +1,114 @@
-import 'dart:io';
-
+import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
+import 'package:animewitcher/features/library/presentation/downloads_provider.dart';
+import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+DownloadItem _download({
+  required String taskId,
+  String? logicalId,
+  String trackingUrl = '',
+  String destinationPath = '',
+}) {
+  return DownloadItem(
+    task: DownloadTask(
+      taskId: taskId,
+      url: 'https://example.test/$taskId',
+      filename: '$taskId.mp4',
+    ),
+    status: TaskStatus.running,
+    progress: 0.5,
+    item: MultimediaItem(title: 'Show', url: 'anime://show', posterUrl: ''),
+    logicalId: logicalId,
+    trackingUrl: trackingUrl,
+    destinationPath: destinationPath,
+    timestamp: 1,
+  );
+}
 
 void main() {
   group('V2 downloads UI logical identity', () {
-    test('DownloadItem carries the canonical logical id', () {
-      final source = File(
-        'lib/features/library/presentation/downloads_provider.dart',
-      ).readAsStringSync();
-      final classStart = source.indexOf('class DownloadItem {');
-      final classEnd = source.indexOf('bool downloadsPointAtSameTarget(', classStart);
-      expect(classStart, greaterThanOrEqualTo(0));
-      expect(classEnd, greaterThan(classStart));
-      final body = source.substring(classStart, classEnd);
+    test(
+      'known different logical ids do not fall through to fallback matching',
+      () {
+        final first = _download(
+          taskId: 'first',
+          logicalId: 'logical-a',
+          trackingUrl: 'episode://same',
+          destinationPath: '/Downloads/same.mp4',
+        );
+        final second = _download(
+          taskId: 'second',
+          logicalId: 'logical-b',
+          trackingUrl: 'episode://same',
+          destinationPath: '/Downloads/same.mp4',
+        );
 
-      expect(body, contains('final String? logicalId;'));
-      expect(body, contains('this.logicalId'));
-    });
+        expect(downloadsPointAtSameTarget(first, second), isFalse);
+      },
+    );
 
-    test('known different logical ids do not fall through to fallback matching', () {
-      final source = File(
-        'lib/features/library/presentation/downloads_provider.dart',
-      ).readAsStringSync();
-      final start = source.indexOf('bool downloadsPointAtSameTarget(');
-      final end = source.indexOf('int _statusRank(', start);
-      expect(start, greaterThanOrEqualTo(0));
-      expect(end, greaterThan(start));
-      final body = source.substring(start, end);
-
-      expect(body, contains('logicalA'));
-      expect(body, contains('logicalB'));
-      expect(body, contains('return logicalA == logicalB'));
-      expect(
-        body.indexOf('return logicalA == logicalB'),
-        lessThan(body.indexOf('trackingUrl')),
+    test('same logical id groups rows even when transport details differ', () {
+      final first = _download(
+        taskId: 'first',
+        logicalId: 'logical-a',
+        trackingUrl: 'episode://one',
+        destinationPath: '/Downloads/one.mp4',
       );
+      final second = _download(
+        taskId: 'second',
+        logicalId: 'logical-a',
+        trackingUrl: 'episode://two',
+        destinationPath: '/Downloads/two.mp4',
+      );
+
+      final groups = groupDownloadsByEpisodeOrFile([first, second]);
+
+      expect(groups, hasLength(1));
+      expect(groups.single, containsAll(<DownloadItem>[first, second]));
     });
 
-    test('grouping uses tracking/file keys only when logical id is absent', () {
-      final source = File(
-        'lib/features/library/presentation/downloads_provider.dart',
-      ).readAsStringSync();
-      final start = source.indexOf('List<List<DownloadItem>> groupDownloadsByEpisodeOrFile(');
-      final end = source.indexOf('class CollapsedDownloads', start);
-      expect(start, greaterThanOrEqualTo(0));
-      expect(end, greaterThan(start));
-      final body = source.substring(start, end);
+    test(
+      'tracking and file fallback is used only when logical id is absent',
+      () {
+        final byTrackingA = _download(
+          taskId: 'tracking-a',
+          trackingUrl: 'episode://same',
+        );
+        final byTrackingB = _download(
+          taskId: 'tracking-b',
+          trackingUrl: 'episode://same',
+        );
+        final byFileA = _download(
+          taskId: 'file-a',
+          destinationPath: '/Downloads/same.mp4',
+        );
+        final byFileB = _download(
+          taskId: 'file-b',
+          destinationPath: '/Downloads/same.mp4',
+        );
 
-      expect(body, contains('byLogicalId'));
-      expect(body, contains('if (logicalId != null && logicalId.isNotEmpty)'));
-      expect(body, contains('continue;'));
-      expect(body, contains('trackingUrl'));
-      expect(body, contains('destinationPath'));
-    });
+        final groups = groupDownloadsByEpisodeOrFile([
+          byTrackingA,
+          byTrackingB,
+          byFileA,
+          byFileB,
+        ]);
+
+        expect(groups, hasLength(2));
+        expect(
+          groups.any(
+            (group) =>
+                group.contains(byTrackingA) && group.contains(byTrackingB),
+          ),
+          isTrue,
+        );
+        expect(
+          groups.any(
+            (group) => group.contains(byFileA) && group.contains(byFileB),
+          ),
+          isTrue,
+        );
+      },
+    );
   });
 }

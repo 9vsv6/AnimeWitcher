@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
@@ -13,13 +14,15 @@ import 'package:animewitcher/core/account/animewitcher_comment_models.dart';
 import 'package:animewitcher/features/comments/presentation/animewitcher_comments_screen.dart';
 import 'package:animewitcher/core/storage/history_repository.dart';
 import 'package:animewitcher/core/storage/episode_watch_repository.dart';
-import 'package:animewitcher/core/utils/download_time_remaining.dart' show DownloadProgressData;
+import 'package:animewitcher/core/utils/download_time_remaining.dart'
+    show DownloadProgressData;
 import 'package:animewitcher/core/utils/localized_text.dart';
 import 'package:animewitcher/core/utils/artwork_quality.dart';
 import 'package:animewitcher/core/utils/episode_label.dart';
 import 'package:animewitcher/core/utils/image_fallbacks.dart';
 import 'package:animewitcher/core/utils/layout_constants.dart';
 import 'package:animewitcher/core/utils/responsive_breakpoints.dart';
+
 import '../../../../shared/widgets/thumbnail_error_placeholder.dart';
 import '../../../library/presentation/download_delete_confirmation.dart';
 import '../../../library/presentation/download_progress_v2_provider.dart';
@@ -190,8 +193,7 @@ class EpisodeCard extends HookConsumerWidget {
 
     final progressMap = ref.watch(downloadProgressProvider);
     final logicalId = activeDownload?.logicalId?.trim();
-    final downloadProgressData =
-        logicalId != null && logicalId.isNotEmpty
+    final downloadProgressData = logicalId != null && logicalId.isNotEmpty
         ? progressMap[logicalId]
         : null;
     final downloadProgress =
@@ -494,9 +496,8 @@ class EpisodeCard extends HookConsumerWidget {
                     child: Text(
                       episode.description!,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant
+                            .withValues(alpha: 0.8),
                         height: 1.4,
                       ),
                       maxLines: 3,
@@ -716,11 +717,10 @@ class EpisodeCard extends HookConsumerWidget {
         AppImageFallbacks.episode(
           bannerUrl: parentItem.bannerUrl,
           posterUrl: parentItem.posterUrl,
-          label: parentItem.title,
         );
-    final placeholderColor = Theme.of(
-      context,
-    ).colorScheme.surfaceContainerHighest;
+    final placeholderColor = Theme.of(context)
+        .colorScheme
+        .surfaceContainerHighest;
 
     Widget buildThumbnailImage() {
       if (imageUrl == null || imageUrl.isEmpty) {
@@ -790,9 +790,8 @@ class EpisodeCard extends HookConsumerWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: Theme.of(
-                  context,
-                ).colorScheme.primary.withValues(alpha: 0.9),
+                color: Theme.of(context).colorScheme.primary
+                    .withValues(alpha: 0.9),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(

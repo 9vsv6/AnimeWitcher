@@ -2,10 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
 import 'package:animewitcher/core/utils/catalog_rating.dart';
 
-MultimediaItem _item(
-  Map<String, String> syncData, {
-  String? episodeBadge,
-}) {
+MultimediaItem _item(Map<String, String> syncData, {String? episodeBadge}) {
   return MultimediaItem(
     title: 'Example',
     url: 'https://animewitcher.com/watch/example',
@@ -52,6 +49,16 @@ void main() {
     expect(formatCatalogRatingScore(rating!.score), '9.47');
   });
 
+  test('catalog rating parses Arabic and Persian digits', () {
+    for (final score in ['٨.٧٣', '۸.۷۳']) {
+      final rating = preferredCatalogRating(
+        _item(<String, String>{'awMalScore': score}),
+      );
+
+      expect(rating?.score, 8.73);
+    }
+  });
+
   test('invalid scores are ignored', () {
     expect(
       preferredCatalogRating(
@@ -68,10 +75,9 @@ void main() {
   test('latest episode cards keep their relative-time caption only', () {
     expect(
       preferredCatalogRating(
-        _item(
-          const <String, String>{'awMalScore': '8.5'},
-          episodeBadge: 'حلقة 5',
-        ),
+        _item(const <String, String>{
+          'awMalScore': '8.5',
+        }, episodeBadge: 'حلقة 5'),
       ),
       isNull,
     );

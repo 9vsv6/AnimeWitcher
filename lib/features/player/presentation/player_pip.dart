@@ -10,12 +10,12 @@ import 'package:flutter/services.dart';
 /// iOS is not supported: Apple PiP requires a native `AVPlayerLayer`, which
 /// is a second video surface on top of the Flutter player.
 class PlayerPip {
-  static const channelName = 'com.animewitcher.app.player/pip';
-  static const channel = MethodChannel(channelName);
+  static const _channelName = 'com.animewitcher.app.player/pip';
+  static const channel = MethodChannel(_channelName);
 
   /// Android rejects PiP aspect ratios outside `1:2.39` … `2.39:1`.
-  static const minAspectRatio = 1 / 2.39;
-  static const maxAspectRatio = 2.39;
+  static const _minAspectRatio = 1 / 2.39;
+  static const _maxAspectRatio = 2.39;
 
   /// Android phone/tablet only. TV uses a different shell. iOS has no PiP.
   static bool shouldShowButton({
@@ -32,8 +32,8 @@ class PlayerPip {
     final safeW = width > 0 ? width : 16;
     final safeH = height > 0 ? height : 9;
     final ratio = safeW / safeH;
-    if (ratio < minAspectRatio) return (100, 239);
-    if (ratio > maxAspectRatio) return (239, 100);
+    if (ratio < _minAspectRatio) return (100, 239);
+    if (ratio > _maxAspectRatio) return (239, 100);
     return (safeW, safeH);
   }
 

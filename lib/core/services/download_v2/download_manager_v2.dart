@@ -25,10 +25,8 @@ final class DownloadStartRequestV2 {
   const DownloadStartRequestV2({
     required this.logicalId,
     this.mediaKind = DownloadMediaKind.videoEpisode,
-    String? mediaId,
-    String? unitKey,
-    String? animeId,
-    String? episodeKey,
+    required this.mediaId,
+    required this.unitKey,
     required this.variantKey,
     required this.destinationPath,
     required this.sourceDescriptor,
@@ -36,10 +34,8 @@ final class DownloadStartRequestV2 {
     required this.retries,
     required this.parallelChunks,
     this.expectedBytes,
-  }) : mediaId = mediaId ?? animeId ?? '',
-       unitKey = unitKey ?? episodeKey ?? '',
-       assert((mediaId ?? animeId ?? '') != ''),
-       assert((unitKey ?? episodeKey ?? '') != ''),
+  }) : assert(mediaId != ''),
+       assert(unitKey != ''),
        assert(variantKey != ''),
        assert(destinationPath != ''),
        assert(retries >= 0),
@@ -56,12 +52,6 @@ final class DownloadStartRequestV2 {
   final bool allowPause;
   final int retries;
   final int parallelChunks;
-
-  @Deprecated('Use mediaId')
-  String get animeId => mediaId;
-
-  @Deprecated('Use unitKey')
-  String get episodeKey => unitKey;
 }
 
 /// V2 application coordinator.
@@ -130,8 +120,7 @@ final class DownloadManagerV2 {
   final Map<String, StreamSubscription<DownloadTransportSnapshot>>
   _subscriptionsByTaskId =
       <String, StreamSubscription<DownloadTransportSnapshot>>{};
-  final Set<DownloadLogicalId> _parallelPausePending =
-      <DownloadLogicalId>{};
+  final Set<DownloadLogicalId> _parallelPausePending = <DownloadLogicalId>{};
   final Map<DownloadLogicalId, int> _lastPositiveSpeedAtMillis =
       <DownloadLogicalId, int>{};
   final Map<String, int> _lastNativeSpeedProjectionAtMillis = <String, int>{};
@@ -210,216 +199,219 @@ final class DownloadManagerV2 {
           }
         }
         if (record.completedAtMillis != null) {
-        final result = await _verifyRecordDestination(
-          record,
-          repairManga: true,
-        );
-        if (result.isValid) {
-          final snapshot = DownloadTransportSnapshot(
-            taskId: record.taskId,
-            status: DownloadTransportStatus.complete,
-            progress: 1,
-            transferredBytes: result.bytes ?? record.expectedBytes,
-            totalBytes: record.expectedBytes ?? result.bytes,
+          final result = await _verifyRecordDestination(
+            record,
+            repairManga: true,
           );
-          _snapshots[record.logicalId] = snapshot;
-          _recordDiagnostic(
-            record.logicalId,
-            snapshot,
-            integrityResult: DownloadV2IntegrityResult.valid,
-          );
-          continue;
-        }
-
-        if (record.mediaKind != DownloadMediaKind.mangaChapter) {
-          await _deleteDestination(record.destinationPath);
-        }
-        final invalidRecord = record.copyWith(
-          clearCompletedAtMillis: true,
-          failureCategory: DownloadFailureCategory.integrity,
-          failureMessage: result.reason,
-          updatedAtMillis: _nowMillis(),
-        );
-        await _store.put(invalidRecord);
-        _rememberRecord(invalidRecord);
-        final snapshot = DownloadTransportSnapshot(
-          taskId: invalidRecord.taskId,
-          status: DownloadTransportStatus.failed,
-          progress: 0,
-          totalBytes: invalidRecord.expectedBytes,
-          failureCategory: DownloadFailureCategory.integrity,
-          failureMessage: result.reason,
-        );
-        _snapshots[invalidRecord.logicalId] = snapshot;
-        _recordDiagnostic(
-          invalidRecord.logicalId,
-          snapshot,
-          integrityResult: _diagnosticIntegrityResult(result.reason),
-        );
-        continue;
-      }
-
-      final exactHandle = byTaskId[record.taskId];
-      if (duplicateStartupDestination &&
-          record.intent == DownloadUserIntent.active) {
-        final pausedRecord = record.copyWith(
-          intent: DownloadUserIntent.paused,
-          awaitingAdmission: false,
-          updatedAtMillis: _nowMillis(),
-        );
-        await _store.put(pausedRecord);
-        _rememberRecord(pausedRecord);
-        _requests.putIfAbsent(
-          pausedRecord.logicalId,
-          () => _requestFromRecord(pausedRecord),
-        );
-
-        DownloadTransportSnapshot? settled;
-        if (exactHandle != null && !exactHandle.current.isFinal) {
-          settled = await _pauseHandleAndSettle(exactHandle);
-        }
-        final pauseBase =
-            settled ??
-            exactHandle?.current ??
-            DownloadTransportSnapshot(
-              taskId: pausedRecord.taskId,
-              status: DownloadTransportStatus.missing,
-              progress: 0,
-              totalBytes: pausedRecord.expectedBytes,
+          if (result.isValid) {
+            final snapshot = DownloadTransportSnapshot(
+              taskId: record.taskId,
+              status: DownloadTransportStatus.complete,
+              progress: 1,
+              transferredBytes: result.bytes ?? record.expectedBytes,
+              totalBytes: record.expectedBytes ?? result.bytes,
             );
+            _snapshots[record.logicalId] = snapshot;
+            _recordDiagnostic(
+              record.logicalId,
+              snapshot,
+              integrityResult: DownloadV2IntegrityResult.valid,
+            );
+            continue;
+          }
 
-        if (exactHandle != null &&
-            pauseBase.status != DownloadTransportStatus.paused) {
-          // Startup found two logical records targeting the same canonical
-          // artifact. A duplicate writer that cannot pause safely must not be
-          // hidden behind paused presentation while it keeps writing into the
-          // owner's destination. Canonical-writer safety wins here: settle that
-          // duplicate transport destructively and expose the resulting truth.
-          await _settleObsoleteHandle(
-            exactHandle,
-            cancelEvenIfFinal: false,
+          if (record.mediaKind != DownloadMediaKind.mangaChapter) {
+            await _deleteDestination(record.destinationPath);
+          }
+          final invalidRecord = record.copyWith(
+            clearCompletedAtMillis: true,
+            failureCategory: DownloadFailureCategory.integrity,
+            failureMessage: result.reason,
+            updatedAtMillis: _nowMillis(),
           );
-          final settledTruth = exactHandle.current;
-          _snapshots[pausedRecord.logicalId] = settledTruth;
-          _recordDiagnostic(pausedRecord.logicalId, settledTruth);
+          await _store.put(invalidRecord);
+          _rememberRecord(invalidRecord);
+          final snapshot = DownloadTransportSnapshot(
+            taskId: invalidRecord.taskId,
+            status: DownloadTransportStatus.failed,
+            progress: 0,
+            totalBytes: invalidRecord.expectedBytes,
+            failureCategory: DownloadFailureCategory.integrity,
+            failureMessage: result.reason,
+          );
+          _snapshots[invalidRecord.logicalId] = snapshot;
+          _recordDiagnostic(
+            invalidRecord.logicalId,
+            snapshot,
+            integrityResult: _diagnosticIntegrityResult(result.reason),
+          );
           continue;
         }
 
-        final projected = _snapshotWithStatus(
-          pauseBase,
-          DownloadTransportStatus.paused,
-        );
-        _snapshots[pausedRecord.logicalId] = projected;
-        _recordDiagnostic(pausedRecord.logicalId, projected);
-        continue;
-      }
-
-      switch (record.intent) {
-        case DownloadUserIntent.paused:
-          _requests.putIfAbsent(
-            record.logicalId,
-            () => _requestFromRecord(record),
+        final exactHandle = byTaskId[record.taskId];
+        if (duplicateStartupDestination &&
+            record.intent == DownloadUserIntent.active) {
+          final pausedRecord = record.copyWith(
+            intent: DownloadUserIntent.paused,
+            awaitingAdmission: false,
+            updatedAtMillis: _nowMillis(),
           );
-          DownloadTransportSnapshot? settledPause;
-          if (exactHandle != null) {
-            if (!exactHandle.current.isFinal &&
-                exactHandle.current.status != DownloadTransportStatus.paused) {
-              settledPause = await _pauseHandleAndSettle(exactHandle);
-            }
-            _activateHandle(record.logicalId, exactHandle);
+          await _store.put(pausedRecord);
+          _rememberRecord(pausedRecord);
+          _requests.putIfAbsent(
+            pausedRecord.logicalId,
+            () => _requestFromRecord(pausedRecord),
+          );
+
+          DownloadTransportSnapshot? settled;
+          if (exactHandle != null && !exactHandle.current.isFinal) {
+            settled = await _pauseHandleAndSettle(exactHandle);
           }
           final pauseBase =
-              settledPause ??
+              settled ??
               exactHandle?.current ??
               DownloadTransportSnapshot(
-                taskId: record.taskId,
+                taskId: pausedRecord.taskId,
                 status: DownloadTransportStatus.missing,
                 progress: 0,
-                totalBytes: record.expectedBytes,
+                totalBytes: pausedRecord.expectedBytes,
               );
-          final projected = exactHandle != null &&
-                  pauseBase.status != DownloadTransportStatus.paused
-              ? pauseBase
-              : _snapshotWithStatus(
-                  pauseBase,
-                  DownloadTransportStatus.paused,
-                );
-          _snapshots[record.logicalId] = projected;
-          _recordDiagnostic(record.logicalId, projected);
 
-        case DownloadUserIntent.canceled:
-          if (exactHandle != null) {
-            await _settleObsoleteHandle(
-              exactHandle,
-              cancelEvenIfFinal: false,
-            );
-            await _gateway.removeTracking(record.taskId);
-            _handlesByTaskId.remove(record.taskId);
+          if (exactHandle != null &&
+              pauseBase.status != DownloadTransportStatus.paused) {
+            // Startup found two logical records targeting the same canonical
+            // artifact. A duplicate writer that cannot pause safely must not be
+            // hidden behind paused presentation while it keeps writing into the
+            // owner's destination. Canonical-writer safety wins here: settle that
+            // duplicate transport destructively and expose the resulting truth.
+            await _settleObsoleteHandle(exactHandle, cancelEvenIfFinal: false);
+            final settledTruth = exactHandle.current;
+            _snapshots[pausedRecord.logicalId] = settledTruth;
+            _recordDiagnostic(pausedRecord.logicalId, settledTruth);
+            continue;
           }
-          final projected = DownloadTransportSnapshot(
-            taskId: record.taskId,
-            status: DownloadTransportStatus.canceled,
-            progress: 0,
-            totalBytes: record.expectedBytes,
-            transferredBytes: record.expectedBytes == null ? null : 0,
-          );
-          _snapshots[record.logicalId] = projected;
-          _recordDiagnostic(record.logicalId, projected);
 
-        case DownloadUserIntent.active:
-          final request = _requests.putIfAbsent(
-            record.logicalId,
-            () => _requestFromRecord(record),
+          final projected = _snapshotWithStatus(
+            pauseBase,
+            DownloadTransportStatus.paused,
           );
-          if (record.awaitingAdmission) {
-            if (exactHandle != null &&
-                _isRecoverable(exactHandle.current) &&
-                exactHandle.current.status != DownloadTransportStatus.paused &&
-                exactHandle.current.status != DownloadTransportStatus.missing) {
-              final admitted = record.copyWith(
-                awaitingAdmission: false,
-                updatedAtMillis: _nowMillis(),
-              );
-              await _store.put(admitted);
-              _rememberRecord(admitted);
-              _activateHandle(admitted.logicalId, exactHandle);
-            } else {
-              final queued = _snapshotWithStatus(
-                exactHandle?.current ??
-                    DownloadTransportSnapshot(
-                      taskId: record.taskId,
-                      status: DownloadTransportStatus.queued,
-                      progress: 0,
-                      totalBytes: record.expectedBytes,
-                      transferredBytes:
-                          record.expectedBytes == null ? null : 0,
-                    ),
-                DownloadTransportStatus.queued,
-              );
-              _snapshots[record.logicalId] = queued;
-              _recordDiagnostic(record.logicalId, queued);
-            }
-          } else if (exactHandle != null &&
-              _isRecoverable(exactHandle.current)) {
-            if (exactHandle.current.status == DownloadTransportStatus.paused) {
-              final resumed = await exactHandle.resume();
-              if (!resumed) {
-                throw StateError(
-                  'Active download could not resume its exact paused transfer',
-                );
+          _snapshots[pausedRecord.logicalId] = projected;
+          _recordDiagnostic(pausedRecord.logicalId, projected);
+          continue;
+        }
+
+        switch (record.intent) {
+          case DownloadUserIntent.paused:
+            _requests.putIfAbsent(
+              record.logicalId,
+              () => _requestFromRecord(record),
+            );
+            DownloadTransportSnapshot? settledPause;
+            if (exactHandle != null) {
+              if (!exactHandle.current.isFinal &&
+                  exactHandle.current.status !=
+                      DownloadTransportStatus.paused) {
+                settledPause = await _pauseHandleAndSettle(exactHandle);
               }
+              _activateHandle(record.logicalId, exactHandle);
             }
-            _activateHandle(record.logicalId, exactHandle);
-          } else if (record.mediaKind == DownloadMediaKind.mangaChapter) {
-            await _startExistingMangaGenerationUnsafe(request, record);
-          } else {
-            await _startFreshGeneration(
-              request,
-              record,
-              previousHandle: exactHandle,
-              lookUpPreviousHandle: false,
+            final pauseBase =
+                settledPause ??
+                exactHandle?.current ??
+                DownloadTransportSnapshot(
+                  taskId: record.taskId,
+                  status: DownloadTransportStatus.missing,
+                  progress: 0,
+                  totalBytes: record.expectedBytes,
+                );
+            final projected =
+                exactHandle != null &&
+                    pauseBase.status != DownloadTransportStatus.paused
+                ? pauseBase
+                : _snapshotWithStatus(
+                    pauseBase,
+                    DownloadTransportStatus.paused,
+                  );
+            _snapshots[record.logicalId] = projected;
+            _recordDiagnostic(record.logicalId, projected);
+
+          case DownloadUserIntent.canceled:
+            if (exactHandle != null) {
+              await _settleObsoleteHandle(
+                exactHandle,
+                cancelEvenIfFinal: false,
+              );
+              await _gateway.removeTracking(record.taskId);
+              _handlesByTaskId.remove(record.taskId);
+            }
+            final projected = DownloadTransportSnapshot(
+              taskId: record.taskId,
+              status: DownloadTransportStatus.canceled,
+              progress: 0,
+              totalBytes: record.expectedBytes,
+              transferredBytes: record.expectedBytes == null ? null : 0,
             );
-          }
+            _snapshots[record.logicalId] = projected;
+            _recordDiagnostic(record.logicalId, projected);
+
+          case DownloadUserIntent.active:
+            final request = _requests.putIfAbsent(
+              record.logicalId,
+              () => _requestFromRecord(record),
+            );
+            if (record.awaitingAdmission) {
+              if (exactHandle != null &&
+                  _isRecoverable(exactHandle.current) &&
+                  exactHandle.current.status !=
+                      DownloadTransportStatus.paused &&
+                  exactHandle.current.status !=
+                      DownloadTransportStatus.missing) {
+                final admitted = record.copyWith(
+                  awaitingAdmission: false,
+                  updatedAtMillis: _nowMillis(),
+                );
+                await _store.put(admitted);
+                _rememberRecord(admitted);
+                _activateHandle(admitted.logicalId, exactHandle);
+              } else {
+                final queued = _snapshotWithStatus(
+                  exactHandle?.current ??
+                      DownloadTransportSnapshot(
+                        taskId: record.taskId,
+                        status: DownloadTransportStatus.queued,
+                        progress: 0,
+                        totalBytes: record.expectedBytes,
+                        transferredBytes: record.expectedBytes == null
+                            ? null
+                            : 0,
+                      ),
+                  DownloadTransportStatus.queued,
+                );
+                _snapshots[record.logicalId] = queued;
+                _recordDiagnostic(record.logicalId, queued);
+              }
+            } else if (exactHandle != null &&
+                _isRecoverable(exactHandle.current)) {
+              if (exactHandle.current.status ==
+                  DownloadTransportStatus.paused) {
+                final resumed = await exactHandle.resume();
+                if (!resumed) {
+                  throw StateError(
+                    'Active download could not resume its exact paused transfer',
+                  );
+                }
+              }
+              _activateHandle(record.logicalId, exactHandle);
+            } else if (record.mediaKind == DownloadMediaKind.mangaChapter) {
+              await _startExistingMangaGenerationUnsafe(request, record);
+            } else {
+              await _startFreshGeneration(
+                request,
+                record,
+                previousHandle: exactHandle,
+                lookUpPreviousHandle: false,
+              );
+            }
         }
       } catch (_) {
         final current = await _store.get(record.logicalId) ?? record;
@@ -459,8 +451,9 @@ final class DownloadManagerV2 {
                 status: DownloadTransportStatus.queued,
                 progress: 0,
                 totalBytes: currentRecord.expectedBytes,
-                transferredBytes:
-                    currentRecord.expectedBytes == null ? null : 0,
+                transferredBytes: currentRecord.expectedBytes == null
+                    ? null
+                    : 0,
               );
           _snapshots[request.logicalId] = queued;
           _recordDiagnostic(request.logicalId, queued);
@@ -561,7 +554,8 @@ final class DownloadManagerV2 {
       _rememberRecord(pausedRecord);
       await _publishRecords();
 
-      final rawBase = packagePause ??
+      final rawBase =
+          packagePause ??
           settledPause ??
           handle?.current ??
           _snapshots[logicalId] ??
@@ -837,9 +831,7 @@ final class DownloadManagerV2 {
     required String taskId,
     required double bytesPerSecond,
   }) {
-    if (taskId.isEmpty ||
-        !bytesPerSecond.isFinite ||
-        bytesPerSecond < 0) {
+    if (taskId.isEmpty || !bytesPerSecond.isFinite || bytesPerSecond < 0) {
       return;
     }
 
@@ -885,13 +877,14 @@ final class DownloadManagerV2 {
       progress: current.progress,
     );
     final remainingBytes =
-        totalBytes != null && transferredBytes != null && totalBytes > transferredBytes
+        totalBytes != null &&
+            transferredBytes != null &&
+            totalBytes > transferredBytes
         ? totalBytes - transferredBytes
         : 0;
     final timeRemaining = remainingBytes > 0 && bytesPerSecond > 0
         ? Duration(
-            milliseconds:
-                ((remainingBytes / bytesPerSecond) * 1000).round(),
+            milliseconds: ((remainingBytes / bytesPerSecond) * 1000).round(),
           )
         : Duration.zero;
 
@@ -923,10 +916,7 @@ final class DownloadManagerV2 {
     await initialize();
     final record = await _store.get(logicalId);
     if (record?.completedAtMillis == null) return false;
-    final result = await _verifyRecordDestination(
-      record!,
-      repairManga: true,
-    );
+    final result = await _verifyRecordDestination(record!, repairManga: true);
     return result.isValid;
   }
 
@@ -1001,7 +991,9 @@ final class DownloadManagerV2 {
     final obsoleteHandle = previous == null
         ? null
         : previousHandle ??
-              (lookUpPreviousHandle ? await _exactHandle(previous.taskId) : null);
+              (lookUpPreviousHandle
+                  ? await _exactHandle(previous.taskId)
+                  : null);
     if (obsoleteHandle != null &&
         (cancelPreviousEvenIfFinal || !obsoleteHandle.current.isFinal)) {
       await _settleObsoleteHandle(
@@ -1065,7 +1057,8 @@ final class DownloadManagerV2 {
       }
 
       final snapshot = _snapshots[record.logicalId];
-      final reservesSlot = snapshot == null ||
+      final reservesSlot =
+          snapshot == null ||
           snapshot.status == DownloadTransportStatus.queued ||
           snapshot.status == DownloadTransportStatus.running ||
           snapshot.status == DownloadTransportStatus.held ||
@@ -1088,14 +1081,15 @@ final class DownloadManagerV2 {
 
   Future<void> _promoteAdmissions() async {
     while (true) {
-      final waiting = (await _store.all())
-          .where(
-            (record) =>
-                record.intent == DownloadUserIntent.active &&
-                record.awaitingAdmission,
-          )
-          .toList()
-        ..sort((a, b) => a.updatedAtMillis.compareTo(b.updatedAtMillis));
+      final waiting =
+          (await _store.all())
+              .where(
+                (record) =>
+                    record.intent == DownloadUserIntent.active &&
+                    record.awaitingAdmission,
+              )
+              .toList()
+            ..sort((a, b) => a.updatedAtMillis.compareTo(b.updatedAtMillis));
       if (waiting.isEmpty) return;
 
       var promoted = false;
@@ -1393,7 +1387,9 @@ final class DownloadManagerV2 {
     final obsoleteHandle = previous == null
         ? null
         : previousHandle ??
-              (lookUpPreviousHandle ? await _exactHandle(previous.taskId) : null);
+              (lookUpPreviousHandle
+                  ? await _exactHandle(previous.taskId)
+                  : null);
 
     if (obsoleteHandle != null &&
         (cancelPreviousEvenIfFinal || !obsoleteHandle.current.isFinal)) {
@@ -1526,9 +1522,7 @@ final class DownloadManagerV2 {
     try {
       final accepted = await handle.cancel();
       if (!accepted) {
-        throw StateError(
-          'Could not stop obsolete transport ${handle.taskId}',
-        );
+        throw StateError('Could not stop obsolete transport ${handle.taskId}');
       }
       if (handle.current.isFinal) return;
 
@@ -1575,10 +1569,7 @@ final class DownloadManagerV2 {
 
     if (handle != null) {
       try {
-        await _settleObsoleteHandle(
-          handle,
-          cancelEvenIfFinal: false,
-        );
+        await _settleObsoleteHandle(handle, cancelEvenIfFinal: false);
       } catch (_) {
         // A rejected cancel leaves the exact writer authoritative. Restore
         // its durable record and projection instead of claiming it stopped.
@@ -1674,10 +1665,7 @@ final class DownloadManagerV2 {
     return result;
   }
 
-  Future<File?> _mangaPageFile(
-    Directory directory,
-    int index,
-  ) async {
+  Future<File?> _mangaPageFile(Directory directory, int index) async {
     final prefix = (index + 1).toString().padLeft(4, '0');
     await for (final entity in directory.list(followLinks: false)) {
       if (entity is! File) continue;
@@ -1686,9 +1674,7 @@ final class DownloadManagerV2 {
     return null;
   }
 
-  Future<void> _reconcileMangaDirectory(
-    LogicalDownloadRecordV2 record,
-  ) async {
+  Future<void> _reconcileMangaDirectory(LogicalDownloadRecordV2 record) async {
     final destination = await _destinationFile(record.destinationPath);
     final directory = Directory(destination.path);
     if (!await directory.exists()) return;
@@ -1899,8 +1885,8 @@ final class DownloadManagerV2 {
         networkSpeedMBps: current.networkSpeedMBps,
         timeRemaining: speedBytesPerSecond > 0 && remainingBytes > 0
             ? Duration(
-                milliseconds:
-                    ((remainingBytes / speedBytesPerSecond) * 1000).round(),
+                milliseconds: ((remainingBytes / speedBytesPerSecond) * 1000)
+                    .round(),
               )
             : Duration.zero,
         configuredConnections:

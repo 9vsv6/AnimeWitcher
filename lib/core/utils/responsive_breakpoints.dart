@@ -254,7 +254,6 @@ class ResponsiveBreakpoints {
 
 // Extension for easy access from BuildContext
 extension ResponsiveContext on BuildContext {
-  DeviceScreenType get deviceType => ResponsiveBreakpoints.getDeviceType(this);
   bool get isMobile => ResponsiveBreakpoints.isMobile(this);
   bool get isTablet => ResponsiveBreakpoints.isTablet(this);
   bool get isDesktop => ResponsiveBreakpoints.isDesktop(this);

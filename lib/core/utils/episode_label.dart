@@ -1,21 +1,8 @@
-String _normalizeEpisodeDigits(String value) {
-  const arabic = '٠١٢٣٤٥٦٧٨٩';
-  const eastern = '۰۱۲۳۴۵۶۷۸۹';
-  return value
-      .replaceAllMapped(
-        RegExp(r'[٠-٩]'),
-        (m) => '${arabic.indexOf(m.group(0)!)}',
-      )
-      .replaceAllMapped(
-        RegExp(r'[۰-۹]'),
-        (m) => '${eastern.indexOf(m.group(0)!)}',
-      );
-}
+import 'digit_normalization.dart';
 
 String _normalizeEpisodeLabel(String value) {
-  return _normalizeEpisodeDigits(
-    value.trim().toLowerCase(),
-  ).replaceAll(RegExp(r'\s+'), ' ');
+  return normalizeLocalizedDigits(value.trim().toLowerCase())
+      .replaceAll(RegExp(r'\s+'), ' ');
 }
 
 /// True when [value] is only a generic episode placeholder such as
@@ -23,9 +10,8 @@ String _normalizeEpisodeLabel(String value) {
 bool isGenericEpisodeTitle(String? value) {
   final title = _normalizeEpisodeLabel(value ?? '');
   if (title.isEmpty) return true;
-  return RegExp(
-        r'^(?:ال)?حلق[ةه]\s*\d+(?:\s+(?:والأخيرة|والاخيرة))?$',
-      ).hasMatch(title) ||
+  return RegExp(r'^(?:ال)?حلق[ةه]\s*\d+(?:\s+(?:والأخيرة|والاخيرة))?$')
+          .hasMatch(title) ||
       RegExp(
         r'^(?:episode|ep\.?)\s*\d+(?:\s+(?:final|last))?$',
         caseSensitive: false,

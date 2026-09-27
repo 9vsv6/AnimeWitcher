@@ -7,16 +7,18 @@ import 'package:animewitcher/core/storage/storage_service.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-Map<String, dynamic> _stringField(String value) =>
-    <String, dynamic>{'stringValue': value};
+Map<String, dynamic> _stringField(String value) => <String, dynamic>{
+  'stringValue': value,
+};
 
 Map<String, dynamic> _mapField(Map<String, dynamic> fields) =>
     <String, dynamic>{
       'mapValue': <String, dynamic>{'fields': fields},
     };
 
-Map<String, dynamic> _intField(int value) =>
-    <String, dynamic>{'integerValue': value.toString()};
+Map<String, dynamic> _intField(int value) => <String, dynamic>{
+  'integerValue': value.toString(),
+};
 
 Map<String, dynamic> _homeSectionsDocument() => <String, dynamic>{
   'fields': <String, dynamic>{
@@ -55,9 +57,7 @@ Map<String, dynamic> _mangaDocument() => <String, dynamic>{
     'type': _stringField('مانهوا'),
     'story': _stringField('Story'),
     'poster_uri': _stringField('https://img.example/m1.webp'),
-    'mangalek_page_url': _stringField(
-      'https://mangalik.net/manga/manga-one/',
-    ),
+    'mangalek_page_url': _stringField('https://mangalik.net/manga/manga-one/'),
   },
 };
 
@@ -118,8 +118,7 @@ class _TestStorageService extends StorageService {
                 data: <Map<String, dynamic>>[
                   <String, dynamic>{
                     'document': <String, dynamic>{
-                      'name':
-                          'projects/animewitcher-1c66d/databases/(default)/documents/manga_recent/recent-b-30',
+                      'name': 'projects/animewitcher-1c66d/databases/(default)/documents/manga_recent/recent-b-30',
                       'fields': <String, dynamic>{
                         'manga_id': _stringField('recent-b'),
                         'manga_name': _stringField('Recent B'),
@@ -137,8 +136,7 @@ class _TestStorageService extends StorageService {
                   },
                   <String, dynamic>{
                     'document': <String, dynamic>{
-                      'name':
-                          'projects/animewitcher-1c66d/databases/(default)/documents/manga_recent/recent-a-20',
+                      'name': 'projects/animewitcher-1c66d/databases/(default)/documents/manga_recent/recent-a-20',
                       'fields': <String, dynamic>{
                         'manga_id': _stringField('recent-a'),
                         'manga_name': _stringField('Recent A'),
@@ -269,7 +267,8 @@ class _TestStorageService extends StorageService {
             Response<dynamic>(
               requestOptions: options,
               statusCode: 200,
-              data: '''
+              data:
+                  '''
 <ul>
 <li class="wp-manga-chapter">
 <a href="${isB ? '/manga/recent-b/chapter-30/' : '/manga/recent-a/chapter-20/'}">
@@ -347,10 +346,8 @@ ${isB ? 'الفصل 30' : 'الفصل 20'}
   return (dio: dio, requests: requests);
 }
 
-AnimeWitcherNativeProvider _provider(Dio dio) => AnimeWitcherNativeProvider(
-  dio,
-  SettingsRepository(_TestStorageService()),
-);
+AnimeWitcherNativeProvider _provider(Dio dio) =>
+    AnimeWitcherNativeProvider(dio, SettingsRepository(_TestStorageService()));
 
 void main() {
   test('native provider advertises manga support', () {
@@ -360,10 +357,8 @@ void main() {
 
   test('manga search uses the verified live manga index', () async {
     final stub = _stubDio();
-    final page = await _provider(stub.dio).searchMangaPage(
-      'one',
-      const ProviderSearchFilters(sort: 'views'),
-    );
+    final page = await _provider(stub.dio)
+        .searchMangaPage('one', const ProviderSearchFilters(sort: 'views'));
 
     expect(page.items, hasLength(1));
     expect(page.items.single.contentType, MultimediaContentType.manga);
@@ -376,9 +371,8 @@ void main() {
 
   test('manga details reads manga_list and never anime_list', () async {
     final stub = _stubDio();
-    final item = await _provider(
-      stub.dio,
-    ).getMangaDetails('https://animewitcher.com/manga/m1');
+    final item = await _provider(stub.dio)
+        .getMangaDetails('https://animewitcher.com/manga/m1');
 
     expect(item.title, 'Manga One');
     expect(item.contentType, MultimediaContentType.manga);
@@ -388,266 +382,274 @@ void main() {
     );
   });
 
-  test('latest manga follows the official manga_recent home Algolia section', () async {
-    final stub = _stubDio();
-    final page = await _provider(stub.dio).getLatestMangaPage(limit: 2);
+  test(
+    'latest manga follows the official manga_recent home Algolia section',
+    () async {
+      final stub = _stubDio();
+      final page = await _provider(stub.dio).getLatestMangaPage(limit: 2);
 
-    expect(page.items, hasLength(2));
-    expect(page.items.map((entry) => entry.manga.title), <String>[
-      'Recent B',
-      'Recent A',
-    ]);
-    expect(page.items[0].chapter.name, 'الفصل 30');
-    expect(page.items[1].chapter.name, 'الفصل 20');
-    expect(
-      page.items[0].chapter.publishedAt,
-      DateTime.fromMillisecondsSinceEpoch(1789916400000),
-    );
+      expect(page.items, hasLength(2));
+      expect(page.items.map((entry) => entry.manga.title), <String>[
+        'Recent B',
+        'Recent A',
+      ]);
+      expect(page.items[0].chapter.name, 'الفصل 30');
+      expect(page.items[1].chapter.name, 'الفصل 20');
+      expect(
+        page.items[0].chapter.publishedAt,
+        DateTime.fromMillisecondsSinceEpoch(1789916400000),
+      );
 
-    final recentRequest = stub.requests.singleWhere(
-      (entry) =>
-          _isAlgolia(entry.uri) &&
-          entry.uri.path.endsWith('/indexes/manga_recent_live/query'),
-    );
-    final body = recentRequest.data as Map;
-    final params = body['params']?.toString() ?? '';
-    expect(params, contains('attributesToRetrieve'));
-    expect(params, contains('chapter_name'));
-    expect(params, contains('manga_name'));
-
-    expect(
-      stub.requests.any((entry) {
-        if (!entry.uri.host.contains('firestore') ||
-            !entry.uri.path.endsWith('/documents:runQuery')) {
-          return false;
-        }
-        final body = entry.data;
-        final query = body is Map ? body['structuredQuery'] : null;
-        final from = query is Map ? query['from'] : null;
-        final firstFrom = from is List && from.isNotEmpty ? from.first : null;
-        return firstFrom is Map && firstFrom['collectionId'] == 'manga_recent';
-      }),
-      isFalse,
-    );
-    expect(
-      stub.requests.any(
+      final recentRequest = stub.requests.singleWhere(
         (entry) =>
-            entry.uri.host == 'mangalik.net' ||
-            entry.uri.host == 'manga-leko.net' ||
-            entry.uri.host == 'lekmanga.online',
-      ),
-      isFalse,
-    );
-  });
+            _isAlgolia(entry.uri) &&
+            entry.uri.path.endsWith('/indexes/manga_recent_live/query'),
+      );
+      final body = recentRequest.data as Map;
+      final params = body['params']?.toString() ?? '';
+      expect(params, contains('attributesToRetrieve'));
+      expect(params, contains('chapter_name'));
+      expect(params, contains('manga_name'));
 
-  test('chapters use the original chapters_summery document before queries', () async {
-    final stub = _stubDio();
-    var queriedChaptersCollection = false;
-    stub.dio.interceptors.insert(
-      0,
-      InterceptorsWrapper(
-        onRequest: (options, handler) {
-          if (!options.uri.host.contains('firestore')) {
-            handler.next(options);
-            return;
+      expect(
+        stub.requests.any((entry) {
+          if (!entry.uri.host.contains('firestore') ||
+              !entry.uri.path.endsWith('/documents:runQuery')) {
+            return false;
           }
-
-          if (options.uri.path.endsWith(
-            '/documents/manga_list/m1/chapters_summery/summery',
-          )) {
-            handler.resolve(
-              Response<dynamic>(
-                requestOptions: options,
-                statusCode: 200,
-                data: <String, dynamic>{
-                  'fields': <String, dynamic>{
-                    'chapters': <String, dynamic>{
-                      'arrayValue': <String, dynamic>{
-                        'values': <Map<String, dynamic>>[
-                          _mapField(<String, dynamic>{
-                            'doc_id': _stringField('42.5'),
-                            'name': _stringField('الفصل 42.5'),
-                            'thumb_uri': _stringField(
-                              'https://img.example/ch42.webp',
-                            ),
-                          }),
-                        ],
-                      },
-                    },
-                  },
-                },
-              ),
-            );
-            return;
-          }
-
-          final body = options.data;
+          final body = entry.data;
           final query = body is Map ? body['structuredQuery'] : null;
           final from = query is Map ? query['from'] : null;
           final firstFrom = from is List && from.isNotEmpty ? from.first : null;
-          if (firstFrom is Map && firstFrom['collectionId'] == 'chapters') {
-            queriedChaptersCollection = true;
-          }
-          handler.next(options);
-        },
-      ),
-    );
+          return firstFrom is Map &&
+              firstFrom['collectionId'] == 'manga_recent';
+        }),
+        isFalse,
+      );
+      expect(
+        stub.requests.any(
+          (entry) =>
+              entry.uri.host == 'mangalik.net' ||
+              entry.uri.host == 'manga-leko.net' ||
+              entry.uri.host == 'lekmanga.online',
+        ),
+        isFalse,
+      );
+    },
+  );
 
-    final chapters = await _provider(stub.dio).getMangaChapters(
-      'https://animewitcher.com/manga/m1',
-    );
+  test(
+    'chapters use the original chapters_summery document before queries',
+    () async {
+      final stub = _stubDio();
+      var queriedChaptersCollection = false;
+      stub.dio.interceptors.insert(
+        0,
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            if (!options.uri.host.contains('firestore')) {
+              handler.next(options);
+              return;
+            }
 
-    expect(chapters, hasLength(1));
-    expect(chapters.single.id, '42.5');
-    expect(chapters.single.name, 'الفصل 42.5');
-    expect(chapters.single.number, 42.5);
-    expect(queriedChaptersCollection, isFalse);
-    expect(
-      stub.requests.any(
-        (entry) =>
-            entry.uri.host == 'mangalik.net' ||
-            entry.uri.host == 'manga-leko.net' ||
-            entry.uri.host == 'lekmanga.online',
-      ),
-      isFalse,
-    );
-  });
+            if (options.uri.path.endsWith(
+              '/documents/manga_list/m1/chapters_summery/summery',
+            )) {
+              handler.resolve(
+                Response<dynamic>(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: <String, dynamic>{
+                    'fields': <String, dynamic>{
+                      'chapters': <String, dynamic>{
+                        'arrayValue': <String, dynamic>{
+                          'values': <Map<String, dynamic>>[
+                            _mapField(<String, dynamic>{
+                              'doc_id': _stringField('42.5'),
+                              'name': _stringField('الفصل 42.5'),
+                              'thumb_uri': _stringField(
+                                'https://img.example/ch42.webp',
+                              ),
+                            }),
+                          ],
+                        },
+                      },
+                    },
+                  },
+                ),
+              );
+              return;
+            }
 
-  test('chapters and pages use AnimeWitcher Firestore hierarchy first', () async {
-    final stub = _stubDio();
-    Map? chapterStructuredQuery;
-    stub.dio.interceptors.insert(
-      0,
-      InterceptorsWrapper(
-        onRequest: (options, handler) {
-          if (!options.uri.host.contains('firestore')) {
+            final body = options.data;
+            final query = body is Map ? body['structuredQuery'] : null;
+            final from = query is Map ? query['from'] : null;
+            final firstFrom = from is List && from.isNotEmpty
+                ? from.first
+                : null;
+            if (firstFrom is Map && firstFrom['collectionId'] == 'chapters') {
+              queriedChaptersCollection = true;
+            }
             handler.next(options);
-            return;
-          }
+          },
+        ),
+      );
 
-          final body = options.data;
-          final query = body is Map ? body['structuredQuery'] : null;
-          final from = query is Map ? query['from'] : null;
-          final firstFrom = from is List && from.isNotEmpty ? from.first : null;
-          final collectionId = firstFrom is Map
-              ? firstFrom['collectionId']?.toString() ?? ''
-              : '';
+      final chapters = await _provider(stub.dio)
+          .getMangaChapters('https://animewitcher.com/manga/m1');
 
-          if (options.uri.path.endsWith('/documents/manga_list/m1:runQuery') &&
-              collectionId == 'chapters') {
-            chapterStructuredQuery = query is Map ? Map.from(query) : null;
-            handler.resolve(
-              Response<dynamic>(
-                requestOptions: options,
-                statusCode: 200,
-                data: <Map<String, dynamic>>[
-                  <String, dynamic>{
-                    'document': <String, dynamic>{
-                      'name':
-                          'projects/animewitcher-1c66d/databases/(default)/documents/manga_list/m1/chapters/c77',
-                      'fields': <String, dynamic>{
-                        'doc_id': _stringField('77'),
-                        'name': _stringField('الفصل 77.5'),
-                        'thumb_uri': _stringField(
-                          'https://img.example/ch77.webp',
-                        ),
+      expect(chapters, hasLength(1));
+      expect(chapters.single.id, '42.5');
+      expect(chapters.single.name, 'الفصل 42.5');
+      expect(chapters.single.number, 42.5);
+      expect(queriedChaptersCollection, isFalse);
+      expect(
+        stub.requests.any(
+          (entry) =>
+              entry.uri.host == 'mangalik.net' ||
+              entry.uri.host == 'manga-leko.net' ||
+              entry.uri.host == 'lekmanga.online',
+        ),
+        isFalse,
+      );
+    },
+  );
+
+  test(
+    'chapters and pages use AnimeWitcher Firestore hierarchy first',
+    () async {
+      final stub = _stubDio();
+      Map<dynamic, dynamic>? chapterStructuredQuery;
+      stub.dio.interceptors.insert(
+        0,
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            if (!options.uri.host.contains('firestore')) {
+              handler.next(options);
+              return;
+            }
+
+            final body = options.data;
+            final query = body is Map ? body['structuredQuery'] : null;
+            final from = query is Map ? query['from'] : null;
+            final firstFrom = from is List && from.isNotEmpty
+                ? from.first
+                : null;
+            final collectionId = firstFrom is Map
+                ? firstFrom['collectionId']?.toString() ?? ''
+                : '';
+
+            if (options.uri.path.endsWith(
+                  '/documents/manga_list/m1:runQuery',
+                ) &&
+                collectionId == 'chapters') {
+              chapterStructuredQuery = query is Map ? Map.from(query) : null;
+              handler.resolve(
+                Response<dynamic>(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: <Map<String, dynamic>>[
+                    <String, dynamic>{
+                      'document': <String, dynamic>{
+                        'name': 'projects/animewitcher-1c66d/databases/(default)/documents/manga_list/m1/chapters/c77',
+                        'fields': <String, dynamic>{
+                          'doc_id': _stringField('77'),
+                          'name': _stringField('الفصل 77.5'),
+                          'thumb_uri': _stringField(
+                            'https://img.example/ch77.webp',
+                          ),
+                        },
                       },
                     },
-                  },
-                ],
-              ),
-            );
-            return;
-          }
+                  ],
+                ),
+              );
+              return;
+            }
 
-          if (options.uri.path.endsWith(
-                '/documents/manga_list/m1/chapters/c77:runQuery',
-              ) &&
-              collectionId == 'pages') {
-            handler.resolve(
-              Response<dynamic>(
-                requestOptions: options,
-                statusCode: 200,
-                data: <Map<String, dynamic>>[
-                  <String, dynamic>{
-                    'document': <String, dynamic>{
-                      'name':
-                          'projects/animewitcher-1c66d/databases/(default)/documents/manga_list/m1/chapters/c77/pages/p2',
-                      'fields': <String, dynamic>{
-                        'name': _stringField('2'),
-                        'image_url': _stringField(
-                          'https://cdn.example/firestore-2.webp',
-                        ),
-                        'order': _intField(2),
-                        'page_number': _intField(2),
+            if (options.uri.path.endsWith(
+                  '/documents/manga_list/m1/chapters/c77:runQuery',
+                ) &&
+                collectionId == 'pages') {
+              handler.resolve(
+                Response<dynamic>(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: <Map<String, dynamic>>[
+                    <String, dynamic>{
+                      'document': <String, dynamic>{
+                        'name': 'projects/animewitcher-1c66d/databases/(default)/documents/manga_list/m1/chapters/c77/pages/p2',
+                        'fields': <String, dynamic>{
+                          'name': _stringField('2'),
+                          'image_url': _stringField(
+                            'https://cdn.example/firestore-2.webp',
+                          ),
+                          'order': _intField(2),
+                          'page_number': _intField(2),
+                        },
                       },
                     },
-                  },
-                  <String, dynamic>{
-                    'document': <String, dynamic>{
-                      'name':
-                          'projects/animewitcher-1c66d/databases/(default)/documents/manga_list/m1/chapters/c77/pages/p1',
-                      'fields': <String, dynamic>{
-                        'name': _stringField('1'),
-                        'image_url': _stringField(
-                          'https://cdn.example/firestore-1.webp',
-                        ),
-                        'order': _intField(1),
-                        'page_number': _intField(1),
+                    <String, dynamic>{
+                      'document': <String, dynamic>{
+                        'name': 'projects/animewitcher-1c66d/databases/(default)/documents/manga_list/m1/chapters/c77/pages/p1',
+                        'fields': <String, dynamic>{
+                          'name': _stringField('1'),
+                          'image_url': _stringField(
+                            'https://cdn.example/firestore-1.webp',
+                          ),
+                          'order': _intField(1),
+                          'page_number': _intField(1),
+                        },
                       },
                     },
-                  },
-                ],
-              ),
-            );
-            return;
-          }
+                  ],
+                ),
+              );
+              return;
+            }
 
-          handler.next(options);
-        },
-      ),
-    );
+            handler.next(options);
+          },
+        ),
+      );
 
-    final provider = _provider(stub.dio);
-    final chapters = await provider.getMangaChapters(
-      'https://animewitcher.com/manga/m1',
-    );
+      final provider = _provider(stub.dio);
+      final chapters = await provider.getMangaChapters(
+        'https://animewitcher.com/manga/m1',
+      );
 
-    expect(chapters, hasLength(1));
-    expect(chapters.single.id, 'c77');
-    expect(chapters.single.name, 'الفصل 77.5');
-    expect(chapters.single.number, 77.5);
-    expect(chapterStructuredQuery, isNotNull);
-    expect(chapterStructuredQuery!.containsKey('orderBy'), isFalse);
+      expect(chapters, hasLength(1));
+      expect(chapters.single.id, 'c77');
+      expect(chapters.single.name, 'الفصل 77.5');
+      expect(chapters.single.number, 77.5);
+      expect(chapterStructuredQuery, isNotNull);
+      expect(chapterStructuredQuery!.containsKey('orderBy'), isFalse);
 
-    final pages = await provider.getMangaChapterPages(
-      'https://animewitcher.com/manga/m1',
-      chapters.single,
-    );
-    expect(
-      pages.map((page) => page.imageUrl),
-      <String>[
+      final pages = await provider.getMangaChapterPages(
+        'https://animewitcher.com/manga/m1',
+        chapters.single,
+      );
+      expect(pages.map((page) => page.imageUrl), <String>[
         'https://cdn.example/firestore-1.webp',
         'https://cdn.example/firestore-2.webp',
-      ],
-    );
-    expect(
-      stub.requests.any(
-        (entry) =>
-            entry.uri.host == 'mangalik.net' ||
-            entry.uri.host == 'manga-leko.net' ||
-            entry.uri.host == 'lekmanga.online',
-      ),
-      isFalse,
-    );
-  });
+      ]);
+      expect(
+        stub.requests.any(
+          (entry) =>
+              entry.uri.host == 'mangalik.net' ||
+              entry.uri.host == 'manga-leko.net' ||
+              entry.uri.host == 'lekmanga.online',
+        ),
+        isFalse,
+      );
+    },
+  );
 
   test('chapters use stored source before archive fallback', () async {
     final stub = _stubDio();
 
-    final chapters = await _provider(stub.dio).getMangaChapters(
-      'https://animewitcher.com/manga/m1',
-    );
+    final chapters = await _provider(stub.dio)
+        .getMangaChapters('https://animewitcher.com/manga/m1');
 
     expect(chapters, hasLength(1));
     expect(chapters.single.name, 'الفصل 1');
@@ -663,73 +665,77 @@ void main() {
     );
   });
 
-  test('chapters fall back to a MangaLek mirror when stored host fails', () async {
-    final stub = _stubDio();
-    stub.dio.interceptors.insert(
-      0,
-      InterceptorsWrapper(
-        onRequest: (options, handler) {
-          if (options.uri.host == 'mangalik.net' &&
-              options.uri.path == '/manga/manga-one/') {
-            handler.resolve(
-              Response<dynamic>(
-                requestOptions: options,
-                statusCode: 503,
-                data: 'temporarily unavailable',
-              ),
-            );
-            return;
-          }
-          handler.next(options);
-        },
-      ),
-    );
+  test(
+    'chapters fall back to a MangaLek mirror when stored host fails',
+    () async {
+      final stub = _stubDio();
+      stub.dio.interceptors.insert(
+        0,
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            if (options.uri.host == 'mangalik.net' &&
+                options.uri.path == '/manga/manga-one/') {
+              handler.resolve(
+                Response<dynamic>(
+                  requestOptions: options,
+                  statusCode: 503,
+                  data: 'temporarily unavailable',
+                ),
+              );
+              return;
+            }
+            handler.next(options);
+          },
+        ),
+      );
 
-    final chapters = await _provider(stub.dio).getMangaChapters(
-      'https://animewitcher.com/manga/m1',
-    );
+      final chapters = await _provider(stub.dio)
+          .getMangaChapters('https://animewitcher.com/manga/m1');
 
-    expect(chapters, hasLength(1));
-    expect(chapters.single.name, 'الفصل 9');
-    expect(
-      stub.requests.any((entry) => entry.uri.host == 'lekmanga.online'),
-      isTrue,
-    );
-  });
+      expect(chapters, hasLength(1));
+      expect(chapters.single.name, 'الفصل 9');
+      expect(
+        stub.requests.any((entry) => entry.uri.host == 'lekmanga.online'),
+        isTrue,
+      );
+    },
+  );
 
-  test('chapters ignore a 200 challenge page and try the next mirror', () async {
-    final stub = _stubDio();
-    stub.dio.interceptors.insert(
-      0,
-      InterceptorsWrapper(
-        onRequest: (options, handler) {
-          if (options.uri.host == 'mangalik.net' &&
-              options.uri.path == '/manga/manga-one/') {
-            handler.resolve(
-              Response<dynamic>(
-                requestOptions: options,
-                statusCode: 200,
-                data: '<html><title>Just a moment...</title></html>',
-              ),
-            );
-            return;
-          }
-          handler.next(options);
-        },
-      ),
-    );
+  test(
+    'chapters ignore a 200 challenge page and try the next mirror',
+    () async {
+      final stub = _stubDio();
+      stub.dio.interceptors.insert(
+        0,
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            if (options.uri.host == 'mangalik.net' &&
+                options.uri.path == '/manga/manga-one/') {
+              handler.resolve(
+                Response<dynamic>(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: '<html><title>Just a moment...</title></html>',
+                ),
+              );
+              return;
+            }
+            handler.next(options);
+          },
+        ),
+      );
 
-    final chapters = await _provider(stub.dio).getMangaChapters(
-      'https://animewitcher.com/manga/m1',
-    );
+      final chapters = await _provider(stub.dio)
+          .getMangaChapters('https://animewitcher.com/manga/m1');
 
-    expect(chapters, hasLength(1));
-    expect(chapters.single.name, 'الفصل 9');
-    expect(
-      stub.requests.any((entry) => entry.uri.host == 'lekmanga.online'),
-      isTrue,
-    );
-  });
+      expect(chapters, hasLength(1));
+      expect(chapters.single.name, 'الفصل 9');
+      expect(
+        stub.requests.any((entry) => entry.uri.host == 'lekmanga.online'),
+        isTrue,
+      );
+    },
+  );
 
   test('chapters fall back to current WordPress archive shape', () async {
     final stub = _stubDio();
@@ -800,16 +806,13 @@ void main() {
       ),
     );
 
-    final chapters = await _provider(stub.dio).getMangaChapters(
-      'https://animewitcher.com/manga/m1',
-    );
+    final chapters = await _provider(stub.dio)
+        .getMangaChapters('https://animewitcher.com/manga/m1');
 
     expect(chapters.map((chapter) => chapter.number), <double?>[30, 29, 28]);
     expect(
       archiveRequests.any(
-        (uri) =>
-            uri.host == 'manga-leko.net' &&
-            uri.path == '/tag/manga-one/',
+        (uri) => uri.host == 'manga-leko.net' && uri.path == '/tag/manga-one/',
       ),
       isTrue,
     );
@@ -862,13 +865,10 @@ void main() {
         chapter,
       );
 
-      expect(
-        pages.map((page) => page.imageUrl),
-        <String>[
-          'https://cdn.example/1.webp',
-          'https://cdn.example/2.webp',
-        ],
-      );
+      expect(pages.map((page) => page.imageUrl), <String>[
+        'https://cdn.example/1.webp',
+        'https://cdn.example/2.webp',
+      ]);
       expect(
         pages.first.headers['Referer'],
         'https://mangalik.net/manga/manga-one/chapter-1/',
@@ -920,23 +920,17 @@ void main() {
         'https://animewitcher.com/manga/m1',
       )).single;
 
-      expect(
-        chapter.url,
-        'https://animewitcher.com/manga/m1/chapters/c1',
-      );
+      expect(chapter.url, 'https://animewitcher.com/manga/m1/chapters/c1');
 
       final pages = await provider.getMangaChapterPages(
         'https://animewitcher.com/manga/m1',
         chapter,
       );
 
-      expect(
-        pages.map((page) => page.imageUrl),
-        <String>[
-          'https://cdn.example/1.webp',
-          'https://cdn.example/2.webp',
-        ],
-      );
+      expect(pages.map((page) => page.imageUrl), <String>[
+        'https://cdn.example/1.webp',
+        'https://cdn.example/2.webp',
+      ]);
       expect(
         pages.first.headers['Referer'],
         'https://mangalik.net/manga/manga-one/chapter-1/',
@@ -966,70 +960,73 @@ void main() {
     );
   });
 
-  test('download refresh replaces stale Firestore page URLs with live source', () async {
-    final stub = _stubDio();
-    stub.dio.interceptors.insert(
-      0,
-      InterceptorsWrapper(
-        onRequest: (options, handler) {
-          if (options.uri.host.contains('firestore') &&
-              options.uri.path.endsWith(
-                '/documents/manga_list/m1/chapters/c1/summary_pages/summery',
-              )) {
-            handler.resolve(
-              Response<dynamic>(
-                requestOptions: options,
-                statusCode: 200,
-                data: <String, dynamic>{
-                  'fields': <String, dynamic>{
-                    'pages': <String, dynamic>{
-                      'arrayValue': <String, dynamic>{
-                        'values': <Map<String, dynamic>>[
-                          _mapField(<String, dynamic>{
-                            'image_url': _stringField(
-                              'https://cdn.example/stale.webp',
-                            ),
-                            'order': _intField(1),
-                          }),
-                        ],
+  test(
+    'download refresh replaces stale Firestore page URLs with live source',
+    () async {
+      final stub = _stubDio();
+      stub.dio.interceptors.insert(
+        0,
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            if (options.uri.host.contains('firestore') &&
+                options.uri.path.endsWith(
+                  '/documents/manga_list/m1/chapters/c1/summary_pages/summery',
+                )) {
+              handler.resolve(
+                Response<dynamic>(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: <String, dynamic>{
+                    'fields': <String, dynamic>{
+                      'pages': <String, dynamic>{
+                        'arrayValue': <String, dynamic>{
+                          'values': <Map<String, dynamic>>[
+                            _mapField(<String, dynamic>{
+                              'image_url': _stringField(
+                                'https://cdn.example/stale.webp',
+                              ),
+                              'order': _intField(1),
+                            }),
+                          ],
+                        },
                       },
                     },
                   },
-                },
-              ),
-            );
-            return;
-          }
-          handler.next(options);
-        },
-      ),
-    );
+                ),
+              );
+              return;
+            }
+            handler.next(options);
+          },
+        ),
+      );
 
-    final provider = _provider(stub.dio);
-    const chapter = MangaChapter(
-      id: 'c1',
-      mangaId: 'm1',
-      url: 'https://animewitcher.com/manga/m1/chapters/c1',
-      name: 'الفصل 1',
-      number: 1,
-    );
+      final provider = _provider(stub.dio);
+      const chapter = MangaChapter(
+        id: 'c1',
+        mangaId: 'm1',
+        url: 'https://animewitcher.com/manga/m1/chapters/c1',
+        name: 'الفصل 1',
+        number: 1,
+      );
 
-    final cached = await provider.getMangaChapterPages(
-      'https://animewitcher.com/manga/m1',
-      chapter,
-    );
-    final refreshed = await provider.refreshMangaChapterPages(
-      'https://animewitcher.com/manga/m1',
-      chapter,
-    );
+      final cached = await provider.getMangaChapterPages(
+        'https://animewitcher.com/manga/m1',
+        chapter,
+      );
+      final refreshed = await provider.refreshMangaChapterPages(
+        'https://animewitcher.com/manga/m1',
+        chapter,
+      );
 
-    expect(cached.single.imageUrl, 'https://cdn.example/stale.webp');
-    expect(refreshed.first.imageUrl, 'https://cdn.example/1.webp');
-    expect(
-      refreshed.first.headers['Referer'],
-      'https://mangalik.net/manga/manga-one/chapter-1/',
-    );
-  });
+      expect(cached.single.imageUrl, 'https://cdn.example/stale.webp');
+      expect(refreshed.first.imageUrl, 'https://cdn.example/1.webp');
+      expect(
+        refreshed.first.headers['Referer'],
+        'https://mangalik.net/manga/manga-one/chapter-1/',
+      );
+    },
+  );
 
   test('refreshMangaChapterPages bypasses the cached CDN page list', () async {
     final stub = _stubDio();
@@ -1047,7 +1044,7 @@ void main() {
                 statusCode: 200,
                 data:
                     '<div class="reading-content">'
-                    '<div class="page-break"><img data-src="https://cdn.example/fresh-' +
+                        '<div class="page-break"><img data-src="https://cdn.example/fresh-' +
                     chapterLoads.toString() +
                     '.webp"></div></div>',
               ),
@@ -1081,5 +1078,4 @@ void main() {
     expect(refreshed.single.imageUrl, 'https://cdn.example/fresh-2.webp');
     expect(chapterLoads, 2);
   });
-
 }

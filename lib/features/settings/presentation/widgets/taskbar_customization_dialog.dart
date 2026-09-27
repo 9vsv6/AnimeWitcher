@@ -1,4 +1,5 @@
 import '../../../../shared/widgets/glass_dialog.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -15,8 +16,8 @@ Future<void> showTaskbarCustomizationDialog(
   final l10n = AppLocalizations.of(context)!;
   final isArabic =
       Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
-  var order = normalizeTaskbarOrder(currentOrder).toList(growable: true);
-  var hidden = normalizeHiddenTaskbarItems(currentHidden).toSet();
+  final order = normalizeTaskbarOrder(currentOrder).toList(growable: true);
+  final hidden = normalizeHiddenTaskbarItems(currentHidden).toSet();
 
   await showGlassDialog<void>(
     context: context,

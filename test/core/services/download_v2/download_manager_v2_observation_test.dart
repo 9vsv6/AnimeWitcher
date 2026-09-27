@@ -12,42 +12,45 @@ import 'package:flutter_test/flutter_test.dart';
 import 'download_v2_test_support.dart';
 
 void main() {
-  test('records exposes logical state and completed availability verifies disk', () async {
-    final temp = await Directory.systemTemp.createTemp('aw-v2-observe-');
-    addTearDown(() => temp.delete(recursive: true));
-    final file = File('${temp.path}${Platform.pathSeparator}episode.mp4');
-    await file.writeAsBytes(<int>[1, 2, 3, 4]);
-    final id = logicalDownloadIdFor(
-      animeId: 'anime:1',
-      episodeKey: '1',
-      variantKey: 'sub:1080p',
-    );
-    final store = InMemoryLogicalDownloadStoreV2();
-    await store.put(
-      _record(
-        id: id,
-        destinationPath: file.path,
-        completedAtMillis: 100,
-        expectedBytes: 4,
-      ),
-    );
-    final gateway = _Gateway();
-    final manager = DownloadManagerV2(
-      store: store,
-      gateway: gateway,
-      sourceResolver: StaticSourceResolverV2(),
-    );
-    addTearDown(manager.dispose);
+  test(
+    'records exposes logical state and completed availability verifies disk',
+    () async {
+      final temp = await Directory.systemTemp.createTemp('aw-v2-observe-');
+      addTearDown(() => temp.delete(recursive: true));
+      final file = File('${temp.path}${Platform.pathSeparator}episode.mp4');
+      await file.writeAsBytes(<int>[1, 2, 3, 4]);
+      final id = logicalDownloadIdFor(
+        animeId: 'anime:1',
+        episodeKey: '1',
+        variantKey: 'sub:1080p',
+      );
+      final store = InMemoryLogicalDownloadStoreV2();
+      await store.put(
+        _record(
+          id: id,
+          destinationPath: file.path,
+          completedAtMillis: 100,
+          expectedBytes: 4,
+        ),
+      );
+      final gateway = _Gateway();
+      final manager = DownloadManagerV2(
+        store: store,
+        gateway: gateway,
+        sourceResolver: StaticSourceResolverV2(),
+      );
+      addTearDown(manager.dispose);
 
-    final records = await manager.records.first;
+      final records = await manager.records.first;
 
-    expect(records.map((record) => record.logicalId), contains(id));
-    expect(await manager.hasCompletedDownload(id), isTrue);
-    expect(gateway.startedSpecs, isEmpty);
+      expect(records.map((record) => record.logicalId), contains(id));
+      expect(await manager.hasCompletedDownload(id), isTrue);
+      expect(gateway.startedSpecs, isEmpty);
 
-    await file.delete();
-    expect(await manager.hasCompletedDownload(id), isFalse);
-  });
+      await file.delete();
+      expect(await manager.hasCompletedDownload(id), isFalse);
+    },
+  );
 
   test('native speed overlay preserves configured and active connection telemetry', () async {
     final id = logicalDownloadIdFor(
@@ -193,83 +196,86 @@ void main() {
     expect(manager.snapshotFor(id)?.networkSpeedMBps, 8);
   });
 
-  test('parallel zero-speed handoff keeps the last fresh positive speed', () async {
-    var now = 1000;
-    final id = logicalDownloadIdFor(
-      animeId: 'anime:1',
-      episodeKey: 'speed-handoff',
-      variantKey: 'sub:1080p',
-    );
-    final taskId = taskIdForGeneration(id, 1);
-    final store = InMemoryLogicalDownloadStoreV2();
-    await store.put(
-      _record(
-        id: id,
-        destinationPath: 'downloads/speed-handoff.mp4',
-        expectedBytes: 100,
-        parallelChunks: 16,
-      ),
-    );
-    final handle = _Handle(
-      taskId,
-      initial: DownloadTransportSnapshot(
+  test(
+    'parallel zero-speed handoff keeps the last fresh positive speed',
+    () async {
+      var now = 1000;
+      final id = logicalDownloadIdFor(
+        animeId: 'anime:1',
+        episodeKey: 'speed-handoff',
+        variantKey: 'sub:1080p',
+      );
+      final taskId = taskIdForGeneration(id, 1);
+      final store = InMemoryLogicalDownloadStoreV2();
+      await store.put(
+        _record(
+          id: id,
+          destinationPath: 'downloads/speed-handoff.mp4',
+          expectedBytes: 100,
+          parallelChunks: 16,
+        ),
+      );
+      final handle = _Handle(
+        taskId,
+        initial: DownloadTransportSnapshot(
+          taskId: taskId,
+          status: DownloadTransportStatus.running,
+          progress: .4,
+          transferredBytes: 40,
+          totalBytes: 100,
+          networkSpeedMBps: 2,
+          configuredConnections: 16,
+          activeConnections: 8,
+        ),
+      );
+      final manager = DownloadManagerV2(
+        store: store,
+        gateway: _Gateway(rehydrated: <DownloadTransportHandle>[handle]),
+        sourceResolver: StaticSourceResolverV2(),
+        nowMillis: () => now,
+      );
+      addTearDown(manager.dispose);
+
+      await manager.initialize();
+      manager.observeNativeNetworkSpeed(
         taskId: taskId,
-        status: DownloadTransportStatus.running,
-        progress: .4,
-        transferredBytes: 40,
-        totalBytes: 100,
-        networkSpeedMBps: 2,
-        configuredConnections: 16,
-        activeConnections: 8,
-      ),
-    );
-    final manager = DownloadManagerV2(
-      store: store,
-      gateway: _Gateway(rehydrated: <DownloadTransportHandle>[handle]),
-      sourceResolver: StaticSourceResolverV2(),
-      nowMillis: () => now,
-    );
-    addTearDown(manager.dispose);
+        bytesPerSecond: 2 * 1000 * 1000,
+      );
 
-    await manager.initialize();
-    manager.observeNativeNetworkSpeed(
-      taskId: taskId,
-      bytesPerSecond: 2 * 1000 * 1000,
-    );
+      handle.emit(
+        DownloadTransportSnapshot(
+          taskId: taskId,
+          status: DownloadTransportStatus.running,
+          progress: .41,
+          transferredBytes: 41,
+          totalBytes: 100,
+          networkSpeedMBps: 0,
+          configuredConnections: 16,
+          activeConnections: 8,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
 
-    handle.emit(
-      DownloadTransportSnapshot(
-        taskId: taskId,
-        status: DownloadTransportStatus.running,
-        progress: .41,
-        transferredBytes: 41,
-        totalBytes: 100,
-        networkSpeedMBps: 0,
-        configuredConnections: 16,
-        activeConnections: 8,
-      ),
-    );
-    await Future<void>.delayed(Duration.zero);
+      expect(manager.snapshotFor(id)?.networkSpeedMBps, 2);
 
-    expect(manager.snapshotFor(id)?.networkSpeedMBps, 2);
+      now += 4000;
+      handle.emit(
+        DownloadTransportSnapshot(
+          taskId: taskId,
+          status: DownloadTransportStatus.running,
+          progress: .41,
+          transferredBytes: 41,
+          totalBytes: 100,
+          networkSpeedMBps: 0,
+          configuredConnections: 16,
+          activeConnections: 8,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
 
-    now += 4000;
-    handle.emit(
-      DownloadTransportSnapshot(
-        taskId: taskId,
-        status: DownloadTransportStatus.running,
-        progress: .41,
-        transferredBytes: 41,
-        totalBytes: 100,
-        networkSpeedMBps: 0,
-        configuredConnections: 16,
-        activeConnections: 8,
-      ),
-    );
-    await Future<void>.delayed(Duration.zero);
-
-    expect(manager.snapshotFor(id)?.networkSpeedMBps, 0);
-  });
+      expect(manager.snapshotFor(id)?.networkSpeedMBps, 0);
+    },
+  );
 
   test('records stream cannot lose a start between initial snapshot and subscription', () async {
     final store = _RaceStore();
@@ -296,11 +302,13 @@ void main() {
     final start = manager.start(
       DownloadStartRequestV2(
         logicalId: id,
-        animeId: 'anime:race',
-        episodeKey: '1',
+        mediaId: 'anime:race',
+        unitKey: '1',
         variantKey: 'sub:1080p',
         destinationPath: 'downloads/race.mp4',
-        sourceDescriptor: const <String, Object?>{'providerId': 'provider.example'},
+        sourceDescriptor: const <String, Object?>{
+          'providerId': 'provider.example',
+        },
         expectedBytes: 100,
         allowPause: true,
         retries: 2,
@@ -311,7 +319,11 @@ void main() {
     store.releaseBlockedAll();
     await start;
 
-    for (var i = 0; i < 20 && !emissions.any((items) => items.any((r) => r.logicalId == id)); i++) {
+    for (
+      var i = 0;
+      i < 20 && !emissions.any((items) => items.any((r) => r.logicalId == id));
+      i++
+    ) {
       await Future<void>.delayed(const Duration(milliseconds: 5));
     }
 
@@ -374,8 +386,8 @@ void main() {
     await manager.start(
       DownloadStartRequestV2(
         logicalId: id,
-        animeId: 'anime:reuse',
-        episodeKey: '12',
+        mediaId: 'anime:reuse',
+        unitKey: '12',
         variantKey: 'sub:1080p',
         destinationPath: 'downloads/reused-active.mp4',
         sourceDescriptor: const <String, Object?>{
@@ -443,8 +455,8 @@ LogicalDownloadRecordV2 _record({
   return LogicalDownloadRecordV2(
     schemaVersion: kLogicalDownloadSchemaVersionV2,
     logicalId: id,
-    animeId: 'anime:1',
-    episodeKey: 'episode',
+    mediaId: 'anime:1',
+    unitKey: 'episode',
     variantKey: 'sub:1080p',
     generation: 1,
     taskId: taskIdForGeneration(id, 1),
@@ -461,7 +473,8 @@ LogicalDownloadRecordV2 _record({
 }
 
 final class _RaceStore implements LogicalDownloadStoreV2 {
-  final InMemoryLogicalDownloadStoreV2 _inner = InMemoryLogicalDownloadStoreV2();
+  final InMemoryLogicalDownloadStoreV2 _inner =
+      InMemoryLogicalDownloadStoreV2();
   Completer<void> blockEntered = Completer<void>();
   Completer<void>? _release;
   bool _blockNext = false;

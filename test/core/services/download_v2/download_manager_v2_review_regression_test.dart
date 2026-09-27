@@ -12,106 +12,122 @@ import 'download_v2_test_support.dart';
 
 void main() {
   group('deep-review reliability regressions', () {
-    test('startup demotes completed record when final artifact is missing', () async {
-      final temp = await Directory.systemTemp.createTemp('aw-v2-missing-complete-');
-      addTearDown(() async {
-        if (await temp.exists()) await temp.delete(recursive: true);
-      });
-      final destination = '${temp.path}${Platform.pathSeparator}missing.mp4';
-      final logicalId = _logicalId('missing');
-      final store = InMemoryLogicalDownloadStoreV2();
-      await store.put(
-        _record(
-          logicalId: logicalId,
-          destinationPath: destination,
-          completedAtMillis: 100,
+    test(
+      'startup demotes completed record when final artifact is missing',
+      () async {
+        final temp = await Directory.systemTemp.createTemp(
+          'aw-v2-missing-complete-',
+        );
+        addTearDown(() async {
+          if (await temp.exists()) await temp.delete(recursive: true);
+        });
+        final destination = '${temp.path}${Platform.pathSeparator}missing.mp4';
+        final logicalId = _logicalId('missing');
+        final store = InMemoryLogicalDownloadStoreV2();
+        await store.put(
+          _record(
+            logicalId: logicalId,
+            destinationPath: destination,
+            completedAtMillis: 100,
+            expectedBytes: 4,
+          ),
+        );
+        final gateway = _Gateway();
+        final manager = DownloadManagerV2(
+          store: store,
+          gateway: gateway,
+          sourceResolver: StaticSourceResolverV2(expectedBytes: 4),
+        );
+        addTearDown(manager.dispose);
+
+        await manager.initialize();
+
+        final restored = await store.get(logicalId);
+        expect(restored, isNotNull);
+        expect(restored!.completedAtMillis, isNull);
+        expect(restored.failureCategory, DownloadFailureCategory.integrity);
+        expect(
+          manager.snapshotFor(logicalId)?.status,
+          isNot(DownloadTransportStatus.complete),
+        );
+        expect(gateway.startedSpecs, isEmpty);
+      },
+    );
+
+    test(
+      'integrity mismatch removes invalid final artifact before retry',
+      () async {
+        final temp = await Directory.systemTemp.createTemp(
+          'aw-v2-corrupt-final-',
+        );
+        addTearDown(() async {
+          if (await temp.exists()) await temp.delete(recursive: true);
+        });
+        final file = File('${temp.path}${Platform.pathSeparator}episode.mp4');
+        await file.writeAsBytes(<int>[1, 2, 3], flush: true);
+        final store = InMemoryLogicalDownloadStoreV2();
+        final gateway = _Gateway();
+        final resolver = StaticSourceResolverV2(expectedBytes: 4);
+        final manager = DownloadManagerV2(
+          store: store,
+          gateway: gateway,
+          sourceResolver: resolver,
+        );
+        addTearDown(manager.dispose);
+        final request = _request(
+          logicalId: _logicalId('corrupt'),
+          destinationPath: file.path,
           expectedBytes: 4,
-        ),
-      );
-      final gateway = _Gateway();
-      final manager = DownloadManagerV2(
-        store: store,
-        gateway: gateway,
-        sourceResolver: StaticSourceResolverV2(expectedBytes: 4),
-      );
-      addTearDown(manager.dispose);
+        );
 
-      await manager.initialize();
+        await manager.start(request);
+        gateway.emitComplete(gateway.startedSpecs.single.taskId);
+        await _waitFor(
+          () async =>
+              (await store.get(request.logicalId))?.failureCategory ==
+              DownloadFailureCategory.integrity,
+        );
 
-      final restored = await store.get(logicalId);
-      expect(restored, isNotNull);
-      expect(restored!.completedAtMillis, isNull);
-      expect(restored.failureCategory, DownloadFailureCategory.integrity);
-      expect(manager.snapshotFor(logicalId)?.status, isNot(DownloadTransportStatus.complete));
-      expect(gateway.startedSpecs, isEmpty);
-    });
+        expect(await file.exists(), isFalse);
+        expect(
+          manager.snapshotFor(request.logicalId)?.status,
+          DownloadTransportStatus.failed,
+        );
+      },
+    );
 
-    test('integrity mismatch removes invalid final artifact before retry', () async {
-      final temp = await Directory.systemTemp.createTemp('aw-v2-corrupt-final-');
-      addTearDown(() async {
-        if (await temp.exists()) await temp.delete(recursive: true);
-      });
-      final file = File('${temp.path}${Platform.pathSeparator}episode.mp4');
-      await file.writeAsBytes(<int>[1, 2, 3], flush: true);
-      final store = InMemoryLogicalDownloadStoreV2();
-      final gateway = _Gateway();
-      final resolver = StaticSourceResolverV2(expectedBytes: 4);
-      final manager = DownloadManagerV2(
-        store: store,
-        gateway: gateway,
-        sourceResolver: resolver,
-      );
-      addTearDown(manager.dispose);
-      final request = _request(
-        logicalId: _logicalId('corrupt'),
-        destinationPath: file.path,
-        expectedBytes: 4,
-      );
+    test(
+      'failed obsolete cancel does not publish a replacement generation',
+      () async {
+        final store = InMemoryLogicalDownloadStoreV2();
+        final gateway = _Gateway();
+        final resolver = StaticSourceResolverV2();
+        final manager = DownloadManagerV2(
+          store: store,
+          gateway: gateway,
+          sourceResolver: resolver,
+        );
+        addTearDown(manager.dispose);
+        final request = _request(
+          logicalId: _logicalId('cancel-failure'),
+          destinationPath: '/tmp/aw-v2-cancel-failure.mp4',
+        );
 
-      await manager.start(request);
-      gateway.emitComplete(gateway.startedSpecs.single.taskId);
-      await _waitFor(
-        () async =>
-            (await store.get(request.logicalId))?.failureCategory ==
-            DownloadFailureCategory.integrity,
-      );
+        await manager.start(request);
+        final firstTaskId = gateway.startedSpecs.single.taskId;
+        final handle = gateway.handleFor(firstTaskId)!;
+        handle.cancelResult = false;
 
-      expect(await file.exists(), isFalse);
-      expect(
-        manager.snapshotFor(request.logicalId)?.status,
-        DownloadTransportStatus.failed,
-      );
-    });
+        await expectLater(manager.restart(request.logicalId), throwsStateError);
 
-    test('failed obsolete cancel does not publish a replacement generation', () async {
-      final store = InMemoryLogicalDownloadStoreV2();
-      final gateway = _Gateway();
-      final resolver = StaticSourceResolverV2();
-      final manager = DownloadManagerV2(
-        store: store,
-        gateway: gateway,
-        sourceResolver: resolver,
-      );
-      addTearDown(manager.dispose);
-      final request = _request(
-        logicalId: _logicalId('cancel-failure'),
-        destinationPath: '/tmp/aw-v2-cancel-failure.mp4',
-      );
-
-      await manager.start(request);
-      final firstTaskId = gateway.startedSpecs.single.taskId;
-      final handle = gateway.handleFor(firstTaskId)!;
-      handle.cancelResult = false;
-
-      await expectLater(manager.restart(request.logicalId), throwsStateError);
-
-      final durable = await store.get(request.logicalId);
-      expect(durable, isNotNull);
-      expect(durable!.generation, 1);
-      expect(durable.taskId, firstTaskId);
-      expect(gateway.startedSpecs, hasLength(1));
-      expect(manager.snapshotFor(request.logicalId)?.taskId, firstTaskId);
-    });
+        final durable = await store.get(request.logicalId);
+        expect(durable, isNotNull);
+        expect(durable!.generation, 1);
+        expect(durable.taskId, firstTaskId);
+        expect(gateway.startedSpecs, hasLength(1));
+        expect(manager.snapshotFor(request.logicalId)?.taskId, firstTaskId);
+      },
+    );
 
     test('rejected user cancel restores the active download record', () async {
       final store = InMemoryLogicalDownloadStoreV2();
@@ -137,8 +153,10 @@ void main() {
       expect(record, isNotNull);
       expect(record!.intent, DownloadUserIntent.active);
       expect(record.taskId, taskId);
-      expect(manager.snapshotFor(request.logicalId)?.status,
-          DownloadTransportStatus.running);
+      expect(
+        manager.snapshotFor(request.logicalId)?.status,
+        DownloadTransportStatus.running,
+      );
       expect(gateway.startedSpecs, hasLength(1));
       expect(gateway.handleFor(taskId), isNotNull);
     });
@@ -146,10 +164,10 @@ void main() {
 }
 
 DownloadLogicalId _logicalId(String suffix) => logicalDownloadIdFor(
-      animeId: 'anime:review',
-      episodeKey: suffix,
-      variantKey: 'sub|1080p',
-    );
+  animeId: 'anime:review',
+  episodeKey: suffix,
+  variantKey: 'sub|1080p',
+);
 
 DownloadStartRequestV2 _request({
   required DownloadLogicalId logicalId,
@@ -158,8 +176,8 @@ DownloadStartRequestV2 _request({
 }) {
   return DownloadStartRequestV2(
     logicalId: logicalId,
-    animeId: 'anime:review',
-    episodeKey: logicalId.value,
+    mediaId: 'anime:review',
+    unitKey: logicalId.value,
     variantKey: 'sub|1080p',
     destinationPath: destinationPath,
     sourceDescriptor: const <String, Object?>{
@@ -182,8 +200,8 @@ LogicalDownloadRecordV2 _record({
   return LogicalDownloadRecordV2(
     schemaVersion: kLogicalDownloadSchemaVersionV2,
     logicalId: logicalId,
-    animeId: 'anime:review',
-    episodeKey: logicalId.value,
+    mediaId: 'anime:review',
+    unitKey: logicalId.value,
     variantKey: 'sub|1080p',
     generation: 1,
     taskId: taskIdForGeneration(logicalId, 1),
@@ -230,7 +248,8 @@ final class _Gateway implements BackgroundDownloaderGateway {
   }
 
   @override
-  Future<DownloadTransportHandle?> attach(String taskId) async => _handles[taskId];
+  Future<DownloadTransportHandle?> attach(String taskId) async =>
+      _handles[taskId];
 
   @override
   Future<List<DownloadTransportHandle>> rehydrate() async =>

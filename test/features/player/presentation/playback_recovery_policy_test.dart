@@ -70,15 +70,6 @@ void main() {
     });
   });
 
-  group('worstCaseReconnectLadder', () {
-    test('sums waiting time between the three attempts (2+4s)', () {
-      expect(
-        PlaybackRecoveryPolicy.worstCaseReconnectLadder,
-        const Duration(seconds: 6),
-      );
-    });
-  });
-
   group('isPermanentPlaybackError', () {
     test('treats 401/403/404 as dead URLs', () {
       expect(

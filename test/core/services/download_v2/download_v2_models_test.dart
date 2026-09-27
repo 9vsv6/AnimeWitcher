@@ -21,8 +21,8 @@ void main() {
     return LogicalDownloadRecordV2(
       schemaVersion: 1,
       logicalId: logicalId,
-      animeId: 'anilist:21',
-      episodeKey: '12',
+      mediaId: 'anilist:21',
+      unitKey: '12',
       variantKey: 'sub:1080p',
       generation: 1,
       taskId: taskIdForGeneration(logicalId, 1),
@@ -114,23 +114,26 @@ void main() {
     expect(paused.updatedAtMillis, 5678);
   });
 
-  test('copyWith can explicitly clear stale completion and failure metadata', () {
-    final terminal = record(
-      completedAtMillis: 9999,
-      failureCategory: DownloadFailureCategory.integrity,
-      failureMessage: 'bad file',
-    );
+  test(
+    'copyWith can explicitly clear stale completion and failure metadata',
+    () {
+      final terminal = record(
+        completedAtMillis: 9999,
+        failureCategory: DownloadFailureCategory.integrity,
+        failureMessage: 'bad file',
+      );
 
-    final restarted = terminal.copyWith(
-      clearCompletedAtMillis: true,
-      clearFailure: true,
-      updatedAtMillis: 10000,
-    );
+      final restarted = terminal.copyWith(
+        clearCompletedAtMillis: true,
+        clearFailure: true,
+        updatedAtMillis: 10000,
+      );
 
-    expect(restarted.completedAtMillis, isNull);
-    expect(restarted.failureCategory, isNull);
-    expect(restarted.failureMessage, isNull);
-  });
+      expect(restarted.completedAtMillis, isNull);
+      expect(restarted.failureCategory, isNull);
+      expect(restarted.failureMessage, isNull);
+    },
+  );
 
   test('transport snapshot final-state classification is explicit', () {
     expect(

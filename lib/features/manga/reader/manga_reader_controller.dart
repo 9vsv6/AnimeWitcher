@@ -20,7 +20,7 @@ class MangaReaderController extends ChangeNotifier {
     required this.provider,
     required this.progressRepository,
     required this.manga,
-    required this.chapter,
+    required MangaChapter chapter,
     required this.chapters,
     this.localChapterDirectory,
     MangaReaderPageCache? pageCache,
@@ -33,7 +33,6 @@ class MangaReaderController extends ChangeNotifier {
   final AnimeWitcherProvider provider;
   final MangaReadingRepository progressRepository;
   final MultimediaItem manga;
-  final MangaChapter chapter;
   final List<MangaChapter> chapters;
   final String? localChapterDirectory;
   final String _localChapterId;
@@ -141,7 +140,6 @@ class MangaReaderController extends ChangeNotifier {
     }
   }
 
-
   Future<void> _preloadAdjacentChapters() async {
     final index = currentChapterIndex;
     if (index < 0 || chapters.isEmpty) return;
@@ -229,10 +227,7 @@ class MangaReaderController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setPageIndex(
-    int value, {
-    bool autoReadDuplicateChapters = false,
-  }) {
+  void setPageIndex(int value, {bool autoReadDuplicateChapters = false}) {
     _autoReadDuplicateChapters = autoReadDuplicateChapters;
     if (_pages.isEmpty) return;
     final next = value.clamp(0, _pages.length - 1).toInt();
@@ -280,8 +275,7 @@ class MangaReaderController extends ChangeNotifier {
   Future<void> flushProgress() async {
     if (_pages.isEmpty) return;
     final previous = progressRepository.get(_mangaId, _chapter.id);
-    final isRead =
-        (previous?.isRead ?? false) || _shouldMarkCurrentChapterRead;
+    final isRead = (previous?.isRead ?? false) || _shouldMarkCurrentChapterRead;
     await progressRepository.save(
       MangaReadingProgress(
         mangaId: _mangaId,
@@ -303,10 +297,6 @@ class MangaReaderController extends ChangeNotifier {
     await flushProgress();
     await progressRepository.toggleBookmark(_mangaId, _chapter.id);
     notifyListeners();
-  }
-
-  void jumpToPage(int value) {
-    setPageIndex(value);
   }
 
   Future<void> openChapter(MangaChapter value) async {
