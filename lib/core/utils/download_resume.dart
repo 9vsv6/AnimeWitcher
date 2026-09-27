@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:background_downloader/background_downloader.dart';
 import 'package:path/path.dart' as p;
 
-import '../services/download_concurrency.dart';
 import 'download_cleanup.dart';
 
 /// How an interrupted download should be continued.
