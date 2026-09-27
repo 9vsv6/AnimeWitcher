@@ -412,8 +412,8 @@ class DownloadLauncher {
                       await downloadManager.start(
                         DownloadStartRequestV2(
                           logicalId: logicalId,
-                          animeId: animeId,
-                          episodeKey: episodeKey,
+                          mediaId: animeId,
+                          unitKey: episodeKey,
                           variantKey: variantKey,
                           destinationPath: destinationPath,
                           sourceDescriptor: descriptor.toJson(),
