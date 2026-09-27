@@ -12,24 +12,24 @@ import androidx.tvprovider.media.tv.Channel
 import androidx.tvprovider.media.tv.PreviewProgram
 import androidx.tvprovider.media.tv.TvContractCompat
 
-const val PROGRAM_ID_LIST_KEY = "persistent_program_ids"
-const val APP_STRING_SHARE = "csshare"
+private const val PROGRAM_ID_LIST_KEY = "persistent_program_ids"
+private const val APP_STRING_SHARE = "csshare"
 
 object TvChannelUtils {
 
     private fun Context.getPrefs() = getSharedPreferences("tv_channel_utils", Context.MODE_PRIVATE)
 
-    fun Context.saveProgramId(programId: Long) {
+    private fun Context.saveProgramId(programId: Long) {
         val existing = getStoredProgramIds().toMutableSet()
         existing.add(programId)
         getPrefs().edit().putStringSet(PROGRAM_ID_LIST_KEY, existing.map { it.toString() }.toSet()).apply()
     }
 
-    fun Context.getStoredProgramIds(): List<Long> {
+    private fun Context.getStoredProgramIds(): List<Long> {
         return getPrefs().getStringSet(PROGRAM_ID_LIST_KEY, emptySet())?.mapNotNull { it.toLongOrNull() } ?: emptyList()
     }
 
-    fun Context.removeProgramId(programId: Long) {
+    private fun Context.removeProgramId(programId: Long) {
          val existing = getStoredProgramIds().toMutableSet()
          existing.remove(programId)
          getPrefs().edit().putStringSet(PROGRAM_ID_LIST_KEY, existing.map { it.toString() }.toSet()).apply()
@@ -124,10 +124,8 @@ object TvChannelUtils {
         for (id in programIds) {
             val uri = ContentUris.withAppendedId(TvContractCompat.PreviewPrograms.CONTENT_URI, id)
             try {
-                val rowsDeleted = context.contentResolver.delete(uri, null, null)
-                if (rowsDeleted > 0 || true) { // Always remove from list if attempted, to avoid stuck IDs
-                    context.removeProgramId(id) 
-                }
+                context.contentResolver.delete(uri, null, null)
+                context.removeProgramId(id)
             } catch (e: Exception) {
                 Log.e("ProgramDelete", "Failed to delete program ID: $id", e)
                  // If permission denied or other persistent error, maybe keep it? But safe to remove from local list to avoid loop
