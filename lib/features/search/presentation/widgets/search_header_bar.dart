@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:animewitcher/l10n/generated/app_localizations.dart';
 
 import '../search_domain.dart';
 import '../search_provider.dart';
