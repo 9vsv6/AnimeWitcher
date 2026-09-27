@@ -52,6 +52,16 @@ void main() {
     expect(formatCatalogRatingScore(rating!.score), '9.47');
   });
 
+  test('catalog rating parses Arabic and Persian digits', () {
+    for (final score in ['٨.٧٣', '۸.۷۳']) {
+      final rating = preferredCatalogRating(
+        _item(<String, String>{'awMalScore': score}),
+      );
+
+      expect(rating?.score, 8.73);
+    }
+  });
+
   test('invalid scores are ignored', () {
     expect(
       preferredCatalogRating(
