@@ -529,14 +529,12 @@ class _DownloadItemTile extends ConsumerWidget {
   final double progress;
   final TaskStatus status;
   final DownloadProgressData? progressData;
-  final bool isInsideGroup;
 
   const _DownloadItemTile({
     required this.item,
     required this.progress,
     required this.status,
     this.progressData,
-    this.isInsideGroup = false,
   });
 
   @override
@@ -608,9 +606,7 @@ class _DownloadItemTile extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                (isInsideGroup && unitLabel != null)
-                    ? unitLabel
-                    : item.item.title,
+                item.item.title,
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: theme.colorScheme.primary,
@@ -618,7 +614,7 @@ class _DownloadItemTile extends ConsumerWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              if (!isInsideGroup && unitLabel != null) ...[
+              if (unitLabel != null) ...[
                 const SizedBox(height: 2),
                 Text(
                   unitLabel,
@@ -776,10 +772,6 @@ class _DownloadItemTile extends ConsumerWidget {
       borderRadius: BorderRadius.circular(LayoutConstants.radiusLg),
       child: content,
     );
-
-    if (isInsideGroup) {
-      return tile;
-    }
 
     return Card(
       elevation: 0,
