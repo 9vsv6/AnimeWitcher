@@ -515,7 +515,7 @@ void main() {
 
   test('chapters and pages use AnimeWitcher Firestore hierarchy first', () async {
     final stub = _stubDio();
-    Map? chapterStructuredQuery;
+    Map<dynamic, dynamic>? chapterStructuredQuery;
     stub.dio.interceptors.insert(
       0,
       InterceptorsWrapper(
