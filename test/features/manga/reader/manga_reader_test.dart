@@ -20,7 +20,6 @@ import 'package:animewitcher/features/manga/reader/widgets/manga_webtoon_reader.
 import 'package:animewitcher/features/manga/reader/widgets/manga_reader_navigation_overlay.dart';
 import 'package:animewitcher/features/manga/reader/widgets/manga_reader_page_indicator.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
-import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -33,14 +32,6 @@ const pages = <MangaPage>[
   MangaPage(index: 1, imageUrl: 'http://127.0.0.1:1/2.webp'),
   MangaPage(index: 2, imageUrl: 'http://127.0.0.1:1/3.webp'),
 ];
-
-Future<void> _doubleTap(WidgetTester tester, Finder finder) async {
-  final position = tester.getCenter(finder);
-  await tester.tapAt(position);
-  await tester.pump(const Duration(milliseconds: 60));
-  await tester.tapAt(position);
-  await tester.pump(const Duration(milliseconds: 350));
-}
 
 final class _ReaderProvider extends AnimeWitcherProvider {
   _ReaderProvider({this.emptyPages = false});
