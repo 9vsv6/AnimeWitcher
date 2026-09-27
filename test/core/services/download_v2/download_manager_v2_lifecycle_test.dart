@@ -25,8 +25,8 @@ void main() {
     );
     final request = DownloadStartRequestV2(
       logicalId: logicalId,
-      animeId: 'anilist:21',
-      episodeKey: '12',
+      mediaId: 'anilist:21',
+      unitKey: '12',
       variantKey: 'sub:1080p',
       destinationPath: 'downloads/anime/episode-12.mp4',
       sourceDescriptor: const <String, Object?>{
@@ -128,8 +128,8 @@ void main() {
     );
     final request = DownloadStartRequestV2(
       logicalId: logicalId,
-      animeId: 'anilist:21',
-      episodeKey: '12',
+      mediaId: 'anilist:21',
+      unitKey: '12',
       variantKey: 'sub:1080p',
       destinationPath: 'downloads/anime/episode-12.mp4',
       sourceDescriptor: const <String, Object?>{
@@ -350,8 +350,8 @@ void main() {
         episodeKey: '13',
         variantKey: 'sub:1080p',
       ),
-      animeId: 'anilist:22',
-      episodeKey: '13',
+      mediaId: 'anilist:22',
+      unitKey: '13',
       variantKey: 'sub:1080p',
       destinationPath: f.request.destinationPath,
       sourceDescriptor: const <String, Object?>{
@@ -396,8 +396,8 @@ void main() {
       LogicalDownloadRecordV2(
         schemaVersion: kLogicalDownloadSchemaVersionV2,
         logicalId: firstId,
-        animeId: 'anilist:21',
-        episodeKey: '12',
+        mediaId: 'anilist:21',
+        unitKey: '12',
         variantKey: 'sub:1080p',
         generation: 1,
         taskId: firstTaskId,
@@ -414,8 +414,8 @@ void main() {
       LogicalDownloadRecordV2(
         schemaVersion: kLogicalDownloadSchemaVersionV2,
         logicalId: secondId,
-        animeId: 'anilist:22',
-        episodeKey: '13',
+        mediaId: 'anilist:22',
+        unitKey: '13',
         variantKey: 'sub:1080p',
         generation: 1,
         taskId: secondTaskId,
@@ -690,8 +690,8 @@ _Fixture _fixture({
   );
   final request = DownloadStartRequestV2(
     logicalId: logicalId,
-    animeId: 'anilist:21',
-    episodeKey: '12',
+    mediaId: 'anilist:21',
+    unitKey: '12',
     variantKey: 'sub:1080p',
     destinationPath: destinationPath,
     sourceDescriptor: const <String, Object?>{
