@@ -1,7 +1,6 @@
 import 'package:animewitcher/core/account/account_providers.dart';
 import 'package:animewitcher/core/account/animewitcher_account_service.dart';
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
-import 'package:animewitcher/core/storage/history_repository.dart';
 import 'package:animewitcher/core/storage/secure_token_storage.dart';
 import 'package:animewitcher/core/storage/storage_service.dart';
 import 'package:animewitcher/features/library/presentation/history_provider.dart';
