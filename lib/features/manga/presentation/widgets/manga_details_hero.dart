@@ -32,13 +32,12 @@ class MangaDetailsHero extends StatelessWidget {
 
     final bannerHeight = sdp(LayoutConstants.detailsBannerHeightMobile);
     final posterUrl =
-        AppImageFallbacks.poster(item.posterUrl, label: item.title) ?? '';
+        AppImageFallbacks.poster(item.posterUrl) ?? '';
     final providedBannerUrl = AppImageFallbacks.optional(item.bannerUrl);
     final bannerUrl =
         AppImageFallbacks.banner(
           bannerUrl: item.bannerUrl,
           posterUrl: item.posterUrl,
-          label: item.title,
         ) ??
         '';
     final titleHeight = sdp(28).clamp(28.0, 44.0).toDouble();
