@@ -30,7 +30,7 @@ on:
         type: boolean
 
   push:
-    branches: [fix/download-manager-performance-v2, refactor/project-cleanup-2026-09-26]
+    branches: [fix/download-manager-performance-v2]
 
 jobs:
   android:
@@ -107,7 +107,7 @@ jobs:
 
   ios:
     name: iOS Build (Unsigned)
-    if: ${{ (github.event_name == 'push' && github.ref_name == 'refactor/project-cleanup-2026-09-26') || github.event.inputs.build_ios == 'true' }}
+    if: ${{ github.event.inputs.build_ios == 'true' }}
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
