@@ -543,15 +543,9 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     BuildContext context,
     MultimediaItem item,
   ) async {
-    final posterUrl = AppImageFallbacks.poster(
-      item.posterViewerUrl,
-      label: item.title,
-    );
+    final posterUrl = AppImageFallbacks.poster(item.posterViewerUrl);
     if (posterUrl == null || posterUrl.isEmpty) return;
-    final previewUrl = AppImageFallbacks.poster(
-      item.posterUrl,
-      label: item.title,
-    );
+    final previewUrl = AppImageFallbacks.poster(item.posterUrl);
 
     await showGeneralDialog<void>(
       context: context,
