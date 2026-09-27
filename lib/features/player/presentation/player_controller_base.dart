@@ -386,7 +386,7 @@ class PlayerController extends Notifier<PlayerState> {
   DateTime? _lastPositionUpdateTime;
   bool _isRecoveringFromStall = false;
   // Backstop timer for the stall-recovery flag. Primary path: clear the
-  // flag in `_endStallRecovery()` immediately after `changeStream(...)`
+  // flag in `_endStallRecovery()` immediately after `_changeStream(...)`
   // completes. Backstop fires only if changeStream hangs longer than 10 s.
   // Without this, the flag was solely time-based — chained errors firing
   // at 9-s intervals would silently skip every other reconnect attempt
@@ -767,7 +767,7 @@ class PlayerController extends Notifier<PlayerState> {
         currentStreamIndex: 0,
       );
       _setSourceAttemptsFromStreams(<StreamResult>[selectedSource]);
-      await loadStreamAtIndex(0, sourceSessionId: sourceSessionId);
+      await _loadStreamAtIndex(0, sourceSessionId: sourceSessionId);
     } else {
       // Some picker entries are intermediate provider URLs. Preserve the
       // user's exact selection and let the provider resolve that one entry
@@ -1230,14 +1230,14 @@ class PlayerController extends Notifier<PlayerState> {
           );
           if (_manualSelectionPending) {
             _manualSelectionPending = false;
-            revertToPreviousStream(
+            _revertToPreviousStream(
               _playerText(
                 english: 'Selected source is not playable. Reverting back to previous source.',
                 arabic: 'المصدر المحدد غير قابل للتشغيل. جارٍ الرجوع إلى المصدر السابق.',
               ),
             );
           } else {
-            unawaited(retryNextStream(sourceSessionId: state.sourceSessionId));
+            unawaited(_retryNextStream(sourceSessionId: state.sourceSessionId));
           }
         } else {
           // Error during active playback.
@@ -1250,7 +1250,7 @@ class PlayerController extends Notifier<PlayerState> {
             }
             _enterRuntimePhase(kind: PlaybackUiPhaseKind.reconnectingLive);
             _beginStallRecovery(
-              perform: changeStream(state.currentStream!, resetPosition: true),
+              perform: _changeStream(state.currentStream!, resetPosition: true),
             );
             return;
           }
@@ -1267,7 +1267,7 @@ class PlayerController extends Notifier<PlayerState> {
             english: 'Current source stopped unexpectedly. Trying next available source...',
             arabic: 'توقف المصدر الحالي بشكل غير متوقع. جارٍ تجربة المصدر التالي المتاح...',
           );
-          unawaited(retryNextStream(sourceSessionId: state.sourceSessionId));
+          unawaited(_retryNextStream(sourceSessionId: state.sourceSessionId));
         }
       }
     });
@@ -1301,7 +1301,7 @@ class PlayerController extends Notifier<PlayerState> {
             _isLiveStream(_videoUrl);
         if (isLive && state.currentStream != null) {
           _enterRuntimePhase(kind: PlaybackUiPhaseKind.reconnectingLive);
-          unawaited(changeStream(state.currentStream!, resetPosition: true));
+          unawaited(_changeStream(state.currentStream!, resetPosition: true));
         }
       }
     });
@@ -1562,7 +1562,7 @@ class PlayerController extends Notifier<PlayerState> {
         debugPrint('Watchdog: buffering 25s — reopening source at $position');
       }
       _enterRuntimePhase(kind: PlaybackUiPhaseKind.bufferingRuntime);
-      _beginStallRecovery(perform: changeStream(current, resetPosition: false));
+      _beginStallRecovery(perform: _changeStream(current, resetPosition: false));
       return;
     }
 
@@ -1578,7 +1578,7 @@ class PlayerController extends Notifier<PlayerState> {
         english: 'This source stopped responding after the seek. Trying the next one…',
         arabic: 'توقف هذا المصدر عن الاستجابة بعد التقديم. جارٍ تجربة المصدر التالي…',
       );
-      unawaited(retryNextStream(sourceSessionId: state.sourceSessionId));
+      unawaited(_retryNextStream(sourceSessionId: state.sourceSessionId));
     }
   }
 
@@ -1753,7 +1753,7 @@ class PlayerController extends Notifier<PlayerState> {
               'current source with software decoding.',
             );
           }
-          unawaited(changeStream(state.currentStream!, resetPosition: true));
+          unawaited(_changeStream(state.currentStream!, resetPosition: true));
           return;
         }
 
@@ -1764,14 +1764,14 @@ class PlayerController extends Notifier<PlayerState> {
         );
         if (_manualSelectionPending) {
           _manualSelectionPending = false;
-          revertToPreviousStream(
+          _revertToPreviousStream(
             _playerText(
               english: 'Selected source failed. Reverting...',
               arabic: 'فشل المصدر المحدد. جارٍ الرجوع...',
             ),
           );
         } else {
-          retryNextStream(sourceSessionId: state.sourceSessionId);
+          _retryNextStream(sourceSessionId: state.sourceSessionId);
         }
       } else {
         // Error during active playback.
@@ -1788,7 +1788,7 @@ class PlayerController extends Notifier<PlayerState> {
           }
           _enterRuntimePhase(kind: PlaybackUiPhaseKind.reconnectingLive);
           _beginStallRecovery(
-            perform: changeStream(state.currentStream!, resetPosition: true),
+            perform: _changeStream(state.currentStream!, resetPosition: true),
           );
           return;
         }
@@ -1814,7 +1814,7 @@ class PlayerController extends Notifier<PlayerState> {
           english: 'Current source stopped unexpectedly. Trying next available source...',
           arabic: 'توقف المصدر الحالي بشكل غير متوقع. جارٍ تجربة المصدر التالي المتاح...',
         );
-        retryNextStream(sourceSessionId: state.sourceSessionId);
+        _retryNextStream(sourceSessionId: state.sourceSessionId);
       }
     });
   }
@@ -1869,7 +1869,7 @@ class PlayerController extends Notifier<PlayerState> {
       english: 'Current source stopped unexpectedly. Trying next available source...',
       arabic: 'توقف المصدر الحالي بشكل غير متوقع. جارٍ تجربة المصدر التالي المتاح...',
     );
-    unawaited(retryNextStream(sourceSessionId: state.sourceSessionId));
+    unawaited(_retryNextStream(sourceSessionId: state.sourceSessionId));
   }
 
   Future<void> _triggerMidPlaybackReconnect({
@@ -2023,7 +2023,7 @@ class PlayerController extends Notifier<PlayerState> {
             debugPrint("Live stream reached EOF. Forcing auto-reconnect...");
           }
           _enterRuntimePhase(kind: PlaybackUiPhaseKind.reconnectingLive);
-          unawaited(changeStream(state.currentStream!, resetPosition: true));
+          unawaited(_changeStream(state.currentStream!, resetPosition: true));
         }
       }
     });
@@ -2054,7 +2054,7 @@ class PlayerController extends Notifier<PlayerState> {
             // _player.play() is sync — fall back to the time-based backstop.
             if (state.isLive && state.currentStream != null) {
               _beginStallRecovery(
-                perform: changeStream(
+                perform: _changeStream(
                   state.currentStream!,
                   resetPosition: true,
                 ),
@@ -2266,7 +2266,7 @@ class PlayerController extends Notifier<PlayerState> {
           );
           if (!_isCurrentSourceSession(sourceSessionId)) return;
 
-          await loadStreamAtIndex(
+          await _loadStreamAtIndex(
             workingIndex,
             sourceSessionId: sourceSessionId,
           );
@@ -2300,7 +2300,7 @@ class PlayerController extends Notifier<PlayerState> {
         currentStreamIndex: 0,
       );
       _setSourceAttemptsFromStreams(<StreamResult>[stream], activeIndex: 0);
-      await loadStreamAtIndex(0, sourceSessionId: state.sourceSessionId);
+      await _loadStreamAtIndex(0, sourceSessionId: state.sourceSessionId);
       return true;
     }
     return false;
@@ -2331,7 +2331,7 @@ class PlayerController extends Notifier<PlayerState> {
       if (streams.isEmpty) return false;
       playable = streams.first;
     }
-    await changeStream(playable, manualSelection: true);
+    await _changeStream(playable, manualSelection: true);
     return true;
   }
 
@@ -2893,7 +2893,7 @@ class PlayerController extends Notifier<PlayerState> {
     }
   }
 
-  Future<void> selectSubtitleTrack(String? id) async {
+  Future<void> _selectSubtitleTrack(String? id) async {
     if (state.useExoPlayer && _videoViewController != null) {
       if (id == null) {
         _videoViewController!.setShowSubtitle(false);
@@ -2980,14 +2980,14 @@ class PlayerController extends Notifier<PlayerState> {
 
     final external = state.externalSubtitles;
     if (external.isNotEmpty) {
-      await selectSubtitleTrack('external:${external.first.url}');
+      await _selectSubtitleTrack('external:${external.first.url}');
       return;
     }
 
     if (!state.useExoPlayer) {
       final embedded = _player.state.tracks.subtitle;
       if (embedded.isNotEmpty) {
-        await selectSubtitleTrack(embedded.first.id);
+        await _selectSubtitleTrack(embedded.first.id);
       }
     }
   }
@@ -3047,7 +3047,7 @@ class PlayerController extends Notifier<PlayerState> {
     }
   }
 
-  Future<void> loadStreamAtIndex(
+  Future<void> _loadStreamAtIndex(
     int index, {
     int? sourceSessionId,
     bool manualSelection = false,
@@ -3150,7 +3150,7 @@ class PlayerController extends Notifier<PlayerState> {
       if (manualSelection) {
         // Issue 2: Don't show "all sources failed" for a manual pick — revert
         // silently to the previously playing source instead.
-        revertToPreviousStream(
+        _revertToPreviousStream(
           _playerText(
             english: 'Selected source is not playable. Reverting back to previous source.',
             arabic: 'المصدر المحدد غير قابل للتشغيل. جارٍ الرجوع إلى المصدر السابق.',
@@ -3158,11 +3158,11 @@ class PlayerController extends Notifier<PlayerState> {
         );
         return;
       }
-      unawaited(retryNextStream(sourceSessionId: sourceSessionId));
+      unawaited(_retryNextStream(sourceSessionId: sourceSessionId));
     }
   }
 
-  Future<void> changeStream(
+  Future<void> _changeStream(
     StreamResult stream, {
     bool isRevert = false,
     bool resetPosition = false,
@@ -3247,7 +3247,7 @@ class PlayerController extends Notifier<PlayerState> {
           ),
         );
       } else {
-        revertToPreviousStream(
+        _revertToPreviousStream(
           _playerText(
             english: 'Could not switch to selected source. Reverting back to previous source.',
             arabic: 'تعذر التبديل إلى المصدر المحدد. جارٍ الرجوع إلى المصدر السابق.',
@@ -3257,7 +3257,7 @@ class PlayerController extends Notifier<PlayerState> {
     }
   }
 
-  Future<void> retryNextStream({int? sourceSessionId}) async {
+  Future<void> _retryNextStream({int? sourceSessionId}) async {
     _resetBufferWatchdog();
     _resetMidPlaybackReconnect();
     if (sourceSessionId != null && !_isCurrentSourceSession(sourceSessionId)) {
@@ -3331,7 +3331,7 @@ class PlayerController extends Notifier<PlayerState> {
 
       _markSourceAttempt(targetIndex, SourceAttemptStatus.trying);
       unawaited(
-        loadStreamAtIndex(targetIndex, sourceSessionId: sourceSessionId),
+        _loadStreamAtIndex(targetIndex, sourceSessionId: sourceSessionId),
       );
     } else {
       // All sources exhausted — always show the blocking error overlay regardless
@@ -3340,14 +3340,14 @@ class PlayerController extends Notifier<PlayerState> {
     }
   }
 
-  void revertToPreviousStream(String message) {
+  void _revertToPreviousStream(String message) {
     if (state.previousStream == null) {
       // No previous stream to revert to — skip to the next available source.
-      retryNextStream(sourceSessionId: state.sourceSessionId);
+      _retryNextStream(sourceSessionId: state.sourceSessionId);
       return;
     }
     _revertMessage = message;
-    changeStream(state.previousStream!, isRevert: true);
+    _changeStream(state.previousStream!, isRevert: true);
   }
 
   /// Consumed by the UI to show a one-time snackbar/toast. Null after read.
@@ -3489,7 +3489,7 @@ class PlayerController extends Notifier<PlayerState> {
         currentStreamIndex: 0,
       );
       _setSourceAttemptsFromStreams(<StreamResult>[selectedSource]);
-      await loadStreamAtIndex(0, sourceSessionId: sourceSessionId);
+      await _loadStreamAtIndex(0, sourceSessionId: sourceSessionId);
       return;
     }
 
@@ -3562,7 +3562,7 @@ class PlayerController extends Notifier<PlayerState> {
         currentStreamIndex: 0,
       );
       _setSourceAttemptsFromStreams(<StreamResult>[selectedSource]);
-      await loadStreamAtIndex(0, sourceSessionId: sourceSessionId);
+      await _loadStreamAtIndex(0, sourceSessionId: sourceSessionId);
       return;
     }
 
