@@ -59,6 +59,14 @@
 - [ ] Regenerate lock/plugin metadata rather than editing generated registrants manually.
 - [ ] Run analyzer/tests/platform gates.
 
+### Task 4 progress — low-risk utilities
+
+- Removed unused public surface: `LayoutConstants.detailsExpandedHeightDesktop`, `LayoutConstants.radiusXxl`, `isArabicAppLocale`, and `ResponsiveContext.deviceType`; repo/base-diff searches showed no production callers on the corrected baseline.
+- Removed the unused `BuildContext` parameter from `formatDownloadTimeRemaining` and updated both production callers plus its tests. A missed second test caller caused analyzer failure in run #2956; it was fixed in `c2322f8` together with the now-unused import.
+- Privatized file-local helpers in catalog labels, URI repair, and factory reset instead of leaving unused public API.
+- Consolidated duplicated Arabic-Indic/Eastern-Arabic-Indic digit normalization into `digit_normalization.dart`; existing catalog-rating and episode-label tests already cover both digit families.
+- Removed analyzer-proven unused search locals/imports and stale test-only imports/helper code without changing behavior.
+
 ### Task 4: Clean low-risk core utilities/models/providers/theme
 - [ ] Find unused declarations and duplicated helpers on the corrected baseline.
 - [ ] Simplify equivalent guard/normalization/formatting logic.
