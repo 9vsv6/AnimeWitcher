@@ -114,8 +114,8 @@ _Fixture _fixture(
   );
   final request = DownloadStartRequestV2(
     logicalId: logicalId,
-    animeId: 'anilist:21',
-    episodeKey: '12',
+    mediaId: 'anilist:21',
+    unitKey: '12',
     variantKey: 'sub:1080p',
     destinationPath: destinationPath,
     sourceDescriptor: const <String, Object?>{
