@@ -215,7 +215,7 @@ class MultimediaCard extends StatelessWidget {
     this.isPortrait = true,
     this.showImageLoadingShimmer = true,
     bool showRelationBadge = false,
-  }) : imageUrl = AppImageFallbacks.poster(item.posterUrl, label: item.title),
+  }) : imageUrl = AppImageFallbacks.poster(item.posterUrl),
        malId = item.artworkLookupMalId,
        lookupTitle = item.artworkLookupTitle,
        manga = item.contentType == MultimediaContentType.manga,
