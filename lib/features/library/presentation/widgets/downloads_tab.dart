@@ -714,7 +714,6 @@ class _DownloadItemTile extends ConsumerWidget {
                       const SizedBox(width: LayoutConstants.spacingSm),
                       Text(
                         formatDownloadTimeRemaining(
-                          context,
                           progressData!,
                           l10n,
                         ),
