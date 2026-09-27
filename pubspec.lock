@@ -85,7 +85,7 @@ packages:
     dependency: "direct main"
     description:
       name: background_downloader
-      sha256: "f82729d0458f58e888f235bc0e0c0b94d9381362852e57b0b614b96199fb6ed0"
+      sha256: f82729d0458f58e888f235bc0e0c0b94d9381362852e57b0b614b96199fb6ed0
       url: "https://pub.dev"
     source: hosted
     version: "9.6.2"
@@ -218,13 +218,13 @@ packages:
     source: hosted
     version: "1.1.2"
   code_assets:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: code_assets
-      sha256: bf394f466ba9205f1812a0433b392d6af280f155f56651eda7c18cc32ed493b8
+      sha256: "828110d598123b5ea96c00c9f3c72105bf79f8ee36c20a39b26209ade421ec57"
       url: "https://pub.dev"
     source: hosted
-    version: "1.2.1"
+    version: "2.1.0"
   code_builder:
     dependency: transitive
     description:
@@ -361,14 +361,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.1"
-  disk_usage:
-    dependency: "direct main"
-    description:
-      name: disk_usage
-      sha256: "438401304354b7d25a8784ae435f4d730ae99c68d3bbeb02369db5c8af891ea6"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.0"
   dpad:
     dependency: "direct main"
     description:
@@ -438,6 +430,22 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_avif_ios:
+    dependency: "direct main"
+    description:
+      name: flutter_avif_ios
+      sha256: "3daaa599d8fe0193d3ade6cafa1fd4f166d4063b8d499c7c311ce1d170b2759f"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.1.0"
+  flutter_avif_platform_interface:
+    dependency: "direct main"
+    description:
+      name: flutter_avif_platform_interface
+      sha256: f5c110bdb7de2d4ab4902bfe2ec331fe24bc19b6d54f00ac4fa165effc0edcda
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.1.0"
   flutter_cache_manager:
     dependency: "direct main"
     description:
@@ -694,13 +702,13 @@ packages:
     source: hosted
     version: "1.1.0"
   hooks:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: hooks
-      sha256: "9a62a50b50b769a737bc0a8ff381f333529df3ab746b2f6b02e83760231455ba"
+      sha256: eaac480a35ec0814146c2c48d96aaa829e0e44a7662c88ae84c9edf4bc35651f
       url: "https://pub.dev"
     source: hosted
-    version: "2.0.2"
+    version: "2.2.0"
   hooks_riverpod:
     dependency: "direct main"
     description:
@@ -949,6 +957,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.6.4"
+  native_toolchain_c:
+    dependency: "direct main"
+    description:
+      name: native_toolchain_c
+      sha256: "90eaad8059ebc2004a63810a4696ea9acdb02473e47ed3b6b3bafb100ac77e31"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.19.5"
   nm:
     dependency: transitive
     description:
@@ -969,10 +985,10 @@ packages:
     dependency: transitive
     description:
       name: objective_c
-      sha256: b7fb95a6d9a4f009edd63dc5ac69f07420b23a16161c6dd8660290b59c602e8e
+      sha256: ad56fd53a78ff6b1472fa59ff2a4e8b8ccabafc586fc263a1dfad0b99b5553e3
       url: "https://pub.dev"
     source: hosted
-    version: "9.5.0"
+    version: "9.6.0"
   octo_image:
     dependency: transitive
     description:
@@ -1118,7 +1134,7 @@ packages:
     source: hosted
     version: "2.2.2"
   path_provider_platform_interface:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       name: path_provider_platform_interface
       sha256: "484838772624c3a4b94f1e44a3e19897fee738f2d5c4ce448443b0417f7c9dda"
@@ -1221,6 +1237,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.5.2"
+  process:
+    dependency: transitive
+    description:
+      name: process
+      sha256: "4242ba3508d37e01808bdf71ad1d5bb93a8d671bf2e7450e6b1b353fb0808891"
+      url: "https://pub.dev"
+    source: hosted
+    version: "5.0.6"
+  protobuf:
+    dependency: transitive
+    description:
+      name: protobuf
+      sha256: "68645b24e0716782e58948f8467fd42a880f255096a821f9e7d0ec625b00c84d"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.1.0"
   pub_semver:
     dependency: transitive
     description:
@@ -1241,10 +1273,10 @@ packages:
     dependency: transitive
     description:
       name: record_use
-      sha256: "2551bd8eecfe95d14ae75f6021ad0248be5c27f138c2ec12fcb52b500b3ba1ed"
+      sha256: "1cb8564af8d43b464294411db9217f5ec04891c6f22ee2c32d73ae05e88a6bd2"
       url: "https://pub.dev"
     source: hosted
-    version: "0.6.0"
+    version: "1.1.1"
   riverpod:
     dependency: transitive
     description:
@@ -1398,7 +1430,7 @@ packages:
     source: hosted
     version: "0.2.2"
   share_plus:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: share_plus
       sha256: "34f00f9becd2743c1fb05363d624f9f70d37f7ccdcdda47450bc0b8c9d327b8c"
