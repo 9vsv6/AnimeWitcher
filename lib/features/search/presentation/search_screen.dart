@@ -629,10 +629,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 
   Widget _buildMobileSearchField(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
-    final isArabic =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     final searchPlaceholder = searchDomainHint(
       context,
       ref.watch(searchDomainProvider),
