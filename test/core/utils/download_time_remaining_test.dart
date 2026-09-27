@@ -43,10 +43,7 @@ void main() {
       formatDownloadSpeed(_data(progress: 1, networkSpeed: 2), l10n),
       l10n.statusFinished,
     );
-    expect(
-      formatDownloadSpeed(_data(networkSpeed: 1.5), l10n),
-      '1.50 MB/s',
-    );
+    expect(formatDownloadSpeed(_data(networkSpeed: 1.5), l10n), '1.50 MB/s');
   });
 
   testWidgets('formatDownloadTimeRemaining uses Arabic units', (tester) async {

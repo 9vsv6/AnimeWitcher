@@ -165,7 +165,9 @@ void main() {
       final source = File('lib/core/services/persistent_parallel_download.dart')
           .readAsStringSync();
 
-      final nativeStart = source.indexOf('Future<void> handleNativeChunkUpdate');
+      final nativeStart = source.indexOf(
+        'Future<void> handleNativeChunkUpdate',
+      );
       final nativeEnd = source.indexOf('bool handleUpdate(', nativeStart);
       expect(nativeStart, greaterThanOrEqualTo(0));
       expect(nativeEnd, greaterThan(nativeStart));

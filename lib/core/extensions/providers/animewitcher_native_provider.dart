@@ -2708,7 +2708,8 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
   /// searches it cannot answer itself: a filter, or an order other than its
   /// own. Kept a few minutes, so paging through the results reads nothing.
   final Map<String, ({DateTime at, List<Map<String, Object?>> hits})>
-  _mangaCatalogCache = <String, ({DateTime at, List<Map<String, Object?>> hits})>{};
+  _mangaCatalogCache =
+      <String, ({DateTime at, List<Map<String, Object?>> hits})>{};
 
   static const Duration _mangaCatalogTtl = Duration(minutes: 10);
 
@@ -2854,6 +2855,7 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       hasMore: position < matching.length,
     );
   }
+
   String _mangaIdFromUrl(String url) {
     final uri = safeTryParseUri(url.trim());
     if (uri == null || uri.pathSegments.isEmpty) return '';
@@ -4153,7 +4155,8 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     final details = _map(source['details']);
     for (final raw in <dynamic>[details['duration'], source['duration']]) {
       if (raw is num && raw.toInt() > 0) return raw.toInt();
-      final match = RegExp(r'\d+').firstMatch(normalizeLocalizedDigits(_text(raw)));
+      final match = RegExp(r'\d+')
+          .firstMatch(normalizeLocalizedDigits(_text(raw)));
       final value = match == null ? 0 : int.tryParse(match.group(0)!) ?? 0;
       if (value > 0) return value;
     }
@@ -4346,7 +4349,8 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
   }
 
   int _positiveInt(dynamic raw) {
-    final match = RegExp(r'\d+').firstMatch(normalizeLocalizedDigits(_text(raw)));
+    final match = RegExp(r'\d+')
+        .firstMatch(normalizeLocalizedDigits(_text(raw)));
     final value = match == null ? 0 : int.tryParse(match.group(0)!) ?? 0;
     return value > 0 ? value : 0;
   }

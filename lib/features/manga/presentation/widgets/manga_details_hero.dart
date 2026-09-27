@@ -31,8 +31,7 @@ class MangaDetailsHero extends StatelessWidget {
     double sdp(double value) => value * scale;
 
     final bannerHeight = sdp(LayoutConstants.detailsBannerHeightMobile);
-    final posterUrl =
-        AppImageFallbacks.poster(item.posterUrl) ?? '';
+    final posterUrl = AppImageFallbacks.poster(item.posterUrl) ?? '';
     final providedBannerUrl = AppImageFallbacks.optional(item.bannerUrl);
     final bannerUrl =
         AppImageFallbacks.banner(
@@ -191,7 +190,6 @@ class MangaDetailsHero extends StatelessWidget {
     );
   }
 }
-
 
 class _MangaDetailsArtwork extends StatelessWidget {
   const _MangaDetailsArtwork({

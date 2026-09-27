@@ -1,7 +1,8 @@
 import 'digit_normalization.dart';
 
 String _normalizeEpisodeLabel(String value) {
-  return normalizeLocalizedDigits(value.trim().toLowerCase()).replaceAll(RegExp(r'\s+'), ' ');
+  return normalizeLocalizedDigits(value.trim().toLowerCase())
+      .replaceAll(RegExp(r'\s+'), ' ');
 }
 
 /// True when [value] is only a generic episode placeholder such as
@@ -9,9 +10,8 @@ String _normalizeEpisodeLabel(String value) {
 bool isGenericEpisodeTitle(String? value) {
   final title = _normalizeEpisodeLabel(value ?? '');
   if (title.isEmpty) return true;
-  return RegExp(
-        r'^(?:ال)?حلق[ةه]\s*\d+(?:\s+(?:والأخيرة|والاخيرة))?$',
-      ).hasMatch(title) ||
+  return RegExp(r'^(?:ال)?حلق[ةه]\s*\d+(?:\s+(?:والأخيرة|والاخيرة))?$')
+          .hasMatch(title) ||
       RegExp(
         r'^(?:episode|ep\.?)\s*\d+(?:\s+(?:final|last))?$',
         caseSensitive: false,

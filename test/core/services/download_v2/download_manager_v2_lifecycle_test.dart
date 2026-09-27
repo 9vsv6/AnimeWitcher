@@ -7,89 +7,87 @@ import 'package:animewitcher/core/services/download_v2/download_manager_v2.dart'
 import 'package:animewitcher/core/services/download_v2/download_v2_identity.dart';
 import 'package:animewitcher/core/services/download_v2/download_v2_models.dart';
 import 'package:animewitcher/core/services/download_v2/logical_download_store_v2.dart';
-import 'package:background_downloader/background_downloader.dart' show TaskStatus;
+import 'package:background_downloader/background_downloader.dart'
+    show TaskStatus;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'download_v2_test_support.dart';
 
 void main() {
-  test('accepted V2 snapshots are forwarded to presentation observers', () async {
-    final store = InMemoryLogicalDownloadStoreV2();
-    final gateway = _FakeGateway();
-    final resolver = StaticSourceResolverV2();
-    final observer = _RecordingPresentationObserver();
-    final logicalId = logicalDownloadIdFor(
-      animeId: 'anilist:21',
-      episodeKey: '12',
-      variantKey: 'sub:1080p',
-    );
-    final request = DownloadStartRequestV2(
-      logicalId: logicalId,
-      mediaId: 'anilist:21',
-      unitKey: '12',
-      variantKey: 'sub:1080p',
-      destinationPath: 'downloads/anime/episode-12.mp4',
-      sourceDescriptor: const <String, Object?>{
-        'providerId': 'provider.example',
-      },
-      allowPause: true,
-      retries: 2,
-      parallelChunks: 1,
-    );
-    final manager = DownloadManagerV2(
-      store: store,
-      gateway: gateway,
-      sourceResolver: resolver,
-      presentationObservers: <DownloadPresentationObserverV2>[observer],
-    );
-    addTearDown(manager.dispose);
+  test(
+    'accepted V2 snapshots are forwarded to presentation observers',
+    () async {
+      final store = InMemoryLogicalDownloadStoreV2();
+      final gateway = _FakeGateway();
+      final resolver = StaticSourceResolverV2();
+      final observer = _RecordingPresentationObserver();
+      final logicalId = logicalDownloadIdFor(
+        animeId: 'anilist:21',
+        episodeKey: '12',
+        variantKey: 'sub:1080p',
+      );
+      final request = DownloadStartRequestV2(
+        logicalId: logicalId,
+        mediaId: 'anilist:21',
+        unitKey: '12',
+        variantKey: 'sub:1080p',
+        destinationPath: 'downloads/anime/episode-12.mp4',
+        sourceDescriptor: const <String, Object?>{
+          'providerId': 'provider.example',
+        },
+        allowPause: true,
+        retries: 2,
+        parallelChunks: 1,
+      );
+      final manager = DownloadManagerV2(
+        store: store,
+        gateway: gateway,
+        sourceResolver: resolver,
+        presentationObservers: <DownloadPresentationObserverV2>[observer],
+      );
+      addTearDown(manager.dispose);
 
-    await manager.start(request);
-    final taskId = gateway.startedSpecs.single.taskId;
-    gateway.emit(taskId, DownloadTransportStatus.running);
-    await Future<void>.delayed(Duration.zero);
+      await manager.start(request);
+      final taskId = gateway.startedSpecs.single.taskId;
+      gateway.emit(taskId, DownloadTransportStatus.running);
+      await Future<void>.delayed(Duration.zero);
 
-    expect(observer.events, isNotEmpty);
-    expect(observer.events.last.$1.logicalId, logicalId);
-    expect(observer.events.last.$2.taskId, taskId);
-    expect(observer.events.last.$2.status, DownloadTransportStatus.running);
-  });
+      expect(observer.events, isNotEmpty);
+      expect(observer.events.last.$1.logicalId, logicalId);
+      expect(observer.events.last.$2.taskId, taskId);
+      expect(observer.events.last.$2.status, DownloadTransportStatus.running);
+    },
+  );
 
-  test('native observed speed updates only the current V2 generation', () async {
-    final f = _fixture();
-    await f.manager.start(f.request);
-    final taskId = f.gateway.startedSpecs.single.taskId;
+  test(
+    'native observed speed updates only the current V2 generation',
+    () async {
+      final f = _fixture();
+      await f.manager.start(f.request);
+      final taskId = f.gateway.startedSpecs.single.taskId;
 
-    f.manager.observeNativeNetworkSpeed(
-      taskId: taskId,
-      bytesPerSecond: 4_500_000,
-    );
+      f.manager.observeNativeNetworkSpeed(
+        taskId: taskId,
+        bytesPerSecond: 4_500_000,
+      );
 
-    expect(
-      f.manager.snapshotFor(f.request.logicalId)?.networkSpeedMBps,
-      4.5,
-    );
+      expect(f.manager.snapshotFor(f.request.logicalId)?.networkSpeedMBps, 4.5);
 
-    f.manager.observeNativeNetworkSpeed(
-      taskId: taskId,
-      bytesPerSecond: 0,
-    );
-    expect(
-      f.manager.snapshotFor(f.request.logicalId)?.networkSpeedMBps,
-      0,
-    );
+      f.manager.observeNativeNetworkSpeed(taskId: taskId, bytesPerSecond: 0);
+      expect(f.manager.snapshotFor(f.request.logicalId)?.networkSpeedMBps, 0);
 
-    await f.manager.cancel(f.request.logicalId);
-    f.manager.observeNativeNetworkSpeed(
-      taskId: taskId,
-      bytesPerSecond: 99_000_000,
-    );
+      await f.manager.cancel(f.request.logicalId);
+      f.manager.observeNativeNetworkSpeed(
+        taskId: taskId,
+        bytesPerSecond: 99_000_000,
+      );
 
-    expect(
-      f.manager.snapshotFor(f.request.logicalId)?.networkSpeedMBps,
-      isNot(99.0),
-    );
-  });
+      expect(
+        f.manager.snapshotFor(f.request.logicalId)?.networkSpeedMBps,
+        isNot(99.0),
+      );
+    },
+  );
 
   test('parallel parent progress does not erase native speed', () async {
     final f = _fixture(parallelChunks: 4);
@@ -149,21 +147,21 @@ void main() {
 
     await manager.start(request);
     final taskId = gateway.startedSpecs.single.taskId;
-    gateway.handleFor(taskId)!.emitSnapshot(
-      DownloadTransportSnapshot(
-        taskId: taskId,
-        status: DownloadTransportStatus.running,
-        progress: 0.5,
-        transferredBytes: 500,
-        totalBytes: 1000,
-      ),
-    );
+    gateway
+        .handleFor(taskId)!
+        .emitSnapshot(
+          DownloadTransportSnapshot(
+            taskId: taskId,
+            status: DownloadTransportStatus.running,
+            progress: 0.5,
+            transferredBytes: 500,
+            totalBytes: 1000,
+          ),
+        );
 
     expect(
-      () => manager.observeNativeNetworkSpeed(
-        taskId: taskId,
-        bytesPerSecond: 0,
-      ),
+      () =>
+          manager.observeNativeNetworkSpeed(taskId: taskId, bytesPerSecond: 0),
       returnsNormally,
     );
     expect(manager.snapshotFor(logicalId)?.networkSpeedMBps, 0);
@@ -172,10 +170,7 @@ void main() {
 
   test('parallel pause waits for every child pause observation', () async {
     final readiness = NativeParallelPauseReadinessV2();
-    final f = _fixture(
-      parallelChunks: 2,
-      pauseReadiness: readiness,
-    );
+    final f = _fixture(parallelChunks: 2, pauseReadiness: readiness);
     await f.manager.start(f.request);
     final taskId = f.gateway.startedSpecs.single.taskId;
 
@@ -221,10 +216,7 @@ void main() {
 
   test('parallel resume reuses confirmed child pause observations', () async {
     final readiness = NativeParallelPauseReadinessV2();
-    final f = _fixture(
-      parallelChunks: 2,
-      pauseReadiness: readiness,
-    );
+    final f = _fixture(parallelChunks: 2, pauseReadiness: readiness);
     await f.manager.start(f.request);
     final taskId = f.gateway.startedSpecs.single.taskId;
     final handle = f.gateway.handleFor(taskId)!;
@@ -292,33 +284,36 @@ void main() {
     );
   });
 
-  test('pause waits for package paused state before allowing exact resume', () async {
-    final f = _fixture();
-    await f.manager.start(f.request);
-    final taskId = f.gateway.startedSpecs.single.taskId;
-    final handle = f.gateway.handleFor(taskId)!;
-    handle.onPause = () async => true;
+  test(
+    'pause waits for package paused state before allowing exact resume',
+    () async {
+      final f = _fixture();
+      await f.manager.start(f.request);
+      final taskId = f.gateway.startedSpecs.single.taskId;
+      final handle = f.gateway.handleFor(taskId)!;
+      handle.onPause = () async => true;
 
-    var pauseCompleted = false;
-    final pauseFuture = f.manager.pause(f.request.logicalId).whenComplete(() {
-      pauseCompleted = true;
-    });
-    await Future<void>.delayed(Duration.zero);
+      var pauseCompleted = false;
+      final pauseFuture = f.manager.pause(f.request.logicalId).whenComplete(() {
+        pauseCompleted = true;
+      });
+      await Future<void>.delayed(Duration.zero);
 
-    expect(pauseCompleted, isFalse);
-    expect(handle.pauseCalls, 1);
+      expect(pauseCompleted, isFalse);
+      expect(handle.pauseCalls, 1);
 
-    f.gateway.emit(taskId, DownloadTransportStatus.paused);
-    final paused = await pauseFuture;
-    expect(paused?.status, DownloadTransportStatus.paused);
+      f.gateway.emit(taskId, DownloadTransportStatus.paused);
+      final paused = await pauseFuture;
+      expect(paused?.status, DownloadTransportStatus.paused);
 
-    final resumed = await f.manager.resume(f.request.logicalId);
+      final resumed = await f.manager.resume(f.request.logicalId);
 
-    expect(resumed.taskId, taskId);
-    expect(handle.resumeCalls, 1);
-    expect(f.gateway.startedSpecs, hasLength(1));
-    expect((await f.store.get(f.request.logicalId))?.generation, 1);
-  });
+      expect(resumed.taskId, taskId);
+      expect(handle.resumeCalls, 1);
+      expect(f.gateway.startedSpecs, hasLength(1));
+      expect((await f.store.get(f.request.logicalId))?.generation, 1);
+    },
+  );
 
   test('pause intent is durable before package pause', () async {
     final f = _fixture();
@@ -342,198 +337,213 @@ void main() {
     );
   });
 
-  test('rejects a second logical writer for the same canonical destination', () async {
-    final f = _fixture();
-    final conflicting = DownloadStartRequestV2(
-      logicalId: logicalDownloadIdFor(
-        animeId: 'anilist:22',
-        episodeKey: '13',
-        variantKey: 'sub:1080p',
-      ),
-      mediaId: 'anilist:22',
-      unitKey: '13',
-      variantKey: 'sub:1080p',
-      destinationPath: f.request.destinationPath,
-      sourceDescriptor: const <String, Object?>{
-        'providerId': 'provider.example',
-      },
-      allowPause: true,
-      retries: 2,
-      parallelChunks: 1,
-    );
-
-    await f.manager.start(f.request);
-
-    await expectLater(
-      f.manager.start(conflicting),
-      throwsStateError,
-    );
-
-    expect(f.gateway.startedSpecs, hasLength(1));
-    expect(f.resolver.calls, 1);
-  });
-
-  test('resume refuses duplicate paused owners of one canonical destination', () async {
-    final store = InMemoryLogicalDownloadStoreV2();
-    final gateway = _FakeGateway();
-    final resolver = StaticSourceResolverV2();
-    const destination = 'downloads/anime/shared-episode.mp4';
-
-    final firstId = logicalDownloadIdFor(
-      animeId: 'anilist:21',
-      episodeKey: '12',
-      variantKey: 'sub:1080p',
-    );
-    final secondId = logicalDownloadIdFor(
-      animeId: 'anilist:22',
-      episodeKey: '13',
-      variantKey: 'sub:1080p',
-    );
-    final firstTaskId = taskIdForGeneration(firstId, 1);
-    final secondTaskId = taskIdForGeneration(secondId, 1);
-
-    for (final record in <LogicalDownloadRecordV2>[
-      LogicalDownloadRecordV2(
-        schemaVersion: kLogicalDownloadSchemaVersionV2,
-        logicalId: firstId,
-        mediaId: 'anilist:21',
-        unitKey: '12',
-        variantKey: 'sub:1080p',
-        generation: 1,
-        taskId: firstTaskId,
-        intent: DownloadUserIntent.paused,
-        destinationPath: destination,
-        sourceDescriptor: const <String, Object?>{
-          'providerId': 'provider.example',
-        },
-        allowPause: true,
-        retries: 2,
-        parallelChunks: 1,
-        updatedAtMillis: 1,
-      ),
-      LogicalDownloadRecordV2(
-        schemaVersion: kLogicalDownloadSchemaVersionV2,
-        logicalId: secondId,
+  test(
+    'rejects a second logical writer for the same canonical destination',
+    () async {
+      final f = _fixture();
+      final conflicting = DownloadStartRequestV2(
+        logicalId: logicalDownloadIdFor(
+          animeId: 'anilist:22',
+          episodeKey: '13',
+          variantKey: 'sub:1080p',
+        ),
         mediaId: 'anilist:22',
         unitKey: '13',
         variantKey: 'sub:1080p',
-        generation: 1,
-        taskId: secondTaskId,
-        intent: DownloadUserIntent.paused,
-        destinationPath: destination,
+        destinationPath: f.request.destinationPath,
         sourceDescriptor: const <String, Object?>{
           'providerId': 'provider.example',
         },
         allowPause: true,
         retries: 2,
         parallelChunks: 1,
-        updatedAtMillis: 2,
-      ),
-    ]) {
-      await store.put(record);
-      await gateway.start(
-        DownloadTaskSpecV2(
-          taskId: record.taskId,
-          url: 'https://example.invalid/video.mp4',
+      );
+
+      await f.manager.start(f.request);
+
+      await expectLater(f.manager.start(conflicting), throwsStateError);
+
+      expect(f.gateway.startedSpecs, hasLength(1));
+      expect(f.resolver.calls, 1);
+    },
+  );
+
+  test(
+    'resume refuses duplicate paused owners of one canonical destination',
+    () async {
+      final store = InMemoryLogicalDownloadStoreV2();
+      final gateway = _FakeGateway();
+      final resolver = StaticSourceResolverV2();
+      const destination = 'downloads/anime/shared-episode.mp4';
+
+      final firstId = logicalDownloadIdFor(
+        animeId: 'anilist:21',
+        episodeKey: '12',
+        variantKey: 'sub:1080p',
+      );
+      final secondId = logicalDownloadIdFor(
+        animeId: 'anilist:22',
+        episodeKey: '13',
+        variantKey: 'sub:1080p',
+      );
+      final firstTaskId = taskIdForGeneration(firstId, 1);
+      final secondTaskId = taskIdForGeneration(secondId, 1);
+
+      for (final record in <LogicalDownloadRecordV2>[
+        LogicalDownloadRecordV2(
+          schemaVersion: kLogicalDownloadSchemaVersionV2,
+          logicalId: firstId,
+          mediaId: 'anilist:21',
+          unitKey: '12',
+          variantKey: 'sub:1080p',
+          generation: 1,
+          taskId: firstTaskId,
+          intent: DownloadUserIntent.paused,
           destinationPath: destination,
-          headers: const <String, String>{},
+          sourceDescriptor: const <String, Object?>{
+            'providerId': 'provider.example',
+          },
           allowPause: true,
           retries: 2,
           parallelChunks: 1,
+          updatedAtMillis: 1,
         ),
+        LogicalDownloadRecordV2(
+          schemaVersion: kLogicalDownloadSchemaVersionV2,
+          logicalId: secondId,
+          mediaId: 'anilist:22',
+          unitKey: '13',
+          variantKey: 'sub:1080p',
+          generation: 1,
+          taskId: secondTaskId,
+          intent: DownloadUserIntent.paused,
+          destinationPath: destination,
+          sourceDescriptor: const <String, Object?>{
+            'providerId': 'provider.example',
+          },
+          allowPause: true,
+          retries: 2,
+          parallelChunks: 1,
+          updatedAtMillis: 2,
+        ),
+      ]) {
+        await store.put(record);
+        await gateway.start(
+          DownloadTaskSpecV2(
+            taskId: record.taskId,
+            url: 'https://example.invalid/video.mp4',
+            destinationPath: destination,
+            headers: const <String, String>{},
+            allowPause: true,
+            retries: 2,
+            parallelChunks: 1,
+          ),
+        );
+        gateway.emit(record.taskId, DownloadTransportStatus.paused);
+      }
+
+      final manager = DownloadManagerV2(
+        store: store,
+        gateway: gateway,
+        sourceResolver: resolver,
       );
-      gateway.emit(record.taskId, DownloadTransportStatus.paused);
-    }
+      addTearDown(manager.dispose);
+      await manager.initialize();
 
-    final manager = DownloadManagerV2(
-      store: store,
-      gateway: gateway,
-      sourceResolver: resolver,
-    );
-    addTearDown(manager.dispose);
-    await manager.initialize();
+      await expectLater(manager.resume(firstId), throwsStateError);
 
-    await expectLater(manager.resume(firstId), throwsStateError);
+      expect(gateway.handleFor(firstTaskId)!.resumeCalls, 0);
+      expect(gateway.handleFor(secondTaskId)!.resumeCalls, 0);
+      expect((await store.get(firstId))?.intent, DownloadUserIntent.paused);
+      expect((await store.get(secondId))?.intent, DownloadUserIntent.paused);
+    },
+  );
 
-    expect(gateway.handleFor(firstTaskId)!.resumeCalls, 0);
-    expect(gateway.handleFor(secondTaskId)!.resumeCalls, 0);
-    expect((await store.get(firstId))?.intent, DownloadUserIntent.paused);
-    expect((await store.get(secondId))?.intent, DownloadUserIntent.paused);
-  });
+  test(
+    'resumable paused handle becomes durably active without replacement',
+    () async {
+      final f = _fixture();
+      await f.manager.start(f.request);
+      final taskId = f.gateway.startedSpecs.single.taskId;
+      final handle = f.gateway.handleFor(taskId)!;
 
-  test('resumable paused handle becomes durably active without replacement', () async {
-    final f = _fixture();
-    await f.manager.start(f.request);
-    final taskId = f.gateway.startedSpecs.single.taskId;
-    final handle = f.gateway.handleFor(taskId)!;
+      await f.manager.pause(f.request.logicalId);
+      f.gateway.emit(taskId, DownloadTransportStatus.paused);
 
-    await f.manager.pause(f.request.logicalId);
-    f.gateway.emit(taskId, DownloadTransportStatus.paused);
+      await f.manager.resume(f.request.logicalId);
 
-    await f.manager.resume(f.request.logicalId);
+      expect(handle.resumeCalls, 1);
+      expect(f.gateway.startedSpecs, hasLength(1));
+      expect(f.resolver.calls, 1);
+      expect(
+        (await f.store.get(f.request.logicalId))?.intent,
+        DownloadUserIntent.active,
+      );
+      expect(f.manager.snapshotFor(f.request.logicalId)?.taskId, taskId);
+    },
+  );
 
-    expect(handle.resumeCalls, 1);
-    expect(f.gateway.startedSpecs, hasLength(1));
-    expect(f.resolver.calls, 1);
-    expect(
-      (await f.store.get(f.request.logicalId))?.intent,
-      DownloadUserIntent.active,
-    );
-    expect(
-      f.manager.snapshotFor(f.request.logicalId)?.taskId,
-      taskId,
-    );
-  });
+  test(
+    'failed exact resume keeps paused generation without replacement',
+    () async {
+      final f = _fixture();
+      await f.manager.start(f.request);
+      final firstTaskId = f.gateway.startedSpecs.single.taskId;
+      final handle = f.gateway.handleFor(firstTaskId)!;
 
-  test('failed exact resume keeps paused generation without replacement', () async {
-    final f = _fixture();
-    await f.manager.start(f.request);
-    final firstTaskId = f.gateway.startedSpecs.single.taskId;
-    final handle = f.gateway.handleFor(firstTaskId)!;
+      await f.manager.pause(f.request.logicalId);
+      f.gateway.emit(firstTaskId, DownloadTransportStatus.paused);
+      handle.onResume = () async => false;
 
-    await f.manager.pause(f.request.logicalId);
-    f.gateway.emit(firstTaskId, DownloadTransportStatus.paused);
-    handle.onResume = () async => false;
+      await expectLater(
+        f.manager.resume(f.request.logicalId),
+        throwsStateError,
+      );
 
-    await expectLater(
-      f.manager.resume(f.request.logicalId),
-      throwsStateError,
-    );
+      expect(handle.resumeCalls, 1);
+      expect(handle.cancelCalls, 0);
+      expect(f.gateway.startedSpecs, hasLength(1));
+      expect((await f.store.get(f.request.logicalId))?.generation, 1);
+      expect((await f.store.get(f.request.logicalId))?.taskId, firstTaskId);
+      expect(
+        (await f.store.get(f.request.logicalId))?.intent,
+        DownloadUserIntent.paused,
+      );
+    },
+  );
+  test(
+    'canceled exact handle after resume failure cannot restart generation',
+    () async {
+      final f = _fixture();
+      await f.manager.start(f.request);
+      final taskId = f.gateway.startedSpecs.single.taskId;
+      final handle = f.gateway.handleFor(taskId)!;
 
-    expect(handle.resumeCalls, 1);
-    expect(handle.cancelCalls, 0);
-    expect(f.gateway.startedSpecs, hasLength(1));
-    expect((await f.store.get(f.request.logicalId))?.generation, 1);
-    expect((await f.store.get(f.request.logicalId))?.taskId, firstTaskId);
-    expect(
-      (await f.store.get(f.request.logicalId))?.intent,
-      DownloadUserIntent.paused,
-    );
-  });
-  test('canceled exact handle after resume failure cannot restart generation', () async {
-    final f = _fixture();
-    await f.manager.start(f.request);
-    final taskId = f.gateway.startedSpecs.single.taskId;
-    final handle = f.gateway.handleFor(taskId)!;
+      await f.manager.pause(f.request.logicalId);
+      f.gateway.emit(taskId, DownloadTransportStatus.paused);
+      handle.onResume = () async => false;
 
-    await f.manager.pause(f.request.logicalId);
-    f.gateway.emit(taskId, DownloadTransportStatus.paused);
-    handle.onResume = () async => false;
+      await expectLater(
+        f.manager.resume(f.request.logicalId),
+        throwsStateError,
+      );
+      f.gateway.emit(taskId, DownloadTransportStatus.canceled);
+      await Future<void>.delayed(Duration.zero);
 
-    await expectLater(f.manager.resume(f.request.logicalId), throwsStateError);
-    f.gateway.emit(taskId, DownloadTransportStatus.canceled);
-    await Future<void>.delayed(Duration.zero);
+      await expectLater(
+        f.manager.resume(f.request.logicalId),
+        throwsStateError,
+      );
 
-    await expectLater(f.manager.resume(f.request.logicalId), throwsStateError);
-
-    expect(f.gateway.startedSpecs, hasLength(1));
-    expect((await f.store.get(f.request.logicalId))?.generation, 1);
-    expect((await f.store.get(f.request.logicalId))?.taskId, taskId);
-    expect(
-      (await f.store.get(f.request.logicalId))?.intent,
-      DownloadUserIntent.paused,
-    );
-  });
+      expect(f.gateway.startedSpecs, hasLength(1));
+      expect((await f.store.get(f.request.logicalId))?.generation, 1);
+      expect((await f.store.get(f.request.logicalId))?.taskId, taskId);
+      expect(
+        (await f.store.get(f.request.logicalId))?.intent,
+        DownloadUserIntent.paused,
+      );
+    },
+  );
 
   test('failed pause never cancels transport or publishes fake paused state', () async {
     final f = _fixture();
@@ -542,10 +552,7 @@ void main() {
     final handle = f.gateway.handleFor(taskId)!;
     handle.onPause = () async => false;
 
-    await expectLater(
-      f.manager.pause(f.request.logicalId),
-      throwsStateError,
-    );
+    await expectLater(f.manager.pause(f.request.logicalId), throwsStateError);
 
     expect(
       handle.cancelCalls,
@@ -555,7 +562,8 @@ void main() {
     expect(
       f.manager.snapshotFor(f.request.logicalId)?.status,
       DownloadTransportStatus.running,
-      reason: 'V2 must never relabel a live/canceled transport as safely paused',
+      reason:
+          'V2 must never relabel a live/canceled transport as safely paused',
     );
     expect(
       (await f.store.get(f.request.logicalId))?.intent,
@@ -584,54 +592,62 @@ void main() {
     expect(f.manager.snapshotFor(f.request.logicalId)?.progress, 0.6);
   });
 
-  test('missing paused V2 transport refuses implicit byte-zero restart', () async {
-    final f = _fixture();
-    await f.manager.start(f.request);
-    final firstTaskId = f.gateway.startedSpecs.single.taskId;
-    await f.manager.pause(f.request.logicalId);
-    f.gateway.emit(firstTaskId, DownloadTransportStatus.missing);
+  test(
+    'missing paused V2 transport refuses implicit byte-zero restart',
+    () async {
+      final f = _fixture();
+      await f.manager.start(f.request);
+      final firstTaskId = f.gateway.startedSpecs.single.taskId;
+      await f.manager.pause(f.request.logicalId);
+      f.gateway.emit(firstTaskId, DownloadTransportStatus.missing);
 
-    await expectLater(
-      f.manager.resume(f.request.logicalId),
-      throwsStateError,
-    );
+      await expectLater(
+        f.manager.resume(f.request.logicalId),
+        throwsStateError,
+      );
 
-    expect(f.gateway.startedSpecs, hasLength(1));
-    expect(f.resolver.calls, 1);
-    expect((await f.store.get(f.request.logicalId))?.generation, 1);
-    expect(
-      (await f.store.get(f.request.logicalId))?.intent,
-      DownloadUserIntent.paused,
-    );
-  });
+      expect(f.gateway.startedSpecs, hasLength(1));
+      expect(f.resolver.calls, 1);
+      expect((await f.store.get(f.request.logicalId))?.generation, 1);
+      expect(
+        (await f.store.get(f.request.logicalId))?.intent,
+        DownloadUserIntent.paused,
+      );
+    },
+  );
 
-  test('cancel waits for obsolete writer settlement before releasing tracking', () async {
-    final f = _fixture();
-    await f.manager.start(f.request);
-    final taskId = f.gateway.startedSpecs.single.taskId;
-    final handle = f.gateway.handleFor(taskId)!;
-    handle.onCancel = () async => true;
+  test(
+    'cancel waits for obsolete writer settlement before releasing tracking',
+    () async {
+      final f = _fixture();
+      await f.manager.start(f.request);
+      final taskId = f.gateway.startedSpecs.single.taskId;
+      final handle = f.gateway.handleFor(taskId)!;
+      handle.onCancel = () async => true;
 
-    var completed = false;
-    final cancelFuture = f.manager.cancel(f.request.logicalId).whenComplete(() {
-      completed = true;
-    });
-    await Future<void>.delayed(Duration.zero);
+      var completed = false;
+      final cancelFuture = f.manager.cancel(f.request.logicalId).whenComplete(
+        () {
+          completed = true;
+        },
+      );
+      await Future<void>.delayed(Duration.zero);
 
-    expect(handle.cancelCalls, 1);
-    expect(completed, isFalse);
-    expect(f.gateway.removedTracking, isNot(contains(taskId)));
+      expect(handle.cancelCalls, 1);
+      expect(completed, isFalse);
+      expect(f.gateway.removedTracking, isNot(contains(taskId)));
 
-    f.gateway.emit(taskId, DownloadTransportStatus.canceled);
-    await cancelFuture;
+      f.gateway.emit(taskId, DownloadTransportStatus.canceled);
+      await cancelFuture;
 
-    expect(completed, isTrue);
-    expect(f.gateway.removedTracking, contains(taskId));
-    expect(
-      (await f.store.get(f.request.logicalId))?.intent,
-      DownloadUserIntent.canceled,
-    );
-  });
+      expect(completed, isTrue);
+      expect(f.gateway.removedTracking, contains(taskId));
+      expect(
+        (await f.store.get(f.request.logicalId))?.intent,
+        DownloadUserIntent.canceled,
+      );
+    },
+  );
 
   test('cancel fences old generation before late callback', () async {
     final f = _fixture();
@@ -658,11 +674,15 @@ void main() {
   });
 
   test('delete is idempotent when destination is already missing', () async {
-    final temp = await Directory.systemTemp.createTemp('animewitcher-v2-delete-');
+    final temp = await Directory.systemTemp.createTemp(
+      'animewitcher-v2-delete-',
+    );
     addTearDown(() async {
       if (await temp.exists()) await temp.delete(recursive: true);
     });
-    final destination = File('${temp.path}${Platform.pathSeparator}episode.mp4');
+    final destination = File(
+      '${temp.path}${Platform.pathSeparator}episode.mp4',
+    );
     await destination.writeAsBytes(<int>[1, 2, 3]);
     final f = _fixture(destinationPath: destination.path);
     await f.manager.start(f.request);
@@ -694,9 +714,7 @@ _Fixture _fixture({
     unitKey: '12',
     variantKey: 'sub:1080p',
     destinationPath: destinationPath,
-    sourceDescriptor: const <String, Object?>{
-      'providerId': 'provider.example',
-    },
+    sourceDescriptor: const <String, Object?>{'providerId': 'provider.example'},
     allowPause: true,
     retries: 2,
     parallelChunks: parallelChunks,
@@ -839,7 +857,6 @@ final class _FakeHandle implements DownloadTransportHandle {
     _controller.add(_current);
   }
 }
-
 
 final class _RecordingPresentationObserver
     implements DownloadPresentationObserverV2 {

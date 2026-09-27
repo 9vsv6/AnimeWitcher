@@ -9,49 +9,52 @@ import 'package:animewitcher/core/services/download_v2/logical_download_store_v2
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('current-generation 403 resolves one fresh source and replaces task', () async {
-    final store = InMemoryLogicalDownloadStoreV2();
-    final gateway = _FakeGateway();
-    final resolver = _FakeResolver(<ResolvedDownloadSourceV2>[
-      const ResolvedDownloadSourceV2(
-        url: 'https://cdn.example.invalid/first.mp4?token=old',
-        headers: <String, String>{'authorization': 'old'},
-        expectedBytes: 100,
-      ),
-      const ResolvedDownloadSourceV2(
-        url: 'https://cdn.example.invalid/second.mp4?token=new',
-        headers: <String, String>{'authorization': 'new'},
-        expectedBytes: 100,
-      ),
-    ]);
-    final manager = DownloadManagerV2(
-      store: store,
-      gateway: gateway,
-      sourceResolver: resolver,
-    );
-    final request = _request();
+  test(
+    'current-generation 403 resolves one fresh source and replaces task',
+    () async {
+      final store = InMemoryLogicalDownloadStoreV2();
+      final gateway = _FakeGateway();
+      final resolver = _FakeResolver(<ResolvedDownloadSourceV2>[
+        const ResolvedDownloadSourceV2(
+          url: 'https://cdn.example.invalid/first.mp4?token=old',
+          headers: <String, String>{'authorization': 'old'},
+          expectedBytes: 100,
+        ),
+        const ResolvedDownloadSourceV2(
+          url: 'https://cdn.example.invalid/second.mp4?token=new',
+          headers: <String, String>{'authorization': 'new'},
+          expectedBytes: 100,
+        ),
+      ]);
+      final manager = DownloadManagerV2(
+        store: store,
+        gateway: gateway,
+        sourceResolver: resolver,
+      );
+      final request = _request();
 
-    await manager.start(request);
-    final oldTaskId = gateway.startedSpecs.single.taskId;
-    expect(resolver.calls, 1);
+      await manager.start(request);
+      final oldTaskId = gateway.startedSpecs.single.taskId;
+      expect(resolver.calls, 1);
 
-    gateway.emitSourceExpired(oldTaskId);
-    gateway.emitSourceExpired(oldTaskId);
-    await gateway.waitForStarts(2);
+      gateway.emitSourceExpired(oldTaskId);
+      gateway.emitSourceExpired(oldTaskId);
+      await gateway.waitForStarts(2);
 
-    expect(resolver.calls, 2);
-    expect(gateway.startedSpecs, hasLength(2));
-    expect(gateway.startedSpecs.first.url, contains('token=old'));
-    expect(gateway.startedSpecs.last.url, contains('token=new'));
-    expect(gateway.startedSpecs.last.taskId, isNot(oldTaskId));
-    expect(gateway.handleFor(oldTaskId)?.cancelCalls, 1);
+      expect(resolver.calls, 2);
+      expect(gateway.startedSpecs, hasLength(2));
+      expect(gateway.startedSpecs.first.url, contains('token=old'));
+      expect(gateway.startedSpecs.last.url, contains('token=new'));
+      expect(gateway.startedSpecs.last.taskId, isNot(oldTaskId));
+      expect(gateway.handleFor(oldTaskId)?.cancelCalls, 1);
 
-    final current = await store.get(request.logicalId);
-    expect(current, isNotNull);
-    expect(current!.taskId, gateway.startedSpecs.last.taskId);
-    expect(current.generation, 2);
-    expect(current.expectedBytes, 100);
-  });
+      final current = await store.get(request.logicalId);
+      expect(current, isNotNull);
+      expect(current!.taskId, gateway.startedSpecs.last.taskId);
+      expect(current.generation, 2);
+      expect(current.expectedBytes, 100);
+    },
+  );
 }
 
 DownloadStartRequestV2 _request() {
@@ -118,7 +121,8 @@ final class _FakeGateway implements BackgroundDownloaderGateway {
   }
 
   @override
-  Future<DownloadTransportHandle?> attach(String taskId) async => _handles[taskId];
+  Future<DownloadTransportHandle?> attach(String taskId) async =>
+      _handles[taskId];
 
   @override
   Future<List<DownloadTransportHandle>> rehydrate() async =>

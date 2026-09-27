@@ -23,7 +23,5 @@ Future<void> runFactoryReset({
 }
 
 Future<void> _wipePlatformSecureTokens() async {
-  await const FlutterSecureStorage(
-    aOptions: AndroidOptions(),
-  ).deleteAll();
+  await const FlutterSecureStorage(aOptions: AndroidOptions()).deleteAll();
 }

@@ -21,10 +21,7 @@ MultimediaItem mergeMangaDetails({
   required MultimediaItem base,
   required MultimediaItem incoming,
 }) {
-  final mergedSync = <String, String>{
-    ...?base.syncData,
-    ...?incoming.syncData,
-  };
+  final mergedSync = <String, String>{...?base.syncData, ...?incoming.syncData};
   final incomingTags = incoming.tags;
   return MultimediaItem(
     title: incoming.title.trim().isEmpty ? base.title : incoming.title,
@@ -63,8 +60,7 @@ Future<DownloadStartRequestV2> mangaChapterDownloadRequest(
   MangaChapter chapter, {
   int parallelChunks = 4,
 }) async {
-  final mangaId =
-      manga.syncData?['mangaId']?.trim().isNotEmpty == true
+  final mangaId = manga.syncData?['mangaId']?.trim().isNotEmpty == true
       ? manga.syncData!['mangaId']!.trim()
       : chapter.mangaId.trim();
   final chapterId = chapter.id.trim();
@@ -221,9 +217,7 @@ class MangaDetailsController extends _$MangaDetailsController {
     try {
       final chapters = await provider.getMangaChapters(item.url);
       if (!ref.mounted) return;
-      state = state.copyWith(
-        chapters: AsyncData<List<MangaChapter>>(chapters),
-      );
+      state = state.copyWith(chapters: AsyncData<List<MangaChapter>>(chapters));
     } catch (error, stackTrace) {
       if (!ref.mounted) return;
       state = state.copyWith(

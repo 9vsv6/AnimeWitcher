@@ -1,18 +1,22 @@
 import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:animewitcher/features/details/presentation/playback_launcher.dart';
 import 'package:animewitcher/features/library/presentation/history_provider.dart';
+
 import '../../../../core/domain/entity/multimedia_item.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animewitcher/core/router/app_router.dart';
 import 'package:animewitcher/core/utils/image_fallbacks.dart';
 import 'package:animewitcher/core/utils/layout_constants.dart';
+
 import '../../../../core/extensions/extension_manager.dart';
 import '../../../../shared/widgets/cards_wrapper.dart';
 import '../../../../shared/widgets/loading_dialog.dart';
+
 import 'package:animewitcher/shared/widgets/taskbar_visibility.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:animewitcher/core/services/notification_service.dart';
@@ -225,9 +229,8 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
                       Navigator.pop(sheetContext);
                       if (!origin.mounted) return;
                       unawaited(
-                        DetailsRoute(
-                          $extra: DetailsRouteExtra(item: item),
-                        ).push<void>(origin),
+                        DetailsRoute($extra: DetailsRouteExtra(item: item))
+                            .push<void>(origin),
                       );
                     },
                   ),
@@ -251,9 +254,8 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
                       ref
                           .read(notificationServiceProvider)
                           .showSuccess(
-                            AppLocalizations.of(
-                              origin,
-                            )!.removedFromHistory(item.title),
+                            AppLocalizations.of(origin)!
+                                .removedFromHistory(item.title),
                           );
                     },
                   ),

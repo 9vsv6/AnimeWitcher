@@ -14,10 +14,7 @@ class DownloadedFiles extends _$DownloadedFiles {
   @override
   Map<String, File?> build() => const <String, File?>{};
 
-  Future<File?> resolveFile(
-    MultimediaItem item, {
-    Episode? episode,
-  }) {
+  Future<File?> resolveFile(MultimediaItem item, {Episode? episode}) {
     return _resolveFileForKey(episode?.url ?? item.url);
   }
 
@@ -37,13 +34,14 @@ class DownloadedFiles extends _$DownloadedFiles {
     final records = await manager.records.first;
 
     File? resolved;
-    final matching = records
-        .where(
-          (record) =>
-              record.completedAtMillis != null && record.unitKey == key,
-        )
-        .toList(growable: false)
-      ..sort((a, b) => b.updatedAtMillis.compareTo(a.updatedAtMillis));
+    final matching =
+        records
+            .where(
+              (record) =>
+                  record.completedAtMillis != null && record.unitKey == key,
+            )
+            .toList(growable: false)
+          ..sort((a, b) => b.updatedAtMillis.compareTo(a.updatedAtMillis));
 
     for (final record in matching) {
       // completedAtMillis is a logical claim, not sufficient byte evidence.
@@ -59,7 +57,6 @@ class DownloadedFiles extends _$DownloadedFiles {
         break;
       }
     }
-
 
     return resolved;
   }

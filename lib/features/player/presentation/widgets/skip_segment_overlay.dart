@@ -289,9 +289,8 @@ class SkipPill extends StatelessWidget {
                   boxShadow: isFocused
                       ? [
                           BoxShadow(
-                            color: Theme.of(context).colorScheme.primary.withValues(
-                              alpha: 0.55,
-                            ),
+                            color: Theme.of(context).colorScheme.primary
+                                .withValues(alpha: 0.55),
                             blurRadius: 16,
                             spreadRadius: 1,
                           ),
@@ -314,9 +313,8 @@ class SkipPill extends StatelessWidget {
                     child: InkWell(
                       borderRadius: borderRadius,
                       onTap: onPressed,
-                      focusColor: Theme.of(context).colorScheme.primary.withValues(
-                        alpha: 0.24,
-                      ),
+                      focusColor: Theme.of(context).colorScheme.primary
+                          .withValues(alpha: 0.24),
                       child: SizedBox(
                         height: buttonHeight,
                         child: Padding(

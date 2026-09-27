@@ -71,7 +71,6 @@ class PlaybackRecoveryPolicy {
     return BufferWatchdogStage.none;
   }
 
-
   /// HTTP 401/403/404/410 and similar "this URL is dead" errors should skip
   /// the reconnect ladder and fail over immediately.
   static bool isPermanentPlaybackError(Object error) {

@@ -140,7 +140,6 @@ class MangaReaderController extends ChangeNotifier {
     }
   }
 
-
   Future<void> _preloadAdjacentChapters() async {
     final index = currentChapterIndex;
     if (index < 0 || chapters.isEmpty) return;
@@ -228,10 +227,7 @@ class MangaReaderController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setPageIndex(
-    int value, {
-    bool autoReadDuplicateChapters = false,
-  }) {
+  void setPageIndex(int value, {bool autoReadDuplicateChapters = false}) {
     _autoReadDuplicateChapters = autoReadDuplicateChapters;
     if (_pages.isEmpty) return;
     final next = value.clamp(0, _pages.length - 1).toInt();
@@ -279,8 +275,7 @@ class MangaReaderController extends ChangeNotifier {
   Future<void> flushProgress() async {
     if (_pages.isEmpty) return;
     final previous = progressRepository.get(_mangaId, _chapter.id);
-    final isRead =
-        (previous?.isRead ?? false) || _shouldMarkCurrentChapterRead;
+    final isRead = (previous?.isRead ?? false) || _shouldMarkCurrentChapterRead;
     await progressRepository.save(
       MangaReadingProgress(
         mangaId: _mangaId,
@@ -303,7 +298,6 @@ class MangaReaderController extends ChangeNotifier {
     await progressRepository.toggleBookmark(_mangaId, _chapter.id);
     notifyListeners();
   }
-
 
   Future<void> openChapter(MangaChapter value) async {
     if (value.id == _chapter.id && value.url == _chapter.url) return;

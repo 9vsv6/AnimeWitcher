@@ -343,8 +343,7 @@ class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen> {
 
     final mangaId = animeWitcherMangaIdFromItem(item);
     if (mangaId.isEmpty) return;
-    if (_loadedUserRatingMangaId != mangaId ||
-        !_loadedUserRatingSignedIn) {
+    if (_loadedUserRatingMangaId != mangaId || !_loadedUserRatingSignedIn) {
       await _loadUserRatingFor(item);
     }
     if (!mounted) return;

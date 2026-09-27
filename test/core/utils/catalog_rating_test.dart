@@ -2,10 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
 import 'package:animewitcher/core/utils/catalog_rating.dart';
 
-MultimediaItem _item(
-  Map<String, String> syncData, {
-  String? episodeBadge,
-}) {
+MultimediaItem _item(Map<String, String> syncData, {String? episodeBadge}) {
   return MultimediaItem(
     title: 'Example',
     url: 'https://animewitcher.com/watch/example',
@@ -78,10 +75,9 @@ void main() {
   test('latest episode cards keep their relative-time caption only', () {
     expect(
       preferredCatalogRating(
-        _item(
-          const <String, String>{'awMalScore': '8.5'},
-          episodeBadge: 'حلقة 5',
-        ),
+        _item(const <String, String>{
+          'awMalScore': '8.5',
+        }, episodeBadge: 'حلقة 5'),
       ),
       isNull,
     );

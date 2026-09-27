@@ -11,7 +11,6 @@ final class _Storage extends StorageService {
 
   @override
   bool isEpisodeImagesFromAniZipEnabled() => false;
-
 }
 
 /// Stands in for the catalog: settings documents answer empty, the manga

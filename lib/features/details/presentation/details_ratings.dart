@@ -152,7 +152,6 @@ int? _nonNegativeInt(String? raw) {
   return int.tryParse(match.group(0)!);
 }
 
-
 String? _firstNonEmpty(Iterable<String?> values) {
   for (final raw in values) {
     final value = raw?.trim() ?? '';

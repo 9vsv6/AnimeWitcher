@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
 import '../../support/debug_shots.dart';
 import '../../support/test_fonts.dart';
 
@@ -79,9 +80,8 @@ Future<void> _writeShot(WidgetTester tester, String filename, Key key) async {
     );
     final image = await boundary.toImage(pixelRatio: 2);
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-    File(
-      '${artifacts.path}/$filename',
-    ).writeAsBytesSync(bytes!.buffer.asUint8List());
+    File('${artifacts.path}/$filename')
+        .writeAsBytesSync(bytes!.buffer.asUint8List());
   });
 }
 

@@ -496,7 +496,10 @@ class PersistentParallelDownload {
     return session == null ? null : _activeConnectionsForSession(session);
   }
 
-  void _recordDiagnostic(String event, [Map<String, Object?> fields = const {}]) {
+  void _recordDiagnostic(
+    String event, [
+    Map<String, Object?> fields = const {},
+  ]) {
     diagnosticLog?.record(event, fields);
     diagnosticEvent?.call(event, fields);
   }
@@ -2247,11 +2250,8 @@ class PersistentParallelDownload {
               part.speed > 0,
         )
         .toList(growable: false);
-    final nativeBridgeSpeedBytesPerSecond =
-        nativeBridgeContributors.fold<double>(
-          0,
-          (sum, part) => sum + part.speed * 1000 * 1000,
-        );
+    final nativeBridgeSpeedBytesPerSecond = nativeBridgeContributors
+        .fold<double>(0, (sum, part) => sum + part.speed * 1000 * 1000);
     // Child-reported speed is only a fallback when byte totals are unavailable.
     // Once credible bytes exist, use it only for one fresh native byte bridge;
     // multiple child callbacks need the estimator's minimum observation window.
@@ -2291,13 +2291,15 @@ class PersistentParallelDownload {
     var hasNativeByteEvidence = false;
     for (final part in session.parts) {
       final at = part.lastNativeBridgeAt;
-      if (at != null && (latestNativeAt == null || at.isAfter(latestNativeAt))) {
+      if (at != null &&
+          (latestNativeAt == null || at.isAfter(latestNativeAt))) {
         latestNativeAt = at;
       }
       if (at != null && part.lastNativeBridgeBytes >= 0) {
         hasNativeByteEvidence = true;
-        nativeWrittenBytes +=
-            part.lastNativeBridgeBytes.clamp(0, part.size).toInt();
+        nativeWrittenBytes += part.lastNativeBridgeBytes
+            .clamp(0, part.size)
+            .toInt();
       }
     }
     int? ageMs(DateTime? at) => at == null
@@ -2417,7 +2419,6 @@ class PersistentParallelDownload {
       ).catchError((Object _, StackTrace __) {}),
     );
   }
-
 
   void _scheduleCoordinatorRecovery(_ParallelSession session) {
     if (_disposed || !session.active || session.deleted) return;
@@ -2860,9 +2861,7 @@ class PersistentParallelDownload {
             );
             onPartProgress(session.task.taskId, part.task.taskId, 1);
 
-            final allComplete = session.parts.every(
-              (child) => child.complete,
-            );
+            final allComplete = session.parts.every((child) => child.complete);
             if (session.active && !allComplete) {
               // The child file + TaskRecord already make this Range durable.
               // Fold intermediate completion into the normal checkpoint timer

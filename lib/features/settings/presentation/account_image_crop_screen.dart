@@ -21,10 +21,8 @@ Future<Uint8List?> showAnimeWitcherAccountImageCropper(
   return Navigator.of(context).push<Uint8List>(
     MaterialPageRoute<Uint8List>(
       fullscreenDialog: true,
-      builder: (_) => _AnimeWitcherAccountImageCropScreen(
-        bytes: bytes,
-        kind: kind,
-      ),
+      builder: (_) =>
+          _AnimeWitcherAccountImageCropScreen(bytes: bytes, kind: kind),
     ),
   );
 }
@@ -63,8 +61,7 @@ class _AnimeWitcherAccountImageCropScreenState
   late Offset _gestureStartFocalPoint;
   late double _gestureStartScale;
 
-  bool get _isAvatar =>
-      widget.kind == AnimeWitcherProfileImageKind.avatar;
+  bool get _isAvatar => widget.kind == AnimeWitcherProfileImageKind.avatar;
 
   double get _targetAspectRatio => _isAvatar ? 1 : 7 / 4;
 
@@ -212,8 +209,7 @@ class _AnimeWitcherAccountImageCropScreenState
             label: appText(
               context,
               english: 'Movable and resizable image crop frame',
-              arabic:
-                  'إطار تحديد صورة قابل للتحريك وتغيير الحجم',
+              arabic: 'إطار تحديد صورة قابل للتحريك وتغيير الحجم',
             ),
             child: CustomPaint(
               painter: _AccountImageCropPainter(
@@ -243,9 +239,9 @@ class _AnimeWitcherAccountImageCropScreenState
             Text(
               appText(
                 context,
-                english:
-                    'Drag the frame to move it. Pinch or use the slider to resize it.',
-                arabic: 'حرّك إطار التحديد، وكبّره أو صغّره '
+                english: 'Drag the frame to move it. Pinch or use the slider to resize it.',
+                arabic:
+                    'حرّك إطار التحديد، وكبّره أو صغّره '
                     'بإصبعين أو باستخدام الشريط.',
               ),
               textAlign: TextAlign.center,
@@ -291,11 +287,7 @@ class _AnimeWitcherAccountImageCropScreenState
                     onPressed: _saving ? null : _resetCrop,
                     icon: const Icon(Icons.restart_alt_rounded),
                     label: Text(
-                      appText(
-                        context,
-                        english: 'Reset',
-                        arabic: 'إعادة الضبط',
-                      ),
+                      appText(context, english: 'Reset', arabic: 'إعادة الضبط'),
                     ),
                   ),
                 ),
@@ -333,10 +325,7 @@ class _AnimeWitcherAccountImageCropScreenState
       availableWidth / image.width,
       availableHeight / image.height,
     );
-    final displaySize = Size(
-      image.width * fitScale,
-      image.height * fitScale,
-    );
+    final displaySize = Size(image.width * fitScale, image.height * fitScale);
     return Rect.fromCenter(
       center: Offset(constraints.maxWidth / 2, constraints.maxHeight / 2),
       width: displaySize.width,
@@ -354,19 +343,16 @@ class _AnimeWitcherAccountImageCropScreenState
 
   Rect _normalizedCropRect(ui.Image image) {
     final maximum = _maximumNormalizedCropSize(image);
-    final size = Size(
-      maximum.width * _cropScale,
-      maximum.height * _cropScale,
-    );
+    final size = Size(maximum.width * _cropScale, maximum.height * _cropScale);
     final center = _clampCropCenter(image, _cropCenter, _cropScale);
-    return Rect.fromCenter(center: center, width: size.width, height: size.height);
+    return Rect.fromCenter(
+      center: center,
+      width: size.width,
+      height: size.height,
+    );
   }
 
-  Offset _clampCropCenter(
-    ui.Image image,
-    Offset center,
-    double scale,
-  ) {
+  Offset _clampCropCenter(ui.Image image, Offset center, double scale) {
     final maximum = _maximumNormalizedCropSize(image);
     final halfWidth = maximum.width * scale / 2;
     final halfHeight = maximum.height * scale / 2;
@@ -386,11 +372,9 @@ class _AnimeWitcherAccountImageCropScreenState
     _gestureStartCenter = _cropCenter;
     _gestureStartFocalPoint = details.localFocalPoint;
     _gestureStartScale = _cropScale;
-    _gestureStartRadius =
-        (details.localFocalPoint - cropRect.center).distance;
-    _resizingFromHandle = _cropHandlePoints(cropRect).any(
-      (point) => (details.localFocalPoint - point).distance <= 34,
-    );
+    _gestureStartRadius = (details.localFocalPoint - cropRect.center).distance;
+    _resizingFromHandle = _cropHandlePoints(cropRect)
+        .any((point) => (details.localFocalPoint - point).distance <= 34);
   }
 
   void _onScaleUpdate(ScaleUpdateDetails details, ui.Image image) {
@@ -416,10 +400,10 @@ class _AnimeWitcherAccountImageCropScreenState
     final nextCenter = _resizingFromHandle
         ? _gestureStartCenter
         : _gestureStartCenter +
-            Offset(
-              focalDelta.dx / imageRect.width,
-              focalDelta.dy / imageRect.height,
-            );
+              Offset(
+                focalDelta.dx / imageRect.width,
+                focalDelta.dy / imageRect.height,
+              );
     setState(() {
       _cropScale = nextScale;
       _cropCenter = _clampCropCenter(image, nextCenter, nextScale);
@@ -469,12 +453,7 @@ class _AnimeWitcherAccountImageCropScreenState
       canvas.drawImageRect(
         image,
         source,
-        Rect.fromLTWH(
-          0,
-          0,
-          targetWidth.toDouble(),
-          targetHeight.toDouble(),
-        ),
+        Rect.fromLTWH(0, 0, targetWidth.toDouble(), targetHeight.toDouble()),
         Paint()..filterQuality = FilterQuality.high,
       );
       final picture = recorder.endRecording();
@@ -483,7 +462,8 @@ class _AnimeWitcherAccountImageCropScreenState
       late final Uint8List pngBytes;
       try {
         final data = await rendered.toByteData(format: ui.ImageByteFormat.png);
-        if (data == null) throw const FormatException('Could not encode image.');
+        if (data == null)
+          throw const FormatException('Could not encode image.');
         pngBytes = data.buffer.asUint8List(
           data.offsetInBytes,
           data.lengthInBytes,
@@ -530,12 +510,7 @@ class _AccountImageCropPainter extends CustomPainter {
     canvas.drawRect(Offset.zero & size, Paint()..color = Colors.black);
     canvas.drawImageRect(
       image,
-      Rect.fromLTWH(
-        0,
-        0,
-        image.width.toDouble(),
-        image.height.toDouble(),
-      ),
+      Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
       imageRect,
       Paint()..filterQuality = FilterQuality.high,
     );
@@ -611,13 +586,21 @@ class _AccountImageCropPainter extends CustomPainter {
         rect.topLeft + const Offset(length, 0),
         handlePaint,
       )
-      ..drawLine(rect.topLeft, rect.topLeft + const Offset(0, length), handlePaint)
+      ..drawLine(
+        rect.topLeft,
+        rect.topLeft + const Offset(0, length),
+        handlePaint,
+      )
       ..drawLine(
         rect.topRight,
         rect.topRight + const Offset(-length, 0),
         handlePaint,
       )
-      ..drawLine(rect.topRight, rect.topRight + const Offset(0, length), handlePaint)
+      ..drawLine(
+        rect.topRight,
+        rect.topRight + const Offset(0, length),
+        handlePaint,
+      )
       ..drawLine(
         rect.bottomLeft,
         rect.bottomLeft + const Offset(length, 0),

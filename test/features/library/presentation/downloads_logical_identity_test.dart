@@ -17,11 +17,7 @@ DownloadItem _download({
     ),
     status: TaskStatus.running,
     progress: 0.5,
-    item: MultimediaItem(
-      title: 'Show',
-      url: 'anime://show',
-      posterUrl: '',
-    ),
+    item: MultimediaItem(title: 'Show', url: 'anime://show', posterUrl: ''),
     logicalId: logicalId,
     trackingUrl: trackingUrl,
     destinationPath: destinationPath,
@@ -31,22 +27,25 @@ DownloadItem _download({
 
 void main() {
   group('V2 downloads UI logical identity', () {
-    test('known different logical ids do not fall through to fallback matching', () {
-      final first = _download(
-        taskId: 'first',
-        logicalId: 'logical-a',
-        trackingUrl: 'episode://same',
-        destinationPath: '/Downloads/same.mp4',
-      );
-      final second = _download(
-        taskId: 'second',
-        logicalId: 'logical-b',
-        trackingUrl: 'episode://same',
-        destinationPath: '/Downloads/same.mp4',
-      );
+    test(
+      'known different logical ids do not fall through to fallback matching',
+      () {
+        final first = _download(
+          taskId: 'first',
+          logicalId: 'logical-a',
+          trackingUrl: 'episode://same',
+          destinationPath: '/Downloads/same.mp4',
+        );
+        final second = _download(
+          taskId: 'second',
+          logicalId: 'logical-b',
+          trackingUrl: 'episode://same',
+          destinationPath: '/Downloads/same.mp4',
+        );
 
-      expect(downloadsPointAtSameTarget(first, second), isFalse);
-    });
+        expect(downloadsPointAtSameTarget(first, second), isFalse);
+      },
+    );
 
     test('same logical id groups rows even when transport details differ', () {
       final first = _download(
@@ -68,43 +67,48 @@ void main() {
       expect(groups.single, containsAll(<DownloadItem>[first, second]));
     });
 
-    test('tracking and file fallback is used only when logical id is absent', () {
-      final byTrackingA = _download(
-        taskId: 'tracking-a',
-        trackingUrl: 'episode://same',
-      );
-      final byTrackingB = _download(
-        taskId: 'tracking-b',
-        trackingUrl: 'episode://same',
-      );
-      final byFileA = _download(
-        taskId: 'file-a',
-        destinationPath: '/Downloads/same.mp4',
-      );
-      final byFileB = _download(
-        taskId: 'file-b',
-        destinationPath: '/Downloads/same.mp4',
-      );
+    test(
+      'tracking and file fallback is used only when logical id is absent',
+      () {
+        final byTrackingA = _download(
+          taskId: 'tracking-a',
+          trackingUrl: 'episode://same',
+        );
+        final byTrackingB = _download(
+          taskId: 'tracking-b',
+          trackingUrl: 'episode://same',
+        );
+        final byFileA = _download(
+          taskId: 'file-a',
+          destinationPath: '/Downloads/same.mp4',
+        );
+        final byFileB = _download(
+          taskId: 'file-b',
+          destinationPath: '/Downloads/same.mp4',
+        );
 
-      final groups = groupDownloadsByEpisodeOrFile([
-        byTrackingA,
-        byTrackingB,
-        byFileA,
-        byFileB,
-      ]);
+        final groups = groupDownloadsByEpisodeOrFile([
+          byTrackingA,
+          byTrackingB,
+          byFileA,
+          byFileB,
+        ]);
 
-      expect(groups, hasLength(2));
-      expect(
-        groups.any(
-          (group) =>
-              group.contains(byTrackingA) && group.contains(byTrackingB),
-        ),
-        isTrue,
-      );
-      expect(
-        groups.any((group) => group.contains(byFileA) && group.contains(byFileB)),
-        isTrue,
-      );
-    });
+        expect(groups, hasLength(2));
+        expect(
+          groups.any(
+            (group) =>
+                group.contains(byTrackingA) && group.contains(byTrackingB),
+          ),
+          isTrue,
+        );
+        expect(
+          groups.any(
+            (group) => group.contains(byFileA) && group.contains(byFileB),
+          ),
+          isTrue,
+        );
+      },
+    );
   });
 }

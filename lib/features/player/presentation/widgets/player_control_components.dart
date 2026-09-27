@@ -145,10 +145,7 @@ class PlayerTopBar extends StatelessWidget {
           padding: EdgeInsets.fromLTRB(leftPadding, 4, rightPadding, 14),
           child: Row(
             children: [
-              AppBackButton(
-                onPressed: onBack,
-                focusNode: backFocusNode,
-              ),
+              AppBackButton(onPressed: onBack, focusNode: backFocusNode),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -505,18 +502,21 @@ class _PlayerActionButtonState extends State<PlayerActionButton> {
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
                   color: showBg
-                      ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.16)
+                      ? Theme.of(context).colorScheme.primary
+                            .withValues(alpha: 0.16)
                       : Colors.transparent,
                   borderRadius: BorderRadius.circular(8),
                   border: showTvFocusRing
-                      ? Border.all(color: Theme.of(context).colorScheme.primary, width: 2)
+                      ? Border.all(
+                          color: Theme.of(context).colorScheme.primary,
+                          width: 2,
+                        )
                       : null,
                   boxShadow: showTvFocusRing
                       ? [
                           BoxShadow(
-                            color: Theme.of(context).colorScheme.primary.withValues(
-                              alpha: 0.2,
-                            ),
+                            color: Theme.of(context).colorScheme.primary
+                                .withValues(alpha: 0.2),
                             blurRadius: 8,
                           ),
                         ]

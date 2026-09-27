@@ -17,7 +17,6 @@ class MangaReaderPageCache {
 
   final Directory? _customCacheDirectory;
 
-
   Future<Directory> _directory() async {
     final custom = _customCacheDirectory;
     if (custom != null) {
@@ -37,10 +36,7 @@ class MangaReaderPageCache {
     return File(p.join(directory.path, '$hash.json'));
   }
 
-  Future<List<MangaPage>?> get(
-    String mangaId,
-    MangaChapter chapter,
-  ) async {
+  Future<List<MangaPage>?> get(String mangaId, MangaChapter chapter) async {
     try {
       final file = await _file(mangaId, chapter);
       if (!await file.exists()) return null;
@@ -146,5 +142,4 @@ class MangaReaderPageCache {
       }
     } catch (_) {}
   }
-
 }

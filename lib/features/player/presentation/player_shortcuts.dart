@@ -15,34 +15,33 @@ import 'package:flutter/services.dart';
 /// halfway, 0 is the start. There is deliberately no key for the end — 9 stops
 /// at nine tenths, because a key that skips the last of an episode would sit
 /// next to the ones that do not.
-double? seekFractionForKey(LogicalKeyboardKey key) => _digitKeys[key] == null
-    ? null
-    : _digitKeys[key]! / 10;
+double? seekFractionForKey(LogicalKeyboardKey key) =>
+    _digitKeys[key] == null ? null : _digitKeys[key]! / 10;
 
 /// Built once at load rather than per keypress. It cannot be `const`:
 /// [LogicalKeyboardKey] defines its own `==`, which a constant map may not
 /// depend on.
 final Map<LogicalKeyboardKey, int> _digitKeys = <LogicalKeyboardKey, int>{
-    LogicalKeyboardKey.digit0: 0,
-    LogicalKeyboardKey.digit1: 1,
-    LogicalKeyboardKey.digit2: 2,
-    LogicalKeyboardKey.digit3: 3,
-    LogicalKeyboardKey.digit4: 4,
-    LogicalKeyboardKey.digit5: 5,
-    LogicalKeyboardKey.digit6: 6,
-    LogicalKeyboardKey.digit7: 7,
-    LogicalKeyboardKey.digit8: 8,
-    LogicalKeyboardKey.digit9: 9,
-    LogicalKeyboardKey.numpad0: 0,
-    LogicalKeyboardKey.numpad1: 1,
-    LogicalKeyboardKey.numpad2: 2,
-    LogicalKeyboardKey.numpad3: 3,
-    LogicalKeyboardKey.numpad4: 4,
-    LogicalKeyboardKey.numpad5: 5,
-    LogicalKeyboardKey.numpad6: 6,
-    LogicalKeyboardKey.numpad7: 7,
-    LogicalKeyboardKey.numpad8: 8,
-    LogicalKeyboardKey.numpad9: 9,
+  LogicalKeyboardKey.digit0: 0,
+  LogicalKeyboardKey.digit1: 1,
+  LogicalKeyboardKey.digit2: 2,
+  LogicalKeyboardKey.digit3: 3,
+  LogicalKeyboardKey.digit4: 4,
+  LogicalKeyboardKey.digit5: 5,
+  LogicalKeyboardKey.digit6: 6,
+  LogicalKeyboardKey.digit7: 7,
+  LogicalKeyboardKey.digit8: 8,
+  LogicalKeyboardKey.digit9: 9,
+  LogicalKeyboardKey.numpad0: 0,
+  LogicalKeyboardKey.numpad1: 1,
+  LogicalKeyboardKey.numpad2: 2,
+  LogicalKeyboardKey.numpad3: 3,
+  LogicalKeyboardKey.numpad4: 4,
+  LogicalKeyboardKey.numpad5: 5,
+  LogicalKeyboardKey.numpad6: 6,
+  LogicalKeyboardKey.numpad7: 7,
+  LogicalKeyboardKey.numpad8: 8,
+  LogicalKeyboardKey.numpad9: 9,
 };
 
 /// The lowest speed the player will step down to.

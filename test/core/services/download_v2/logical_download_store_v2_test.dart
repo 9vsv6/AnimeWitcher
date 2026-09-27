@@ -33,32 +33,35 @@ void main() {
     );
   }
 
-  test('store round-trips logical metadata without transport internals', () async {
-    final store = InMemoryLogicalDownloadStoreV2();
-    final record = fixtureRecord(intent: DownloadUserIntent.paused);
+  test(
+    'store round-trips logical metadata without transport internals',
+    () async {
+      final store = InMemoryLogicalDownloadStoreV2();
+      final record = fixtureRecord(intent: DownloadUserIntent.paused);
 
-    await store.put(record);
-    final loaded = await store.get(record.logicalId);
+      await store.put(record);
+      final loaded = await store.get(record.logicalId);
 
-    expect(loaded, isNotNull);
-    expect(loaded!.intent, DownloadUserIntent.paused);
-    expect(loaded.generation, record.generation);
-    expect(loaded.taskId, record.taskId);
-    expect(loaded.destinationPath, record.destinationPath);
-    expect(loaded.sourceDescriptor, record.sourceDescriptor);
+      expect(loaded, isNotNull);
+      expect(loaded!.intent, DownloadUserIntent.paused);
+      expect(loaded.generation, record.generation);
+      expect(loaded.taskId, record.taskId);
+      expect(loaded.destinationPath, record.destinationPath);
+      expect(loaded.sourceDescriptor, record.sourceDescriptor);
 
-    final serializedKeys = loaded.toJson().keys.join('|').toLowerCase();
-    for (final forbidden in <String>[
-      'chunkid',
-      'range',
-      'resumebytes',
-      'ownership',
-      'retryremaining',
-      'holdreason',
-    ]) {
-      expect(serializedKeys, isNot(contains(forbidden)));
-    }
-  });
+      final serializedKeys = loaded.toJson().keys.join('|').toLowerCase();
+      for (final forbidden in <String>[
+        'chunkid',
+        'range',
+        'resumebytes',
+        'ownership',
+        'retryremaining',
+        'holdreason',
+      ]) {
+        expect(serializedKeys, isNot(contains(forbidden)));
+      }
+    },
+  );
 
   test('paused intent survives store recreation', () async {
     final backend = <String, Object?>{};
@@ -75,25 +78,28 @@ void main() {
     expect(restored.generation, record.generation);
   });
 
-  test('mutate updates one logical record without changing its identity', () async {
-    final store = InMemoryLogicalDownloadStoreV2();
-    final record = fixtureRecord();
-    await store.put(record);
+  test(
+    'mutate updates one logical record without changing its identity',
+    () async {
+      final store = InMemoryLogicalDownloadStoreV2();
+      final record = fixtureRecord();
+      await store.put(record);
 
-    final updated = await store.mutate(record.logicalId, (current) {
-      expect(current, isNotNull);
-      return current!.copyWith(
-        intent: DownloadUserIntent.paused,
-        updatedAtMillis: 2000,
-      );
-    });
+      final updated = await store.mutate(record.logicalId, (current) {
+        expect(current, isNotNull);
+        return current!.copyWith(
+          intent: DownloadUserIntent.paused,
+          updatedAtMillis: 2000,
+        );
+      });
 
-    expect(updated, isNotNull);
-    expect(updated!.logicalId, record.logicalId);
-    expect(updated.taskId, record.taskId);
-    expect(updated.intent, DownloadUserIntent.paused);
-    expect((await store.get(record.logicalId))?.updatedAtMillis, 2000);
-  });
+      expect(updated, isNotNull);
+      expect(updated!.logicalId, record.logicalId);
+      expect(updated.taskId, record.taskId);
+      expect(updated.intent, DownloadUserIntent.paused);
+      expect((await store.get(record.logicalId))?.updatedAtMillis, 2000);
+    },
+  );
 
   test('mutate returning null removes the logical record', () async {
     final store = InMemoryLogicalDownloadStoreV2();

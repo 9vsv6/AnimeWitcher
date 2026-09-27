@@ -109,12 +109,20 @@ class DetailsDesktopHero extends ConsumerWidget {
 
   double _posterWidthFor(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
-    return compact && size.height > size.width ? 120 : compact ? 104 : 170;
+    return compact && size.height > size.width
+        ? 120
+        : compact
+        ? 104
+        : 170;
   }
 
   double _posterHeightFor(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
-    return compact && size.height > size.width ? 174 : compact ? 150 : 245;
+    return compact && size.height > size.width
+        ? 174
+        : compact
+        ? 150
+        : 245;
   }
 
   @override
@@ -146,8 +154,7 @@ class DetailsDesktopHero extends ConsumerWidget {
         // With the poster beside the name the block is taller, so it starts
         // higher and the synopsis still begins on the first screen.
         final viewport = MediaQuery.sizeOf(context);
-        final isPortraitPhone =
-            compact && viewport.height > viewport.width;
+        final isPortraitPhone = compact && viewport.height > viewport.width;
         final mediaTopInset = MediaQuery.viewPaddingOf(context).top;
         final view = View.of(context);
         final rawTopInset = view.viewPadding.top / view.devicePixelRatio;
@@ -175,7 +182,11 @@ class DetailsDesktopHero extends ConsumerWidget {
         // the first lines of the synopsis, fading out as it goes. A fixed
         // run rather than the synopsis's own height: tied to that, "show
         // more" made the box taller and the picture, filling it, zoomed in.
-        final pictureRunOn = isPortraitPhone ? 0.0 : compact ? 150.0 : 200.0;
+        final pictureRunOn = isPortraitPhone
+            ? 0.0
+            : compact
+            ? 150.0
+            : 200.0;
 
         Widget backdropArtwork() => ArtworkDecode(
           paintedWidth: MediaQuery.sizeOf(context).width,
@@ -203,11 +214,10 @@ class DetailsDesktopHero extends ConsumerWidget {
                       alignment: Alignment.topCenter,
                       memCacheWidth: decodeWidth,
                       filterQuality: FilterQuality.medium,
-                      errorWidget: (_, _, _) =>
-                          ThumbnailErrorPlaceholder(
-                            label: displayItem.title,
-                            isBackdrop: true,
-                          ),
+                      errorWidget: (_, _, _) => ThumbnailErrorPlaceholder(
+                        label: displayItem.title,
+                        isBackdrop: true,
+                      ),
                     );
                   }
                   return ThumbnailErrorPlaceholder(

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:animewitcher/core/account/account_providers.dart';
+
 import '../../../../core/storage/history_repository.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 
@@ -75,7 +76,6 @@ class WatchHistory extends _$WatchHistory {
     );
     refresh();
   }
-
 }
 
 class ContinueWatchingNotifier extends Notifier<List<HistoryItem>> {
@@ -117,18 +117,20 @@ class ContinueWatchingNotifier extends Notifier<List<HistoryItem>> {
     String? episodeServerName,
     String? episodePosterUrl,
   }) async {
-    await ref.read(historyRepositoryProvider).saveContinueWatchingProgress(
-      item,
-      position,
-      duration,
-      lastStreamUrl: lastStreamUrl,
-      lastEpisodeUrl: lastEpisodeUrl,
-      season: season,
-      episode: episode,
-      episodeTitle: episodeTitle,
-      episodeServerName: episodeServerName,
-      episodePosterUrl: episodePosterUrl,
-    );
+    await ref
+        .read(historyRepositoryProvider)
+        .saveContinueWatchingProgress(
+          item,
+          position,
+          duration,
+          lastStreamUrl: lastStreamUrl,
+          lastEpisodeUrl: lastEpisodeUrl,
+          season: season,
+          episode: episode,
+          episodeTitle: episodeTitle,
+          episodeServerName: episodeServerName,
+          episodePosterUrl: episodePosterUrl,
+        );
     refresh();
   }
 }

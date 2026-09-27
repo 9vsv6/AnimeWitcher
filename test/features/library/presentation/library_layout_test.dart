@@ -52,8 +52,7 @@ final class _LibraryStorage extends MemoryStorageService {
   int dateLookups = 0;
 
   @override
-  List<MultimediaItem> getLibraryItems({String? category}) =>
-      _read(category);
+  List<MultimediaItem> getLibraryItems({String? category}) => _read(category);
 
   List<MultimediaItem> _read(String? category) {
     reads++;

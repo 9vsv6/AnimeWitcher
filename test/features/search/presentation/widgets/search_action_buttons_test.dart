@@ -69,7 +69,9 @@ void main() {
     late StateSetter update;
     await tester.pumpWidget(
       MaterialApp(
-        theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue)),
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        ),
         home: Scaffold(
           appBar: AppBar(
             title: StatefulBuilder(
@@ -86,7 +88,9 @@ void main() {
                     const SizedBox(width: 10),
                     SearchActionButtons(
                       sortValue: 'default',
-                      sortItems: const [AppleNativeMenuItem(value: 'default', label: 'Default')],
+                      sortItems: const [
+                        AppleNativeMenuItem(value: 'default', label: 'Default'),
+                      ],
                       onSortSelected: (_) {},
                       onFilterPressed: () {},
                       sortTooltip: 'Sort',
@@ -103,8 +107,12 @@ void main() {
         ),
       ),
     );
-    final field = tester.getRect(find.byKey(const ValueKey('search-field-glass')));
-    final actions = tester.getRect(find.byKey(const ValueKey('search-action-capsule')));
+    final field = tester.getRect(
+      find.byKey(const ValueKey('search-field-glass')),
+    );
+    final actions = tester.getRect(
+      find.byKey(const ValueKey('search-action-capsule')),
+    );
     expect(field.height, SearchGlassSurface.height);
     expect(actions.height, field.height);
     expect(actions.top, field.top);
@@ -114,9 +122,12 @@ void main() {
     expect(find.byType(AppleLiquidGlassSurface), findsOneWidget);
     expect(find.text('2'), findsOneWidget);
     final theme = Theme.of(tester.element(find.byType(SearchActionButtons)));
-    final badgeBox = tester.widget<Container>(find.descendant(
-      of: find.byType(SearchFilterBadge), matching: find.byType(Container),
-    ));
+    final badgeBox = tester.widget<Container>(
+      find.descendant(
+        of: find.byType(SearchFilterBadge),
+        matching: find.byType(Container),
+      ),
+    );
     final decoration = badgeBox.decoration! as BoxDecoration;
     expect(decoration.color, theme.colorScheme.primary);
     expect(decoration.shape, BoxShape.circle);
@@ -128,7 +139,10 @@ void main() {
     update(() => count = 0);
     await tester.pump();
     expect(find.byType(SearchFilterBadge), findsNothing);
-    expect(tester.getRect(find.byKey(const ValueKey('search-action-capsule'))), actions);
+    expect(
+      tester.getRect(find.byKey(const ValueKey('search-action-capsule'))),
+      actions,
+    );
   });
 
   testWidgets('filter hitbox stays aligned with the icon in an RTL AppBar', (
@@ -167,7 +181,9 @@ void main() {
 
     await tester.pump();
 
-    final groupRect = tester.getRect(find.byKey(const ValueKey('search-action-capsule')));
+    final groupRect = tester.getRect(
+      find.byKey(const ValueKey('search-action-capsule')),
+    );
     final filterIconRect = tester.getRect(find.byIcon(Icons.tune_rounded));
 
     // Tapping the pixels that paint the icon must activate the filter itself.

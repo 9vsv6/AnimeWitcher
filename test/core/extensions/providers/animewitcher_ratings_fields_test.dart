@@ -43,8 +43,7 @@ Dio _stubDio(Map<String, dynamic> animeFields) {
             requestOptions: options,
             statusCode: 200,
             data: <String, dynamic>{
-              'name':
-                  'projects/animewitcher-1c66d/databases/(default)/documents/anime_list/rated-show',
+              'name': 'projects/animewitcher-1c66d/databases/(default)/documents/anime_list/rated-show',
               'fields': animeFields,
             },
           ),

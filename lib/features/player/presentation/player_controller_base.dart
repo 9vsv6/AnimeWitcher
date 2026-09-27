@@ -1169,7 +1169,6 @@ class PlayerController extends Notifier<PlayerState> {
             _suppressNextEpisodeDetection) {
           _suppressNextEpisodeDetection = false;
         }
-
       }
     });
 
@@ -1562,7 +1561,9 @@ class PlayerController extends Notifier<PlayerState> {
         debugPrint('Watchdog: buffering 25s — reopening source at $position');
       }
       _enterRuntimePhase(kind: PlaybackUiPhaseKind.bufferingRuntime);
-      _beginStallRecovery(perform: _changeStream(current, resetPosition: false));
+      _beginStallRecovery(
+        perform: _changeStream(current, resetPosition: false),
+      );
       return;
     }
 
@@ -4831,7 +4832,6 @@ class PlayerController extends Notifier<PlayerState> {
 
     return setVolumeLevel(_lastNonZeroVolumeLevel);
   }
-
 }
 
 final playerControllerProvider =

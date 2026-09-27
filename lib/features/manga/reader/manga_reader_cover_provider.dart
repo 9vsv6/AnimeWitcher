@@ -22,5 +22,4 @@ class MangaReaderCustomCoversNotifier extends Notifier<Map<String, String>> {
         .read(settingsRepositoryProvider)
         .saveMangaReaderCustomCovers(next);
   }
-
 }

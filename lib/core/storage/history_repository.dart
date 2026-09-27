@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+
 import '../account/account_providers.dart';
 import '../account/animewitcher_account_service.dart';
 import '../domain/entity/multimedia_item.dart';
@@ -93,7 +94,6 @@ class HistoryRepository {
   final AnimeWitcherAccountService _accountService;
 
   HistoryRepository(this._storageService, this._accountService);
-
 
   Future<void> removeFromHistory(String url) async {
     await _storageService.removeFromHistory(url);

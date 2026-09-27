@@ -8,6 +8,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../../../../core/utils/digit_normalization.dart';
 
 import '../../../../core/utils/localized_text.dart';

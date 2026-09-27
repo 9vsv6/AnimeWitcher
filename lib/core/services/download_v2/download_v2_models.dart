@@ -54,8 +54,10 @@ final class DownloadTransportSnapshot {
   final int? totalBytes;
   final double networkSpeedMBps;
   final Duration timeRemaining;
+
   /// Requested connection ceiling for this parent transfer when known.
   final int? configuredConnections;
+
   /// Currently owned native/range writers for this parent when observable.
   final int? activeConnections;
   final DownloadFailureCategory? failureCategory;
@@ -170,7 +172,9 @@ final class LogicalDownloadRecordV2 {
       failureCategory: clearFailure
           ? null
           : failureCategory ?? this.failureCategory,
-      failureMessage: clearFailure ? null : failureMessage ?? this.failureMessage,
+      failureMessage: clearFailure
+          ? null
+          : failureMessage ?? this.failureMessage,
       allowPause: allowPause ?? this.allowPause,
       retries: retries ?? this.retries,
       parallelChunks: parallelChunks ?? this.parallelChunks,
@@ -264,10 +268,9 @@ final class LogicalDownloadRecordV2 {
       allowPause: map['allowPause'] is bool ? map['allowPause']! as bool : true,
       retries: retries,
       parallelChunks: parallelChunks,
-      awaitingAdmission:
-          map['awaitingAdmission'] is bool
-              ? map['awaitingAdmission']! as bool
-              : false,
+      awaitingAdmission: map['awaitingAdmission'] is bool
+          ? map['awaitingAdmission']! as bool
+          : false,
       updatedAtMillis: updatedAtMillis,
     );
   }

@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:background_downloader/background_downloader.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import 'package:animewitcher/core/utils/image_fallbacks.dart';
 import 'package:animewitcher/core/utils/episode_label.dart';
 import 'package:animewitcher/core/utils/episode_order.dart';
 import 'package:animewitcher/core/providers/episode_sort_provider.dart';
+
 import '../../../../core/domain/entity/manga.dart';
 import '../../../../core/services/download_v2/download_v2_models.dart';
 import '../../../../core/router/app_router.dart';
@@ -267,24 +269,22 @@ class _GroupedDownloadTile extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final firstItem = items.first;
     final episodeSortAscending = ref.watch(episodeSortAscendingProvider);
-    final isManga =
-        firstItem.mediaKind == DownloadMediaKind.mangaChapter;
+    final isManga = firstItem.mediaKind == DownloadMediaKind.mangaChapter;
     final orderedItems = isManga
-        ? (List<DownloadItem>.from(items)
-            ..sort((a, b) {
-              final an = a.chapter?.number;
-              final bn = b.chapter?.number;
-              if (an != null && bn != null) {
-                final compare = an.compareTo(bn);
-                if (compare != 0) {
-                  return episodeSortAscending ? compare : -compare;
-                }
+        ? (List<DownloadItem>.from(items)..sort((a, b) {
+            final an = a.chapter?.number;
+            final bn = b.chapter?.number;
+            if (an != null && bn != null) {
+              final compare = an.compareTo(bn);
+              if (compare != 0) {
+                return episodeSortAscending ? compare : -compare;
               }
-              final compare = (a.chapter?.name ?? '').compareTo(
-                b.chapter?.name ?? '',
-              );
-              return episodeSortAscending ? compare : -compare;
-            }))
+            }
+            final compare = (a.chapter?.name ?? '').compareTo(
+              b.chapter?.name ?? '',
+            );
+            return episodeSortAscending ? compare : -compare;
+          }))
         : episodeItemsInDisplayOrder(
             items,
             episodeOf: (item) => item.episode,
@@ -362,9 +362,9 @@ class _GroupedDownloadTile extends ConsumerWidget {
                         completedDownloadUnitCountLabel(
                           kind: firstItem.mediaKind,
                           count: items.length,
-                          isArabic: Localizations.localeOf(context)
-                              .languageCode
-                              .toLowerCase() ==
+                          isArabic:
+                              Localizations.localeOf(context).languageCode
+                                  .toLowerCase() ==
                               'ar',
                         ),
                         style: theme.textTheme.bodySmall?.copyWith(
@@ -405,21 +405,20 @@ class _GroupedDownloadTile extends ConsumerWidget {
                     ? CompletedDownloadChapterCard(
                         key: ValueKey(download.id),
                         item: download,
-                        onOpen: () => _openMangaChapter(
-                          context,
-                          download,
-                          orderedItems,
+                        onOpen: () =>
+                            _openMangaChapter(context, download, orderedItems),
+                        onDelete: () => unawaited(
+                          confirmAndRemoveDownload(context, ref, download),
                         ),
-                        onDelete: () =>
-                            unawaited(confirmAndRemoveDownload(context, ref, download)),
                       )
                     : CompletedDownloadEpisodeCard(
                         key: ValueKey(download.id),
                         item: download,
                         onPlay: () =>
                             _playLocalFile(context, ref, download, l10n),
-                        onDelete: () =>
-                            unawaited(confirmAndRemoveDownload(context, ref, download)),
+                        onDelete: () => unawaited(
+                          confirmAndRemoveDownload(context, ref, download),
+                        ),
                       ),
               ),
               if (!isLast)
@@ -571,9 +570,7 @@ class _DownloadItemTile extends ConsumerWidget {
       child: ArtworkDecode(
         paintedWidth: 80,
         builder: (BuildContext context, int? decodeWidth) => CachedNetworkImage(
-          imageUrl:
-              AppImageFallbacks.poster(item.item.posterUrl) ??
-              '',
+          imageUrl: AppImageFallbacks.poster(item.item.posterUrl) ?? '',
           width: 80,
           height: 120,
           fit: BoxFit.cover,
@@ -702,10 +699,7 @@ class _DownloadItemTile extends ConsumerWidget {
                       ),
                       const SizedBox(width: LayoutConstants.spacingSm),
                       Text(
-                        formatDownloadTimeRemaining(
-                          progressData!,
-                          l10n,
-                        ),
+                        formatDownloadTimeRemaining(progressData!, l10n),
                         textDirection: isArabic
                             ? TextDirection.rtl
                             : TextDirection.ltr,
@@ -783,10 +777,7 @@ class _DownloadItemTile extends ConsumerWidget {
     );
   }
 
-  Future<void> _resumeDownload(
-    BuildContext context,
-    WidgetRef ref,
-  ) async {
+  Future<void> _resumeDownload(BuildContext context, WidgetRef ref) async {
     try {
       await ref
           .read(downloadsProvider.notifier)

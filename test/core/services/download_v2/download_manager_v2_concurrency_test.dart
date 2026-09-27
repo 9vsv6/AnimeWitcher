@@ -9,180 +9,190 @@ import 'package:animewitcher/core/services/download_v2/logical_download_store_v2
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('logical concurrency caps episodes without counting package chunks', () async {
-    final store = InMemoryLogicalDownloadStoreV2();
-    final gateway = _ConcurrencyGateway();
-    final resolver = _Resolver();
-    final manager = DownloadManagerV2(
-      store: store,
-      gateway: gateway,
-      sourceResolver: resolver,
-      maxConcurrentDownloads: () => 1,
-    );
-    addTearDown(manager.dispose);
+  test(
+    'logical concurrency caps episodes without counting package chunks',
+    () async {
+      final store = InMemoryLogicalDownloadStoreV2();
+      final gateway = _ConcurrencyGateway();
+      final resolver = _Resolver();
+      final manager = DownloadManagerV2(
+        store: store,
+        gateway: gateway,
+        sourceResolver: resolver,
+        maxConcurrentDownloads: () => 1,
+      );
+      addTearDown(manager.dispose);
 
-    final first = _request(episode: '1', chunks: 16);
-    final second = _request(episode: '2', chunks: 16);
+      final first = _request(episode: '1', chunks: 16);
+      final second = _request(episode: '2', chunks: 16);
 
-    final firstSnapshot = await manager.start(first);
-    expect(firstSnapshot.status, DownloadTransportStatus.running);
-    expect(gateway.startedSpecs, hasLength(1));
-    expect(gateway.startedSpecs.single.parallelChunks, 16);
-    expect(resolver.calls, 1);
+      final firstSnapshot = await manager.start(first);
+      expect(firstSnapshot.status, DownloadTransportStatus.running);
+      expect(gateway.startedSpecs, hasLength(1));
+      expect(gateway.startedSpecs.single.parallelChunks, 16);
+      expect(resolver.calls, 1);
 
-    final secondSnapshot = await manager.start(second);
-    expect(secondSnapshot.status, DownloadTransportStatus.queued);
-    expect(gateway.startedSpecs, hasLength(1));
-    expect(resolver.calls, 1);
+      final secondSnapshot = await manager.start(second);
+      expect(secondSnapshot.status, DownloadTransportStatus.queued);
+      expect(gateway.startedSpecs, hasLength(1));
+      expect(resolver.calls, 1);
 
-    final queuedRecord = await store.get(second.logicalId);
-    expect(queuedRecord, isNotNull);
-    expect(queuedRecord!.awaitingAdmission, isTrue);
-    expect(queuedRecord.intent, DownloadUserIntent.active);
+      final queuedRecord = await store.get(second.logicalId);
+      expect(queuedRecord, isNotNull);
+      expect(queuedRecord!.awaitingAdmission, isTrue);
+      expect(queuedRecord.intent, DownloadUserIntent.active);
 
-    gateway.emit(
-      gateway.startedSpecs.first.taskId,
-      DownloadTransportStatus.failed,
-    );
-    await gateway.waitForStarts(2);
+      gateway.emit(
+        gateway.startedSpecs.first.taskId,
+        DownloadTransportStatus.failed,
+      );
+      await gateway.waitForStarts(2);
 
-    expect(resolver.calls, 2);
-    expect(gateway.startedSpecs, hasLength(2));
-    expect(gateway.startedSpecs.last.parallelChunks, 16);
-    expect(gateway.startedSpecs.last.taskId, queuedRecord.taskId);
-    expect((await store.get(second.logicalId))?.awaitingAdmission, isFalse);
-  });
+      expect(resolver.calls, 2);
+      expect(gateway.startedSpecs, hasLength(2));
+      expect(gateway.startedSpecs.last.parallelChunks, 16);
+      expect(gateway.startedSpecs.last.taskId, queuedRecord.taskId);
+      expect((await store.get(second.logicalId))?.awaitingAdmission, isFalse);
+    },
+  );
 
-  test('resume waits for an episode slot and keeps the exact paused handle', () async {
-    final store = InMemoryLogicalDownloadStoreV2();
-    final gateway = _ConcurrencyGateway();
-    final resolver = _Resolver();
-    final manager = DownloadManagerV2(
-      store: store,
-      gateway: gateway,
-      sourceResolver: resolver,
-      maxConcurrentDownloads: () => 1,
-    );
-    addTearDown(manager.dispose);
+  test(
+    'resume waits for an episode slot and keeps the exact paused handle',
+    () async {
+      final store = InMemoryLogicalDownloadStoreV2();
+      final gateway = _ConcurrencyGateway();
+      final resolver = _Resolver();
+      final manager = DownloadManagerV2(
+        store: store,
+        gateway: gateway,
+        sourceResolver: resolver,
+        maxConcurrentDownloads: () => 1,
+      );
+      addTearDown(manager.dispose);
 
-    final first = _request(episode: '1', chunks: 4);
-    final second = _request(episode: '2', chunks: 4);
+      final first = _request(episode: '1', chunks: 4);
+      final second = _request(episode: '2', chunks: 4);
 
-    await manager.start(first);
-    final firstTaskId = gateway.startedSpecs.single.taskId;
-    final firstHandle = gateway.handleFor(firstTaskId)!;
+      await manager.start(first);
+      final firstTaskId = gateway.startedSpecs.single.taskId;
+      final firstHandle = gateway.handleFor(firstTaskId)!;
 
-    final pauseFuture = manager.pause(first.logicalId);
-    await Future<void>.delayed(Duration.zero);
-    gateway.emit(firstTaskId, DownloadTransportStatus.paused);
-    await pauseFuture;
+      final pauseFuture = manager.pause(first.logicalId);
+      await Future<void>.delayed(Duration.zero);
+      gateway.emit(firstTaskId, DownloadTransportStatus.paused);
+      await pauseFuture;
 
-    await manager.start(second);
-    final secondTaskId = gateway.startedSpecs.last.taskId;
-    expect(gateway.startedSpecs, hasLength(2));
+      await manager.start(second);
+      final secondTaskId = gateway.startedSpecs.last.taskId;
+      expect(gateway.startedSpecs, hasLength(2));
 
-    final queuedResume = await manager.resume(first.logicalId);
-    expect(queuedResume.status, DownloadTransportStatus.queued);
-    expect(firstHandle.resumeCalls, 0);
-    expect((await store.get(first.logicalId))?.taskId, firstTaskId);
-    expect((await store.get(first.logicalId))?.generation, 1);
-    expect((await store.get(first.logicalId))?.awaitingAdmission, isTrue);
+      final queuedResume = await manager.resume(first.logicalId);
+      expect(queuedResume.status, DownloadTransportStatus.queued);
+      expect(firstHandle.resumeCalls, 0);
+      expect((await store.get(first.logicalId))?.taskId, firstTaskId);
+      expect((await store.get(first.logicalId))?.generation, 1);
+      expect((await store.get(first.logicalId))?.awaitingAdmission, isTrue);
 
-    gateway.emit(secondTaskId, DownloadTransportStatus.failed);
-    await firstHandle.waitForResume();
+      gateway.emit(secondTaskId, DownloadTransportStatus.failed);
+      await firstHandle.waitForResume();
 
-    expect(firstHandle.resumeCalls, 1);
-    expect(gateway.startedSpecs, hasLength(2));
-    expect((await store.get(first.logicalId))?.taskId, firstTaskId);
-    expect((await store.get(first.logicalId))?.generation, 1);
-    expect((await store.get(first.logicalId))?.awaitingAdmission, isFalse);
-  });
+      expect(firstHandle.resumeCalls, 1);
+      expect(gateway.startedSpecs, hasLength(2));
+      expect((await store.get(first.logicalId))?.taskId, firstTaskId);
+      expect((await store.get(first.logicalId))?.generation, 1);
+      expect((await store.get(first.logicalId))?.awaitingAdmission, isFalse);
+    },
+  );
 
+  test(
+    'queued resume failure preserves paused generation without fresh start',
+    () async {
+      final store = InMemoryLogicalDownloadStoreV2();
+      final gateway = _ConcurrencyGateway();
+      final resolver = _Resolver();
+      final manager = DownloadManagerV2(
+        store: store,
+        gateway: gateway,
+        sourceResolver: resolver,
+        maxConcurrentDownloads: () => 1,
+      );
+      addTearDown(manager.dispose);
 
-  test('queued resume failure preserves paused generation without fresh start', () async {
-    final store = InMemoryLogicalDownloadStoreV2();
-    final gateway = _ConcurrencyGateway();
-    final resolver = _Resolver();
-    final manager = DownloadManagerV2(
-      store: store,
-      gateway: gateway,
-      sourceResolver: resolver,
-      maxConcurrentDownloads: () => 1,
-    );
-    addTearDown(manager.dispose);
+      final first = _request(episode: '1', chunks: 4);
+      final second = _request(episode: '2', chunks: 4);
 
-    final first = _request(episode: '1', chunks: 4);
-    final second = _request(episode: '2', chunks: 4);
+      await manager.start(first);
+      final firstTaskId = gateway.startedSpecs.single.taskId;
+      final firstHandle = gateway.handleFor(firstTaskId)!;
 
-    await manager.start(first);
-    final firstTaskId = gateway.startedSpecs.single.taskId;
-    final firstHandle = gateway.handleFor(firstTaskId)!;
+      final pauseFuture = manager.pause(first.logicalId);
+      await Future<void>.delayed(Duration.zero);
+      gateway.emit(firstTaskId, DownloadTransportStatus.paused);
+      await pauseFuture;
 
-    final pauseFuture = manager.pause(first.logicalId);
-    await Future<void>.delayed(Duration.zero);
-    gateway.emit(firstTaskId, DownloadTransportStatus.paused);
-    await pauseFuture;
+      await manager.start(second);
+      final secondTaskId = gateway.startedSpecs.last.taskId;
+      firstHandle.onResume = () async => false;
 
-    await manager.start(second);
-    final secondTaskId = gateway.startedSpecs.last.taskId;
-    firstHandle.onResume = () async => false;
+      final queued = await manager.resume(first.logicalId);
+      expect(queued.status, DownloadTransportStatus.queued);
 
-    final queued = await manager.resume(first.logicalId);
-    expect(queued.status, DownloadTransportStatus.queued);
+      gateway.emit(secondTaskId, DownloadTransportStatus.failed);
+      await firstHandle.waitForResume();
+      await Future<void>.delayed(Duration.zero);
 
-    gateway.emit(secondTaskId, DownloadTransportStatus.failed);
-    await firstHandle.waitForResume();
-    await Future<void>.delayed(Duration.zero);
+      expect(firstHandle.resumeCalls, 1);
+      expect(gateway.startedSpecs, hasLength(2));
+      expect((await store.get(first.logicalId))?.generation, 1);
+      expect((await store.get(first.logicalId))?.taskId, firstTaskId);
+      expect(
+        (await store.get(first.logicalId))?.intent,
+        DownloadUserIntent.paused,
+      );
+    },
+  );
 
-    expect(firstHandle.resumeCalls, 1);
-    expect(gateway.startedSpecs, hasLength(2));
-    expect((await store.get(first.logicalId))?.generation, 1);
-    expect((await store.get(first.logicalId))?.taskId, firstTaskId);
-    expect(
-      (await store.get(first.logicalId))?.intent,
-      DownloadUserIntent.paused,
-    );
-  });
+  test(
+    'paused queued episode resumes with the same reserved generation',
+    () async {
+      final store = InMemoryLogicalDownloadStoreV2();
+      final gateway = _ConcurrencyGateway();
+      final resolver = _Resolver();
+      final manager = DownloadManagerV2(
+        store: store,
+        gateway: gateway,
+        sourceResolver: resolver,
+        maxConcurrentDownloads: () => 1,
+      );
+      addTearDown(manager.dispose);
 
-  test('paused queued episode resumes with the same reserved generation', () async {
-    final store = InMemoryLogicalDownloadStoreV2();
-    final gateway = _ConcurrencyGateway();
-    final resolver = _Resolver();
-    final manager = DownloadManagerV2(
-      store: store,
-      gateway: gateway,
-      sourceResolver: resolver,
-      maxConcurrentDownloads: () => 1,
-    );
-    addTearDown(manager.dispose);
+      final first = _request(episode: '1', chunks: 8);
+      final second = _request(episode: '2', chunks: 8);
 
-    final first = _request(episode: '1', chunks: 8);
-    final second = _request(episode: '2', chunks: 8);
+      await manager.start(first);
+      final queued = await manager.start(second);
+      final queuedRecord = await store.get(second.logicalId);
+      expect(queued.status, DownloadTransportStatus.queued);
+      expect(queuedRecord?.generation, 1);
+      expect(queuedRecord?.awaitingAdmission, isTrue);
+      expect(resolver.calls, 1);
 
-    await manager.start(first);
-    final queued = await manager.start(second);
-    final queuedRecord = await store.get(second.logicalId);
-    expect(queued.status, DownloadTransportStatus.queued);
-    expect(queuedRecord?.generation, 1);
-    expect(queuedRecord?.awaitingAdmission, isTrue);
-    expect(resolver.calls, 1);
+      await manager.pause(second.logicalId);
+      final pausedRecord = await store.get(second.logicalId);
+      expect(pausedRecord?.intent, DownloadUserIntent.paused);
+      expect(pausedRecord?.awaitingAdmission, isTrue);
 
-    await manager.pause(second.logicalId);
-    final pausedRecord = await store.get(second.logicalId);
-    expect(pausedRecord?.intent, DownloadUserIntent.paused);
-    expect(pausedRecord?.awaitingAdmission, isTrue);
-
-    final resumed = await manager.resume(second.logicalId);
-    final resumedRecord = await store.get(second.logicalId);
-    expect(resumed.status, DownloadTransportStatus.queued);
-    expect(resumedRecord?.intent, DownloadUserIntent.active);
-    expect(resumedRecord?.awaitingAdmission, isTrue);
-    expect(resumedRecord?.generation, 1);
-    expect(resumedRecord?.taskId, queuedRecord?.taskId);
-    expect(gateway.startedSpecs, hasLength(1));
-    expect(resolver.calls, 1);
-  });
-
+      final resumed = await manager.resume(second.logicalId);
+      final resumedRecord = await store.get(second.logicalId);
+      expect(resumed.status, DownloadTransportStatus.queued);
+      expect(resumedRecord?.intent, DownloadUserIntent.active);
+      expect(resumedRecord?.awaitingAdmission, isTrue);
+      expect(resumedRecord?.generation, 1);
+      expect(resumedRecord?.taskId, queuedRecord?.taskId);
+      expect(gateway.startedSpecs, hasLength(1));
+      expect(resolver.calls, 1);
+    },
+  );
 }
 
 DownloadStartRequestV2 _request({

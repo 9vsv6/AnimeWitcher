@@ -4,10 +4,7 @@
 /// helpers because changing their byte representation can invalidate signatures.
 String _repairInvalidPercentEncoding(String value) {
   if (!value.contains('%')) return value;
-  return value.replaceAllMapped(
-    RegExp(r'%(?![0-9A-Fa-f]{2})'),
-    (_) => '%25',
-  );
+  return value.replaceAllMapped(RegExp(r'%(?![0-9A-Fa-f]{2})'), (_) => '%25');
 }
 
 String safeDecodeUriComponent(String value) {

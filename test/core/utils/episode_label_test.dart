@@ -238,19 +238,11 @@ void main() {
         'الفيلم: بداية المغامرة',
       );
       expect(
-        formatEpisodeLabel(
-          episode: 0,
-          isArabic: true,
-          serverName: 'مترجم',
-        ),
+        formatEpisodeLabel(episode: 0, isArabic: true, serverName: 'مترجم'),
         'مترجم',
       );
       expect(
-        formatEpisodeLabel(
-          episode: 0,
-          isArabic: true,
-          serverName: 'مدبلج',
-        ),
+        formatEpisodeLabel(episode: 0, isArabic: true, serverName: 'مدبلج'),
         'مدبلج',
       );
     });

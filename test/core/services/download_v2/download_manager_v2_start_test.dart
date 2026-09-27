@@ -13,9 +13,7 @@ void main() {
   test('duplicate start creates one writer', () async {
     final gateway = _FakeGateway();
     final resolver = StaticSourceResolverV2(
-      headers: const <String, String>{
-        'referer': 'https://example.invalid/',
-      },
+      headers: const <String, String>{'referer': 'https://example.invalid/'},
       expectedBytes: 123456,
     );
     final manager = DownloadManagerV2(

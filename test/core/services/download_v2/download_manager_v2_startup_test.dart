@@ -59,32 +59,35 @@ void main() {
     );
   });
 
-  test('startup waits for paused transport settlement before completing', () async {
-    final f = await _startupFixture(
-      intent: DownloadUserIntent.paused,
-      hasExactHandle: true,
-    );
-    final handle = f.gateway.handleFor(f.record.taskId)!;
-    handle.onPause = () async => true;
+  test(
+    'startup waits for paused transport settlement before completing',
+    () async {
+      final f = await _startupFixture(
+        intent: DownloadUserIntent.paused,
+        hasExactHandle: true,
+      );
+      final handle = f.gateway.handleFor(f.record.taskId)!;
+      handle.onPause = () async => true;
 
-    var initialized = false;
-    final initializeFuture = f.manager.initialize().whenComplete(() {
-      initialized = true;
-    });
-    await Future<void>.delayed(Duration.zero);
+      var initialized = false;
+      final initializeFuture = f.manager.initialize().whenComplete(() {
+        initialized = true;
+      });
+      await Future<void>.delayed(Duration.zero);
 
-    expect(handle.pauseCalls, 1);
-    expect(initialized, isFalse);
+      expect(handle.pauseCalls, 1);
+      expect(initialized, isFalse);
 
-    handle.emitStatus(DownloadTransportStatus.paused);
-    await initializeFuture;
+      handle.emitStatus(DownloadTransportStatus.paused);
+      await initializeFuture;
 
-    expect(initialized, isTrue);
-    expect(
-      f.manager.snapshotFor(f.logicalId)?.status,
-      DownloadTransportStatus.paused,
-    );
-  });
+      expect(initialized, isTrue);
+      expect(
+        f.manager.snapshotFor(f.logicalId)?.status,
+        DownloadTransportStatus.paused,
+      );
+    },
+  );
 
   test('startup never recreates canceled intent', () async {
     final f = await _startupFixture(intent: DownloadUserIntent.canceled);
@@ -118,108 +121,117 @@ void main() {
     );
   });
 
-  test('startup binds exact active transfer without creating a writer', () async {
-    final f = await _startupFixture(
-      intent: DownloadUserIntent.active,
-      hasExactHandle: true,
-    );
-
-    await f.manager.initialize();
-
-    expect(f.gateway.startedSpecs, isEmpty);
-    expect(f.resolver.calls, 0);
-    expect(f.manager.snapshotFor(f.logicalId)?.taskId, f.record.taskId);
-    expect(
-      f.manager.snapshotFor(f.logicalId)?.status,
-      DownloadTransportStatus.running,
-    );
-  });
-
-  test('startup restarts active record with no recoverable exact transfer', () async {
-    final f = await _startupFixture(intent: DownloadUserIntent.active);
-
-    await f.manager.initialize();
-
-    expect(f.gateway.startedSpecs, hasLength(1));
-    expect(f.resolver.calls, 1);
-    expect(f.gateway.startedSpecs.single.taskId, isNot(f.record.taskId));
-    expect((await f.store.get(f.logicalId))?.generation, 2);
-  });
-
-  test('startup isolates one broken active record and recovers the rest', () async {
-    final store = InMemoryLogicalDownloadStoreV2();
-    final gateway = _StartupGateway();
-    final resolver = _SelectiveStartupResolver();
-
-    LogicalDownloadRecordV2 record({
-      required int anime,
-      required int episode,
-      required String providerId,
-    }) {
-      final logicalId = logicalDownloadIdFor(
-        animeId: 'anilist:$anime',
-        episodeKey: '$episode',
-        variantKey: 'sub:1080p',
-      );
-      return LogicalDownloadRecordV2(
-        schemaVersion: kLogicalDownloadSchemaVersionV2,
-        logicalId: logicalId,
-        mediaId: 'anilist:$anime',
-        unitKey: '$episode',
-        variantKey: 'sub:1080p',
-        generation: 1,
-        taskId: taskIdForGeneration(logicalId, 1),
+  test(
+    'startup binds exact active transfer without creating a writer',
+    () async {
+      final f = await _startupFixture(
         intent: DownloadUserIntent.active,
-        destinationPath: 'downloads/anime/episode-$episode.mp4',
-        sourceDescriptor: <String, Object?>{
-          'providerId': providerId,
-          'trackingUrl': '/anime/$anime/$episode',
-        },
-        expectedBytes: 100,
-        updatedAtMillis: episode,
+        hasExactHandle: true,
       );
-    }
 
-    final broken = record(
-      anime: 21,
-      episode: 12,
-      providerId: 'provider.broken',
-    );
-    final healthy = record(
-      anime: 22,
-      episode: 13,
-      providerId: 'provider.healthy',
-    );
-    await store.put(broken);
-    await store.put(healthy);
+      await f.manager.initialize();
 
-    final manager = DownloadManagerV2(
-      store: store,
-      gateway: gateway,
-      sourceResolver: resolver,
-    );
-    addTearDown(manager.dispose);
+      expect(f.gateway.startedSpecs, isEmpty);
+      expect(f.resolver.calls, 0);
+      expect(f.manager.snapshotFor(f.logicalId)?.taskId, f.record.taskId);
+      expect(
+        f.manager.snapshotFor(f.logicalId)?.status,
+        DownloadTransportStatus.running,
+      );
+    },
+  );
 
-    await manager.initialize();
+  test(
+    'startup restarts active record with no recoverable exact transfer',
+    () async {
+      final f = await _startupFixture(intent: DownloadUserIntent.active);
 
-    expect(resolver.calls, 2);
-    expect(
-      gateway.startedSpecs.map((spec) => spec.destinationPath),
-      contains(healthy.destinationPath),
-    );
-    expect(
-      gateway.startedSpecs.map((spec) => spec.destinationPath),
-      isNot(contains(broken.destinationPath)),
-    );
-    expect(
-      manager.snapshotFor(broken.logicalId)?.status,
-      DownloadTransportStatus.failed,
-    );
-    expect(
-      manager.snapshotFor(healthy.logicalId)?.status,
-      DownloadTransportStatus.running,
-    );
-  });
+      await f.manager.initialize();
+
+      expect(f.gateway.startedSpecs, hasLength(1));
+      expect(f.resolver.calls, 1);
+      expect(f.gateway.startedSpecs.single.taskId, isNot(f.record.taskId));
+      expect((await f.store.get(f.logicalId))?.generation, 2);
+    },
+  );
+
+  test(
+    'startup isolates one broken active record and recovers the rest',
+    () async {
+      final store = InMemoryLogicalDownloadStoreV2();
+      final gateway = _StartupGateway();
+      final resolver = _SelectiveStartupResolver();
+
+      LogicalDownloadRecordV2 record({
+        required int anime,
+        required int episode,
+        required String providerId,
+      }) {
+        final logicalId = logicalDownloadIdFor(
+          animeId: 'anilist:$anime',
+          episodeKey: '$episode',
+          variantKey: 'sub:1080p',
+        );
+        return LogicalDownloadRecordV2(
+          schemaVersion: kLogicalDownloadSchemaVersionV2,
+          logicalId: logicalId,
+          mediaId: 'anilist:$anime',
+          unitKey: '$episode',
+          variantKey: 'sub:1080p',
+          generation: 1,
+          taskId: taskIdForGeneration(logicalId, 1),
+          intent: DownloadUserIntent.active,
+          destinationPath: 'downloads/anime/episode-$episode.mp4',
+          sourceDescriptor: <String, Object?>{
+            'providerId': providerId,
+            'trackingUrl': '/anime/$anime/$episode',
+          },
+          expectedBytes: 100,
+          updatedAtMillis: episode,
+        );
+      }
+
+      final broken = record(
+        anime: 21,
+        episode: 12,
+        providerId: 'provider.broken',
+      );
+      final healthy = record(
+        anime: 22,
+        episode: 13,
+        providerId: 'provider.healthy',
+      );
+      await store.put(broken);
+      await store.put(healthy);
+
+      final manager = DownloadManagerV2(
+        store: store,
+        gateway: gateway,
+        sourceResolver: resolver,
+      );
+      addTearDown(manager.dispose);
+
+      await manager.initialize();
+
+      expect(resolver.calls, 2);
+      expect(
+        gateway.startedSpecs.map((spec) => spec.destinationPath),
+        contains(healthy.destinationPath),
+      );
+      expect(
+        gateway.startedSpecs.map((spec) => spec.destinationPath),
+        isNot(contains(broken.destinationPath)),
+      );
+      expect(
+        manager.snapshotFor(broken.logicalId)?.status,
+        DownloadTransportStatus.failed,
+      );
+      expect(
+        manager.snapshotFor(healthy.logicalId)?.status,
+        DownloadTransportStatus.running,
+      );
+    },
+  );
 
   test('startup keeps one canonical writer when duplicate active handles rehydrate', () async {
     final store = InMemoryLogicalDownloadStoreV2();
@@ -271,90 +283,102 @@ void main() {
 
     await manager.initialize();
 
-    expect(manager.snapshotFor(first.logicalId)?.status, DownloadTransportStatus.running);
-    expect(manager.snapshotFor(second.logicalId)?.status, DownloadTransportStatus.paused);
-    expect((await store.get(first.logicalId))?.intent, DownloadUserIntent.active);
-    expect((await store.get(second.logicalId))?.intent, DownloadUserIntent.paused);
+    expect(
+      manager.snapshotFor(first.logicalId)?.status,
+      DownloadTransportStatus.running,
+    );
+    expect(
+      manager.snapshotFor(second.logicalId)?.status,
+      DownloadTransportStatus.paused,
+    );
+    expect(
+      (await store.get(first.logicalId))?.intent,
+      DownloadUserIntent.active,
+    );
+    expect(
+      (await store.get(second.logicalId))?.intent,
+      DownloadUserIntent.paused,
+    );
     expect(gateway.handleFor(first.taskId)?.pauseCalls, 0);
     expect(gateway.handleFor(second.taskId)?.pauseCalls, 1);
     expect(gateway.startedSpecs, isEmpty);
   });
 
-  test(
-    'startup duplicate writer whose pause fails is canceled instead of fake-paused',
-    () async {
-      final store = InMemoryLogicalDownloadStoreV2();
-      final gateway = _StartupGateway();
-      final resolver = StaticSourceResolverV2(expectedBytes: 100);
-      const destination = 'downloads/anime/shared-failed-pause.mp4';
+  test('startup duplicate writer whose pause fails is canceled instead of fake-paused', () async {
+    final store = InMemoryLogicalDownloadStoreV2();
+    final gateway = _StartupGateway();
+    final resolver = StaticSourceResolverV2(expectedBytes: 100);
+    const destination = 'downloads/anime/shared-failed-pause.mp4';
 
-      LogicalDownloadRecordV2 record({
-        required int anime,
-        required int episode,
-        required int updatedAtMillis,
-      }) {
-        final logicalId = logicalDownloadIdFor(
-          animeId: 'anilist:$anime',
-          episodeKey: '$episode',
-          variantKey: 'sub:1080p',
-        );
-        return LogicalDownloadRecordV2(
-          schemaVersion: kLogicalDownloadSchemaVersionV2,
-          logicalId: logicalId,
-          mediaId: 'anilist:$anime',
-          unitKey: '$episode',
-          variantKey: 'sub:1080p',
-          generation: 1,
-          taskId: taskIdForGeneration(logicalId, 1),
-          intent: DownloadUserIntent.active,
-          destinationPath: destination,
-          sourceDescriptor: const <String, Object?>{
-            'providerId': 'provider.example',
-          },
-          expectedBytes: 100,
-          updatedAtMillis: updatedAtMillis,
-        );
-      }
-
-      final owner = record(anime: 31, episode: 1, updatedAtMillis: 1);
-      final duplicate = record(anime: 32, episode: 1, updatedAtMillis: 2);
-      await store.put(owner);
-      await store.put(duplicate);
-      gateway.addRehydrated(owner.taskId, DownloadTransportStatus.running);
-      gateway.addRehydrated(duplicate.taskId, DownloadTransportStatus.running);
-      final duplicateHandle = gateway.handleFor(duplicate.taskId)!
-        ..onPause = () async => false;
-
-      final manager = DownloadManagerV2(
-        store: store,
-        gateway: gateway,
-        sourceResolver: resolver,
+    LogicalDownloadRecordV2 record({
+      required int anime,
+      required int episode,
+      required int updatedAtMillis,
+    }) {
+      final logicalId = logicalDownloadIdFor(
+        animeId: 'anilist:$anime',
+        episodeKey: '$episode',
+        variantKey: 'sub:1080p',
       );
-      addTearDown(manager.dispose);
+      return LogicalDownloadRecordV2(
+        schemaVersion: kLogicalDownloadSchemaVersionV2,
+        logicalId: logicalId,
+        mediaId: 'anilist:$anime',
+        unitKey: '$episode',
+        variantKey: 'sub:1080p',
+        generation: 1,
+        taskId: taskIdForGeneration(logicalId, 1),
+        intent: DownloadUserIntent.active,
+        destinationPath: destination,
+        sourceDescriptor: const <String, Object?>{
+          'providerId': 'provider.example',
+        },
+        expectedBytes: 100,
+        updatedAtMillis: updatedAtMillis,
+      );
+    }
 
-      await manager.initialize();
+    final owner = record(anime: 31, episode: 1, updatedAtMillis: 1);
+    final duplicate = record(anime: 32, episode: 1, updatedAtMillis: 2);
+    await store.put(owner);
+    await store.put(duplicate);
+    gateway.addRehydrated(owner.taskId, DownloadTransportStatus.running);
+    gateway.addRehydrated(duplicate.taskId, DownloadTransportStatus.running);
+    final duplicateHandle = gateway.handleFor(duplicate.taskId)!
+      ..onPause = () async => false;
 
-      expect(
-        manager.snapshotFor(owner.logicalId)?.status,
-        DownloadTransportStatus.running,
-      );
-      expect(duplicateHandle.pauseCalls, 1);
-      expect(
-        duplicateHandle.cancelCalls,
-        1,
-        reason:
-            'one canonical destination cannot retain two live writers when the '
-            'duplicate cannot pause safely',
-      );
-      expect(
-        manager.snapshotFor(duplicate.logicalId)?.status,
-        DownloadTransportStatus.canceled,
-        reason:
-            'startup must expose transport truth instead of fabricating paused',
-      );
-      expect((await store.get(duplicate.logicalId))?.intent, DownloadUserIntent.paused);
-    },
-  );
+    final manager = DownloadManagerV2(
+      store: store,
+      gateway: gateway,
+      sourceResolver: resolver,
+    );
+    addTearDown(manager.dispose);
+
+    await manager.initialize();
+
+    expect(
+      manager.snapshotFor(owner.logicalId)?.status,
+      DownloadTransportStatus.running,
+    );
+    expect(duplicateHandle.pauseCalls, 1);
+    expect(
+      duplicateHandle.cancelCalls,
+      1,
+      reason:
+          'one canonical destination cannot retain two live writers when the '
+          'duplicate cannot pause safely',
+    );
+    expect(
+      manager.snapshotFor(duplicate.logicalId)?.status,
+      DownloadTransportStatus.canceled,
+      reason:
+          'startup must expose transport truth instead of fabricating paused',
+    );
+    expect(
+      (await store.get(duplicate.logicalId))?.intent,
+      DownloadUserIntent.paused,
+    );
+  });
 
   test('startup never adopts a different task id even when transport looks related', () async {
     final f = await _startupFixture(
@@ -366,7 +390,10 @@ void main() {
 
     expect(f.gateway.startedSpecs, hasLength(1));
     expect(f.resolver.calls, 1);
-    expect(f.gateway.startedSpecs.single.taskId, isNot('unrelated_same_source'));
+    expect(
+      f.gateway.startedSpecs.single.taskId,
+      isNot('unrelated_same_source'),
+    );
     expect(f.gateway.attachCalls, isEmpty);
   });
 }

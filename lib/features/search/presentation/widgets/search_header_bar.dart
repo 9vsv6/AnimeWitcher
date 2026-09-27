@@ -71,7 +71,10 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
     // The same wording the home bar uses, so the two read as one control.
     // Names what is being searched, so a manga search does not read as an
     // anime one.
-    final searchHint = searchDomainHint(context, ref.watch(searchDomainProvider));
+    final searchHint = searchDomainHint(
+      context,
+      ref.watch(searchDomainProvider),
+    );
 
     final actionWidth = SearchActionButtons.groupWidthForHeight(
       SearchGlassSurface.height,

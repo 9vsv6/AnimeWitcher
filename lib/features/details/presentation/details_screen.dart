@@ -703,8 +703,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
 
   Future<void> _rateAnimeFromHero(MultimediaItem item) async {
     final animeId = animeWitcherAnimeIdFromItem(item);
-    if (_loadedUserRatingAnimeId != animeId ||
-        !_loadedUserRatingSignedIn) {
+    if (_loadedUserRatingAnimeId != animeId || !_loadedUserRatingSignedIn) {
       await _loadUserRatingFor(item);
     }
     if (!mounted) return;
@@ -718,8 +717,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     setState(() {
       _userRating = outcome.rating;
       _loadedUserRatingAnimeId = animeWitcherAnimeIdFromItem(item);
-      _loadedUserRatingSignedIn =
-          _accountServiceOrNull()?.isSignedIn ?? false;
+      _loadedUserRatingSignedIn = _accountServiceOrNull()?.isSignedIn ?? false;
     });
   }
 

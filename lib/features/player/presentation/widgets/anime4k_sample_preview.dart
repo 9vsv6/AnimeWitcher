@@ -238,7 +238,8 @@ class _Anime4kSamplePreviewState extends State<Anime4kSamplePreview> {
       // screenshot fallback. The result is cached, so this synchronous native
       // one-shot is paid only for a new preview configuration.
       final bindings = Anime4kMetalFfiBindings.tryCreate();
-      final succeeded = bindings?.processPreview(
+      final succeeded =
+          bindings?.processPreview(
             inputPath: inputPath,
             outputPath: outputPath,
             shaderPaths: shaderPaths,

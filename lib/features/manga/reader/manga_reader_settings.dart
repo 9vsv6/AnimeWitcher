@@ -43,7 +43,6 @@ enum MangaReaderScaleType {
 
 enum MangaReaderBackground { black, grey, white, automatic }
 
-
 enum MangaReaderPageSlice { full, left, right }
 
 /// How the screen may turn while reading, Mihon's choices: with the device,

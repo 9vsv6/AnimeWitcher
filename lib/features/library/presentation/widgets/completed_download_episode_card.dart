@@ -338,9 +338,9 @@ class _CompletedDownloadEpisodeCardState
           bannerUrl: widget.item.item.bannerUrl,
           posterUrl: widget.item.item.posterUrl,
         );
-    final placeholderColor = Theme.of(
-      context,
-    ).colorScheme.surfaceContainerHighest;
+    final placeholderColor = Theme.of(context)
+        .colorScheme
+        .surfaceContainerHighest;
 
     return Stack(
       children: [
@@ -414,9 +414,8 @@ class _CompletedDownloadEpisodeCardState
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: Theme.of(
-                  context,
-                ).colorScheme.primary.withValues(alpha: 0.9),
+                color: Theme.of(context).colorScheme.primary
+                    .withValues(alpha: 0.9),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
