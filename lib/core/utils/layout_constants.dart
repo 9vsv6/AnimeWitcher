@@ -22,14 +22,12 @@ class LayoutConstants {
   static const double detailsTitleStartMobile = 87;
   static const double detailsHeaderEndMobile = 16;
   static const double detailsHeaderBottomMobile = 5;
-  static const double detailsExpandedHeightDesktop = 300;
 
   // Border Radius
   static const double radiusSm = 4;
   static const double radiusMd = 8;
   static const double radiusLg = 12;
   static const double radiusXl = 16;
-  static const double radiusXxl = 24;
   static const double radiusPill = 50;
 
   // Content constraints: the widest a single column of text/settings rows
