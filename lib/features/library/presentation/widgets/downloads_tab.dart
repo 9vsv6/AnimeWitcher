@@ -10,7 +10,6 @@ import 'package:animewitcher/core/utils/episode_label.dart';
 import 'package:animewitcher/core/utils/episode_order.dart';
 import 'package:animewitcher/core/providers/episode_sort_provider.dart';
 import '../../../../core/domain/entity/manga.dart';
-import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/services/download_v2/download_v2_models.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/services/download_concurrency.dart';
