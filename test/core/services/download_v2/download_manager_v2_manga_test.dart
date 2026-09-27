@@ -233,8 +233,8 @@ void main() {
     await manager.start(
       DownloadStartRequestV2(
         logicalId: logicalId,
-        animeId: 'a1',
-        episodeKey: '1',
+        mediaId: 'a1',
+        unitKey: '1',
         variantKey: 'sub',
         destinationPath: 'downloads/a1/1.mp4',
         sourceDescriptor: const <String, Object?>{'providerId': 'p'},
