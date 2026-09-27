@@ -32,10 +32,6 @@ jobs:
           flutter gen-l10n
           dart run build_runner build --delete-conflicting-outputs
 
-      - name: Show regenerated dependency metadata
-        run: |
-          git diff -- pubspec.lock macos/Flutter/GeneratedPluginRegistrant.swift windows/flutter/generated_plugin_registrant.cc windows/flutter/generated_plugins.cmake
-
       - name: Analyze
         # Existing warnings and infos remain visible in the log, but only
         # analyzer errors block this first enforcement step. Warnings can be
