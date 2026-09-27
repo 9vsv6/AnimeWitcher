@@ -196,8 +196,8 @@ DownloadStartRequestV2 _request({
   );
   return DownloadStartRequestV2(
     logicalId: logicalId,
-    animeId: 'anilist:21',
-    episodeKey: episode,
+    mediaId: 'anilist:21',
+    unitKey: episode,
     variantKey: 'sub:1080p',
     destinationPath: 'downloads/anime/episode-$episode.mp4',
     sourceDescriptor: <String, Object?>{
