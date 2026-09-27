@@ -17,8 +17,8 @@ void main() {
     return LogicalDownloadRecordV2(
       schemaVersion: kLogicalDownloadSchemaVersionV2,
       logicalId: logicalId,
-      animeId: 'anilist:21',
-      episodeKey: '12',
+      mediaId: 'anilist:21',
+      unitKey: '12',
       variantKey: 'sub:1080p',
       generation: generation,
       taskId: taskIdForGeneration(logicalId, generation),
@@ -118,8 +118,8 @@ void main() {
     final second = LogicalDownloadRecordV2(
       schemaVersion: kLogicalDownloadSchemaVersionV2,
       logicalId: secondLogicalId,
-      animeId: 'anilist:21',
-      episodeKey: '13',
+      mediaId: 'anilist:21',
+      unitKey: '13',
       variantKey: 'sub:1080p',
       generation: 1,
       taskId: taskIdForGeneration(secondLogicalId, 1),
