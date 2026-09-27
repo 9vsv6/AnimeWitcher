@@ -17,12 +17,12 @@ Future<void> runFactoryReset({
     // `clearAccountSession` already attempts local credential cleanup.
   }
   try {
-    await (clearSecureTokens ?? wipePlatformSecureTokens)();
+    await (clearSecureTokens ?? _wipePlatformSecureTokens)();
   } catch (_) {}
   await clearLocalData();
 }
 
-Future<void> wipePlatformSecureTokens() async {
+Future<void> _wipePlatformSecureTokens() async {
   await const FlutterSecureStorage(
     aOptions: AndroidOptions(),
   ).deleteAll();
