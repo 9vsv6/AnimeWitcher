@@ -18,6 +18,11 @@ void main() {
       expect(isGenericEpisodeTitle('Episode 3 Final'), isTrue);
     });
 
+    test('normalizes Arabic and Persian digits in placeholders', () {
+      expect(isGenericEpisodeTitle('الحلقة ١٦'), isTrue);
+      expect(isGenericEpisodeTitle('Episode ۱۲'), isTrue);
+    });
+
     test('keeps creative titles and standalone labels', () {
       expect(isGenericEpisodeTitle('رفقاء جدد'), isFalse);
       expect(isGenericEpisodeTitle('مترجم'), isFalse);
