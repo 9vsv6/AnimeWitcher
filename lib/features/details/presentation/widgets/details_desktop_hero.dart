@@ -124,17 +124,13 @@ class DetailsDesktopHero extends ConsumerWidget {
     final textColor = theme.colorScheme.onSurface;
 
     final providedBannerUrl = AppImageFallbacks.optional(displayItem.bannerUrl);
-    final posterUrl = AppImageFallbacks.poster(
-      displayItem.posterUrl,
-      label: displayItem.title,
-    );
+    final posterUrl = AppImageFallbacks.poster(displayItem.posterUrl);
     // Asked for at its stored size; the catalog's own URL requests a
     // thumbnail-sized copy of it.
     final backdropUrl =
         AppImageFallbacks.banner(
           bannerUrl: displayItem.bannerUrl,
           posterUrl: displayItem.posterUrl,
-          label: displayItem.title,
         ) ??
         '';
     final backdrop = storyblokAtStoredWidth(
