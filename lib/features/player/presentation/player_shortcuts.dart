@@ -53,7 +53,7 @@ const double minPlaybackSpeed = 0.25;
 /// A quarter lands on every preset the speed sheet offers and on the slider's
 /// own 0.05 grid, and it is coarse enough that one press is heard. All these
 /// values are exact in binary, so stepping repeatedly does not drift.
-const double playbackSpeedStep = 0.25;
+const double _playbackSpeedStep = 0.25;
 
 /// The speed one step up or down from [current].
 ///
@@ -72,9 +72,9 @@ double steppedPlaybackSpeed(
   final ceiling = maxSpeed < 3.0 ? maxSpeed : 3.0;
   if (ceiling <= minPlaybackSpeed) return current;
 
-  final steps = current / playbackSpeedStep;
+  final steps = current / _playbackSpeedStep;
   final target = faster ? steps.floor() + 1 : steps.ceil() - 1;
-  final next = target * playbackSpeedStep;
+  final next = target * _playbackSpeedStep;
   if (next < minPlaybackSpeed) {
     // Already at or below the floor: stay where we are rather than climbing
     // back up to it, which would make the slower key speed playback up.
