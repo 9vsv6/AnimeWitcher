@@ -62,7 +62,6 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final l10n = AppLocalizations.of(context)!;
     // Only whether a search is running: watching the whole results state
     // rebuilt the bar with every page of results that came in.
     final searching = ref.watch(
