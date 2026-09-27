@@ -716,7 +716,6 @@ class EpisodeCard extends HookConsumerWidget {
         AppImageFallbacks.episode(
           bannerUrl: parentItem.bannerUrl,
           posterUrl: parentItem.posterUrl,
-          label: parentItem.title,
         );
     final placeholderColor = Theme.of(
       context,
