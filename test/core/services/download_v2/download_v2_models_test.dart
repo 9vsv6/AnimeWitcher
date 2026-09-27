@@ -21,8 +21,8 @@ void main() {
     return LogicalDownloadRecordV2(
       schemaVersion: 1,
       logicalId: logicalId,
-      animeId: 'anilist:21',
-      episodeKey: '12',
+      mediaId: 'anilist:21',
+      unitKey: '12',
       variantKey: 'sub:1080p',
       generation: 1,
       taskId: taskIdForGeneration(logicalId, 1),
