@@ -3424,11 +3424,11 @@ class PersistentParallelDownload {
       }
     }
     if (etag != null &&
-        etag!.isNotEmpty &&
-        !etag!.toLowerCase().startsWith('w/')) {
+        etag.isNotEmpty &&
+        !etag.toLowerCase().startsWith('w/')) {
       return etag;
     }
-    if (lastModified != null && lastModified!.isNotEmpty) {
+    if (lastModified != null && lastModified.isNotEmpty) {
       return lastModified;
     }
     return null;
