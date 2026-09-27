@@ -319,10 +319,7 @@ class _GroupedDownloadTile extends ConsumerWidget {
                 builder: (BuildContext context, int? decodeWidth) =>
                     CachedNetworkImage(
                       imageUrl:
-                          AppImageFallbacks.poster(
-                            firstItem.item.posterUrl,
-                            label: firstItem.item.title,
-                          ) ??
+                          AppImageFallbacks.poster(firstItem.item.posterUrl) ??
                           '',
                       width: 80,
                       height: 120,
@@ -575,10 +572,7 @@ class _DownloadItemTile extends ConsumerWidget {
         paintedWidth: 80,
         builder: (BuildContext context, int? decodeWidth) => CachedNetworkImage(
           imageUrl:
-              AppImageFallbacks.poster(
-                item.item.posterUrl,
-                label: item.item.title,
-              ) ??
+              AppImageFallbacks.poster(item.item.posterUrl) ??
               '',
           width: 80,
           height: 120,
