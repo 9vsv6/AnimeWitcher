@@ -24,8 +24,8 @@ void main() {
     final record = LogicalDownloadRecordV2(
       schemaVersion: kLogicalDownloadSchemaVersionV2,
       logicalId: const DownloadLogicalId('logical-episode'),
-      animeId: 'anilist:21',
-      episodeKey: '12',
+      mediaId: 'anilist:21',
+      unitKey: '12',
       variantKey: 'sub:1080p',
       generation: 1,
       taskId: spec.taskId,
