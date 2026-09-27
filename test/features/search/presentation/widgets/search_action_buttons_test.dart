@@ -3,7 +3,6 @@ import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/gestures.dart';
 import 'package:animewitcher/features/search/presentation/widgets/search_glass_surface.dart';
 import 'package:flutter_test/flutter_test.dart';
 
