@@ -97,7 +97,7 @@ void main() {
       const ValueKey('download-concurrency-slider'),
     );
     expect(concurrencyFinder, findsOneWidget);
-    var concurrencySlider = tester.widget<CustomSlider>(concurrencyFinder);
+    final concurrencySlider = tester.widget<CustomSlider>(concurrencyFinder);
     expect(concurrencySlider.min, kDownloadConcurrencyMin.toDouble());
     expect(concurrencySlider.max, kDownloadConcurrencyMax.toDouble());
     expect(
@@ -134,7 +134,7 @@ void main() {
 
     final partsFinder = find.byKey(const ValueKey('download-parts-slider'));
     expect(partsFinder, findsOneWidget);
-    var partsSlider = tester.widget<CustomSlider>(partsFinder);
+    final partsSlider = tester.widget<CustomSlider>(partsFinder);
     expect(partsSlider.min, kDownloadPartsAuto.toDouble());
     expect(partsSlider.max, kDownloadPartsMax.toDouble());
     expect(partsSlider.divisions, 16);
