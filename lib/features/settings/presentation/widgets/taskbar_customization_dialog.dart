@@ -15,8 +15,8 @@ Future<void> showTaskbarCustomizationDialog(
   final l10n = AppLocalizations.of(context)!;
   final isArabic =
       Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
-  var order = normalizeTaskbarOrder(currentOrder).toList(growable: true);
-  var hidden = normalizeHiddenTaskbarItems(currentHidden).toSet();
+  final order = normalizeTaskbarOrder(currentOrder).toList(growable: true);
+  final hidden = normalizeHiddenTaskbarItems(currentHidden).toSet();
 
   await showGlassDialog<void>(
     context: context,
