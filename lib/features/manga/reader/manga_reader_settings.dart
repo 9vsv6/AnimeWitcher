@@ -43,12 +43,6 @@ enum MangaReaderScaleType {
 
 enum MangaReaderBackground { black, grey, white, automatic }
 
-enum MangaReaderChapterSwipeAction {
-  toggleBookmark,
-  toggleRead,
-  download,
-  disabled,
-}
 
 enum MangaReaderPageSlice { full, left, right }
 
@@ -128,8 +122,6 @@ class MangaReaderSettings {
     this.readerHideThreshold = 1,
     this.autoScrollEnabled = false,
     this.autoScrollSpeed = 10,
-    this.chapterSwipeStartAction = MangaReaderChapterSwipeAction.toggleBookmark,
-    this.chapterSwipeEndAction = MangaReaderChapterSwipeAction.toggleRead,
     this.personalReaderModes = const <String, MangaReaderMode>{},
     this.personalDoublePage = const <String, bool>{},
     this.personalAutoScrollEnabled = const <String, bool>{},
@@ -215,8 +207,6 @@ class MangaReaderSettings {
   final int readerHideThreshold;
   final bool autoScrollEnabled;
   final double autoScrollSpeed;
-  final MangaReaderChapterSwipeAction chapterSwipeStartAction;
-  final MangaReaderChapterSwipeAction chapterSwipeEndAction;
   final Map<String, MangaReaderMode> personalReaderModes;
   final Map<String, bool> personalDoublePage;
   final Map<String, bool> personalAutoScrollEnabled;
@@ -367,8 +357,6 @@ class MangaReaderSettings {
     int? readerHideThreshold,
     bool? autoScrollEnabled,
     double? autoScrollSpeed,
-    MangaReaderChapterSwipeAction? chapterSwipeStartAction,
-    MangaReaderChapterSwipeAction? chapterSwipeEndAction,
     Map<String, MangaReaderMode>? personalReaderModes,
     Map<String, bool>? personalDoublePage,
     Map<String, bool>? personalAutoScrollEnabled,
@@ -436,10 +424,6 @@ class MangaReaderSettings {
       readerHideThreshold: readerHideThreshold ?? this.readerHideThreshold,
       autoScrollEnabled: autoScrollEnabled ?? this.autoScrollEnabled,
       autoScrollSpeed: autoScrollSpeed ?? this.autoScrollSpeed,
-      chapterSwipeStartAction:
-          chapterSwipeStartAction ?? this.chapterSwipeStartAction,
-      chapterSwipeEndAction:
-          chapterSwipeEndAction ?? this.chapterSwipeEndAction,
       personalReaderModes: personalReaderModes ?? this.personalReaderModes,
       personalDoublePage: personalDoublePage ?? this.personalDoublePage,
       personalAutoScrollEnabled:
@@ -505,8 +489,6 @@ class MangaReaderSettings {
     'readerHideThreshold': readerHideThreshold,
     'autoScrollEnabled': autoScrollEnabled,
     'autoScrollSpeed': autoScrollSpeed,
-    'chapterSwipeStartAction': chapterSwipeStartAction.name,
-    'chapterSwipeEndAction': chapterSwipeEndAction.name,
     'personalReaderModes': personalReaderModes.map(
       (key, value) => MapEntry(key, value.name),
     ),
@@ -677,16 +659,6 @@ class MangaReaderSettings {
       ).clamp(0, 3).toInt(),
       autoScrollEnabled: boolean('autoScrollEnabled', false),
       autoScrollSpeed: number('autoScrollSpeed', 10).clamp(2, 30).toDouble(),
-      chapterSwipeStartAction: enumValue(
-        MangaReaderChapterSwipeAction.values,
-        json['chapterSwipeStartAction'],
-        MangaReaderChapterSwipeAction.toggleBookmark,
-      ),
-      chapterSwipeEndAction: enumValue(
-        MangaReaderChapterSwipeAction.values,
-        json['chapterSwipeEndAction'],
-        MangaReaderChapterSwipeAction.toggleRead,
-      ),
       personalReaderModes: readerModeMap(json['personalReaderModes']),
       personalDoublePage: boolMap(json['personalDoublePage']),
       personalAutoScrollEnabled: boolMap(json['personalAutoScrollEnabled']),
