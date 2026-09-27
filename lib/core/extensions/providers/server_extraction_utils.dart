@@ -117,12 +117,6 @@ String extractGenericServer(String input, String start, String end) {
   return extractBetweenMarkers(normalizedInput, normalizedStart, normalizedEnd);
 }
 
-/// Backward-compatible name used by the original audit tests.
-String extractServerUrlWithRetry({
-  required String body,
-  required String start,
-  required String end,
-}) => extractGenericServer(body, start, end);
 
 /// Prefix `//host/...` and strip wrapping quotes after a marker cut.
 String prepareExtractedMediaUrl(String raw) {
