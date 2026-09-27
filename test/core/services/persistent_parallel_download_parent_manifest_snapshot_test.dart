@@ -42,10 +42,10 @@ void main() {
 
       expect(snapshot['schemaVersion'], greaterThanOrEqualTo(6));
       expect(snapshot['parentTaskId'], parent.taskId);
-      expect(snapshot['parentTask'], isA<Map>());
+      expect(snapshot['parentTask'], isA<Map<Object?, Object?>>());
 
       final restored = Task.createFromJson(
-        Map<String, dynamic>.from(snapshot['parentTask'] as Map),
+        Map<String, dynamic>.from(snapshot['parentTask'] as Map<Object?, Object?>),
       );
       expect(restored, isA<ParallelDownloadTask>());
       final restoredParent = restored as ParallelDownloadTask;
