@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/account/account_providers.dart';
 import '../../../core/navigation/app_layout_style.dart';
 import '../../../core/theme/theme_provider.dart';
-import '../../../core/utils/responsive_breakpoints.dart';
 import '../../../shared/widgets/live_previews.dart';
 import '../../details/presentation/widgets/details_seasons_bar.dart';
 import '../../manga/reader/manga_reader_settings_screen.dart';
