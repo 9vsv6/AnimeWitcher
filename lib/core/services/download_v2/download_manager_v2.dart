@@ -25,10 +25,8 @@ final class DownloadStartRequestV2 {
   const DownloadStartRequestV2({
     required this.logicalId,
     this.mediaKind = DownloadMediaKind.videoEpisode,
-    String? mediaId,
-    String? unitKey,
-    String? animeId,
-    String? episodeKey,
+    required this.mediaId,
+    required this.unitKey,
     required this.variantKey,
     required this.destinationPath,
     required this.sourceDescriptor,
@@ -36,10 +34,8 @@ final class DownloadStartRequestV2 {
     required this.retries,
     required this.parallelChunks,
     this.expectedBytes,
-  }) : mediaId = mediaId ?? animeId ?? '',
-       unitKey = unitKey ?? episodeKey ?? '',
-       assert((mediaId ?? animeId ?? '') != ''),
-       assert((unitKey ?? episodeKey ?? '') != ''),
+  }) : assert(mediaId != ''),
+       assert(unitKey != ''),
        assert(variantKey != ''),
        assert(destinationPath != ''),
        assert(retries >= 0),
@@ -57,11 +53,6 @@ final class DownloadStartRequestV2 {
   final int retries;
   final int parallelChunks;
 
-  @Deprecated('Use mediaId')
-  String get animeId => mediaId;
-
-  @Deprecated('Use unitKey')
-  String get episodeKey => unitKey;
 }
 
 /// V2 application coordinator.
