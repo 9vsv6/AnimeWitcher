@@ -40,7 +40,7 @@ class DownloadedFiles extends _$DownloadedFiles {
     final matching = records
         .where(
           (record) =>
-              record.completedAtMillis != null && record.episodeKey == key,
+              record.completedAtMillis != null && record.unitKey == key,
         )
         .toList(growable: false)
       ..sort((a, b) => b.updatedAtMillis.compareTo(a.updatedAtMillis));
