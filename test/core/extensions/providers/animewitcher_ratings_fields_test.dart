@@ -130,6 +130,22 @@ void main() {
     expect(item.syncData?['awImdbScore'], '7.4');
   });
 
+  test('parses localized digits in duration metadata', () async {
+    final provider = AnimeWitcherNativeProvider(
+      _stubDio(<String, dynamic>{
+        'name': _stringField('Rated Show'),
+        'details': _mapField(<String, dynamic>{
+          'duration': _stringField('٢٤ دقيقة'),
+        }),
+      }),
+      SettingsRepository(_TestStorageService()),
+    );
+
+    final item = await provider.getDetails(url);
+
+    expect(item.duration, 24);
+  });
+
   test('maps reviews_closed from the anime document', () async {
     final provider = AnimeWitcherNativeProvider(
       _stubDio(<String, dynamic>{
