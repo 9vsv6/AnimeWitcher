@@ -116,10 +116,7 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
       widget.historyItem.episodePosterUrl,
     );
     final animeBannerUrl = AppImageFallbacks.optional(item.bannerUrl);
-    final animePosterUrl = AppImageFallbacks.poster(
-      item.posterUrl,
-      label: item.title,
-    );
+    final animePosterUrl = AppImageFallbacks.poster(item.posterUrl);
     final imageCandidates = <String>{
       if (hasEpisodes && episodePosterUrl != null) episodePosterUrl,
       if (animeBannerUrl != null) animeBannerUrl,
