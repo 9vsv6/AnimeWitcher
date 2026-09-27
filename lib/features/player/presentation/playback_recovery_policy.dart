@@ -71,15 +71,6 @@ class PlaybackRecoveryPolicy {
     return BufferWatchdogStage.none;
   }
 
-  /// Waiting time between reconnect attempts before failover, assuming
-  /// every backoff elapses (2 s + 4 s). The first try is immediate.
-  static Duration get worstCaseReconnectLadder {
-    var total = Duration.zero;
-    for (var attempt = 1; attempt < maxMidPlaybackRetries; attempt++) {
-      total += reconnectBackoff(attempt) ?? Duration.zero;
-    }
-    return total;
-  }
 
   /// HTTP 401/403/404/410 and similar "this URL is dead" errors should skip
   /// the reconnect ladder and fail over immediately.
