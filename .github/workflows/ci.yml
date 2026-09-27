@@ -2,9 +2,9 @@ name: Flutter Checks
 
 on:
   pull_request:
-    branches: [main, feat/manga-manhwa]
+    branches: [main]
   push:
-    branches: [main, fix/download-manager-performance-v2]
+    branches: [main, fix/download-manager-performance-v2, refactor/project-cleanup-2026-09-26]
 
 permissions:
   contents: read
