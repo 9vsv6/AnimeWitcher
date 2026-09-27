@@ -20,7 +20,7 @@ class MangaReaderController extends ChangeNotifier {
     required this.provider,
     required this.progressRepository,
     required this.manga,
-    required this.chapter,
+    required MangaChapter chapter,
     required this.chapters,
     this.localChapterDirectory,
     MangaReaderPageCache? pageCache,
@@ -33,7 +33,6 @@ class MangaReaderController extends ChangeNotifier {
   final AnimeWitcherProvider provider;
   final MangaReadingRepository progressRepository;
   final MultimediaItem manga;
-  final MangaChapter chapter;
   final List<MangaChapter> chapters;
   final String? localChapterDirectory;
   final String _localChapterId;
@@ -305,9 +304,6 @@ class MangaReaderController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void jumpToPage(int value) {
-    setPageIndex(value);
-  }
 
   Future<void> openChapter(MangaChapter value) async {
     if (value.id == _chapter.id && value.url == _chapter.url) return;
