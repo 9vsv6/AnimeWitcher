@@ -23,13 +23,4 @@ class MangaReaderCustomCoversNotifier extends Notifier<Map<String, String>> {
         .saveMangaReaderCustomCovers(next);
   }
 
-  Future<void> clearCover(String mangaUrl) async {
-    final key = mangaUrl.trim();
-    if (!state.containsKey(key)) return;
-    final next = <String, String>{...state}..remove(key);
-    state = next;
-    await ref
-        .read(settingsRepositoryProvider)
-        .saveMangaReaderCustomCovers(next);
-  }
 }
