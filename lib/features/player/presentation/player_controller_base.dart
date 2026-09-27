@@ -302,7 +302,6 @@ class PlayerController extends Notifier<PlayerState> {
       episodeUrl: episode?.posterUrl,
       bannerUrl: _item.bannerUrl,
       posterUrl: _item.posterUrl,
-      label: _item.title,
     );
   }
 
