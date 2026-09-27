@@ -446,7 +446,7 @@ class PagedSearchNotifier extends Notifier<SearchAggregateState> {
       _domain = next;
       _reload(clearExisting: true);
     });
-    ref.listen(accountDataRevisionProvider, (_, __) => _reload());
+    ref.listen(accountDataRevisionProvider, (_, _) => _reload());
     _query = ref.read(searchQueryProvider);
     _domain = ref.read(searchDomainProvider);
     _filters = ref.read(searchProviderFiltersProvider);
