@@ -8,6 +8,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../../../core/utils/digit_normalization.dart';
 
 import '../../../../core/utils/localized_text.dart';
 import '../../../../shared/widgets/apple_liquid_glass.dart';
@@ -20,26 +21,8 @@ import 'details_hero_actions.dart';
 /// four episodes reads as a broken list rather than a remembered search.
 final ValueNotifier<String> episodeSearchQuery = ValueNotifier<String>('');
 
-/// Arabic-Indic digits, so a number typed on an Arabic keyboard matches the
-/// ASCII ones the episodes are numbered with.
-String normalizeDigits(String input) {
-  const arabicIndic = '٠١٢٣٤٥٦٧٨٩';
-  const easternArabicIndic = '۰۱۲۳۴۵۶۷۸۹';
-  final buffer = StringBuffer();
-  for (final rune in input.runes) {
-    final char = String.fromCharCode(rune);
-    final arabicIndex = arabicIndic.indexOf(char);
-    final easternIndex = easternArabicIndic.indexOf(char);
-    if (arabicIndex >= 0) {
-      buffer.write(arabicIndex);
-    } else if (easternIndex >= 0) {
-      buffer.write(easternIndex);
-    } else {
-      buffer.write(char);
-    }
-  }
-  return buffer.toString();
-}
+/// Converts localized digits to ASCII so a typed episode number can match.
+String normalizeDigits(String input) => normalizeLocalizedDigits(input);
 
 /// Whether one episode answers [query].
 ///
