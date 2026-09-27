@@ -10,7 +10,6 @@ import '../../../../l10n/generated/app_localizations.dart';
 import '../../../skip/data/skip_service.dart';
 import '../player_controller.dart';
 import '../../../settings/presentation/player_settings_provider.dart';
-import 'hotstar_player_style.dart';
 import 'player_prompt_placement.dart';
 
 /// Displays a contextual "Skip Intro / Skip Recap / Skip Outro" button
