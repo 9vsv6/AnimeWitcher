@@ -17,8 +17,6 @@ class MangaReaderPageCache {
 
   final Directory? _customCacheDirectory;
 
-  String getKey(String mangaId, MangaChapter chapter) =>
-      '${mangaId.trim()}_${chapter.url}';
 
   Future<Directory> _directory() async {
     final custom = _customCacheDirectory;
@@ -34,7 +32,8 @@ class MangaReaderPageCache {
 
   Future<File> _file(String mangaId, MangaChapter chapter) async {
     final directory = await _directory();
-    final hash = md5.convert(utf8.encode(getKey(mangaId, chapter))).toString();
+    final key = '${mangaId.trim()}_${chapter.url}';
+    final hash = md5.convert(utf8.encode(key)).toString();
     return File(p.join(directory.path, '$hash.json'));
   }
 
@@ -108,7 +107,7 @@ class MangaReaderPageCache {
         }),
         flush: true,
       );
-      await trim();
+      await _trim();
     } catch (_) {}
   }
 
@@ -119,7 +118,7 @@ class MangaReaderPageCache {
     } catch (_) {}
   }
 
-  Future<void> trim({int maxBytes = maxCacheSizeBytes}) async {
+  Future<void> _trim({int maxBytes = maxCacheSizeBytes}) async {
     try {
       final directory = await _directory();
       final files = directory
@@ -148,18 +147,4 @@ class MangaReaderPageCache {
     } catch (_) {}
   }
 
-  Future<int> clear() async {
-    var deleted = 0;
-    try {
-      final directory = await _directory();
-      await for (final entity in directory.list(followLinks: false)) {
-        if (entity is! File || !entity.path.endsWith('.json')) continue;
-        try {
-          await entity.delete();
-          deleted++;
-        } catch (_) {}
-      }
-    } catch (_) {}
-    return deleted;
-  }
 }
