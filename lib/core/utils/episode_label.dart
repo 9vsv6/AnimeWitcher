@@ -1,21 +1,7 @@
-String _normalizeEpisodeDigits(String value) {
-  const arabic = '٠١٢٣٤٥٦٧٨٩';
-  const eastern = '۰۱۲۳۴۵۶۷۸۹';
-  return value
-      .replaceAllMapped(
-        RegExp(r'[٠-٩]'),
-        (m) => '${arabic.indexOf(m.group(0)!)}',
-      )
-      .replaceAllMapped(
-        RegExp(r'[۰-۹]'),
-        (m) => '${eastern.indexOf(m.group(0)!)}',
-      );
-}
+import 'digit_normalization.dart';
 
 String _normalizeEpisodeLabel(String value) {
-  return _normalizeEpisodeDigits(
-    value.trim().toLowerCase(),
-  ).replaceAll(RegExp(r'\s+'), ' ');
+  return normalizeLocalizedDigits(value.trim().toLowerCase()).replaceAll(RegExp(r'\s+'), ' ');
 }
 
 /// True when [value] is only a generic episode placeholder such as
