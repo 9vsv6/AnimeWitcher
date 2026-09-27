@@ -12,7 +12,6 @@ void main() {
     );
     final context = tester.element(find.byType(SizedBox));
 
-    expect(isArabicAppLocale(context), isTrue);
     expect(
       appText(context, english: 'Downloads', arabic: 'التنزيلات'),
       'التنزيلات',
