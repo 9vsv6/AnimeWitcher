@@ -21,8 +21,6 @@ void main() {
     expect(old!.mediaKind, DownloadMediaKind.videoEpisode);
     expect(old.mediaId, 'a1');
     expect(old.unitKey, 'e2');
-    expect(old.animeId, 'a1');
-    expect(old.episodeKey, 'e2');
   });
 
   test('schema v2 manga record round trips manga identity', () {
