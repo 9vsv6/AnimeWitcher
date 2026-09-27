@@ -296,8 +296,8 @@ void main() {
     final start = manager.start(
       DownloadStartRequestV2(
         logicalId: id,
-        animeId: 'anime:race',
-        episodeKey: '1',
+        mediaId: 'anime:race',
+        unitKey: '1',
         variantKey: 'sub:1080p',
         destinationPath: 'downloads/race.mp4',
         sourceDescriptor: const <String, Object?>{'providerId': 'provider.example'},
@@ -374,8 +374,8 @@ void main() {
     await manager.start(
       DownloadStartRequestV2(
         logicalId: id,
-        animeId: 'anime:reuse',
-        episodeKey: '12',
+        mediaId: 'anime:reuse',
+        unitKey: '12',
         variantKey: 'sub:1080p',
         destinationPath: 'downloads/reused-active.mp4',
         sourceDescriptor: const <String, Object?>{
@@ -443,8 +443,8 @@ LogicalDownloadRecordV2 _record({
   return LogicalDownloadRecordV2(
     schemaVersion: kLogicalDownloadSchemaVersionV2,
     logicalId: id,
-    animeId: 'anime:1',
-    episodeKey: 'episode',
+    mediaId: 'anime:1',
+    unitKey: 'episode',
     variantKey: 'sub:1080p',
     generation: 1,
     taskId: taskIdForGeneration(id, 1),
