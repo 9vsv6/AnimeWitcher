@@ -60,7 +60,6 @@ void main() {
         home: Builder(
           builder: (context) {
             remaining = formatDownloadTimeRemaining(
-              context,
               _data(timeRemaining: const Duration(minutes: 2, seconds: 5)),
               AppLocalizations.of(context)!,
             );
