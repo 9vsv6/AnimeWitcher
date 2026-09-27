@@ -11,6 +11,7 @@ import '../../network/bounded_batch_scheduler.dart';
 import '../../network/next_airing_timeout.dart';
 import '../../network/stale_connection_retry.dart';
 import '../../storage/settings_repository.dart';
+import '../../utils/digit_normalization.dart';
 import '../../utils/storyblok_image.dart';
 import '../../utils/episode_label.dart';
 import '../../utils/artwork_host_fallback.dart';
@@ -4152,7 +4153,7 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     final details = _map(source['details']);
     for (final raw in <dynamic>[details['duration'], source['duration']]) {
       if (raw is num && raw.toInt() > 0) return raw.toInt();
-      final match = RegExp(r'\d+').firstMatch(_normalizeDigits(_text(raw)));
+      final match = RegExp(r'\d+').firstMatch(normalizeLocalizedDigits(_text(raw)));
       final value = match == null ? 0 : int.tryParse(match.group(0)!) ?? 0;
       if (value > 0) return value;
     }
@@ -4345,7 +4346,7 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
   }
 
   int _positiveInt(dynamic raw) {
-    final match = RegExp(r'\d+').firstMatch(_normalizeDigits(_text(raw)));
+    final match = RegExp(r'\d+').firstMatch(normalizeLocalizedDigits(_text(raw)));
     final value = match == null ? 0 : int.tryParse(match.group(0)!) ?? 0;
     return value > 0 ? value : 0;
   }
@@ -4953,20 +4954,6 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     return NextAiring(episode: latest > 0 ? latest + 1 : 0, unixTime: unixTime);
   }
 
-  String _normalizeDigits(String value) {
-    const arabic = '٠١٢٣٤٥٦٧٨٩';
-    const eastern = '۰۱۲۳۴۵۶۷۸۹';
-    return value
-        .replaceAllMapped(
-          RegExp(r'[٠-٩]'),
-          (m) => '${arabic.indexOf(m.group(0)!)}',
-        )
-        .replaceAllMapped(
-          RegExp(r'[۰-۹]'),
-          (m) => '${eastern.indexOf(m.group(0)!)}',
-        );
-  }
-
   String _localizedEpisodeTitle(dynamic raw) {
     if (raw is String) return _decodeHtml(raw);
     final source = _map(raw);
@@ -5022,7 +5009,7 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
   }
 
   int _episodeNumberFromId(String id) {
-    final normalized = _normalizeDigits(id.trim());
+    final normalized = normalizeLocalizedDigits(id.trim());
     if (normalized.isEmpty) return 0;
     final explicit = RegExp(
       r'(?:episode|ep|الحلقة|حلقه|حلقة)[^0-9]*(\d+)$',
@@ -5095,7 +5082,7 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       final raw = source[key];
       if (raw is int) return raw;
       if (raw is num) return raw.toInt();
-      final text = _normalizeDigits(_text(raw).trim());
+      final text = normalizeLocalizedDigits(_text(raw).trim());
       if (RegExp(r'^-?\d+$').hasMatch(text)) return int.tryParse(text);
     }
     return null;
