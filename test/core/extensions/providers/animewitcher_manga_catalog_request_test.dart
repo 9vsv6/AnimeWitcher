@@ -12,19 +12,6 @@ final class _Storage extends StorageService {
   @override
   bool isEpisodeImagesFromAniZipEnabled() => false;
 
-  @override
-  Map<String, dynamic> getAnimeWitcherSearchSettings2() =>
-      const <String, dynamic>{};
-
-  @override
-  Future<void> saveAnimeWitcherSearchSettings(
-    Map<String, dynamic> settings,
-  ) async {}
-
-  @override
-  Future<void> saveAnimeWitcherSearchSettings2(
-    Map<String, dynamic> settings,
-  ) async {}
 }
 
 /// Stands in for the catalog: settings documents answer empty, the manga
