@@ -337,7 +337,6 @@ class _CompletedDownloadEpisodeCardState
         AppImageFallbacks.episode(
           bannerUrl: widget.item.item.bannerUrl,
           posterUrl: widget.item.item.posterUrl,
-          label: widget.item.item.title,
         );
     final placeholderColor = Theme.of(
       context,
