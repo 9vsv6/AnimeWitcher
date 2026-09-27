@@ -10,7 +10,6 @@ import '../../domain/entity/manga.dart';
 import '../../extensions/base_provider.dart';
 import '../../extensions/extension_manager.dart';
 import '../../storage/settings_repository.dart';
-import '../download_concurrency.dart';
 import '../download_continued_processing_service.dart';
 import '../download_url_refresh.dart';
 import 'background_downloader_gateway.dart';
