@@ -2418,19 +2418,6 @@ class PersistentParallelDownload {
     );
   }
 
-  Duration _aggregateTimeRemaining(_ParallelSession session, double speedMb) {
-    if (speedMb <= 0 || session.progress >= 1) {
-      return const Duration(seconds: -1);
-    }
-    final remainingBytes = session.parts.fold<double>(
-      0,
-      (sum, part) => sum + part.size * (1 - part.credibleProgress),
-    );
-    if (remainingBytes <= 0) return Duration.zero;
-
-    final seconds = (remainingBytes / (speedMb * 1000 * 1000)).ceil();
-    return Duration(seconds: seconds < 1 ? 1 : seconds);
-  }
 
   void _scheduleCoordinatorRecovery(_ParallelSession session) {
     if (_disposed || !session.active || session.deleted) return;
