@@ -379,7 +379,7 @@ class _MangaReaderScreenState extends ConsumerState<MangaReaderScreen>
 
   void _jumpToPage(int index) {
     if (_controller.pages.isEmpty) return;
-    _controller.jumpToPage(
+    _controller.setPageIndex(
       index.clamp(0, _controller.pages.length - 1).toInt(),
     );
     setState(() => _readerEpoch++);
