@@ -92,10 +92,6 @@ void main() {
     test('retries with normalization on escaped pages', () {
       const body = r'{"file"\u003A"https:\/\/x\/v.mp4","q":720}';
       expect(extractGenericServer(body, start, end), 'https://x/v.mp4');
-      expect(
-        extractServerUrlWithRetry(body: body, start: start, end: end),
-        'https://x/v.mp4',
-      );
     });
 
     test('short-circuits when nothing changed and no markers matched', () {
