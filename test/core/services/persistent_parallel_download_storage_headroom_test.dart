@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:animewitcher/core/services/persistent_parallel_download.dart';
