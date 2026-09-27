@@ -7,13 +7,50 @@ on:
     branches: [main, fix/download-manager-performance-v2]
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  cleanup-format:
+    name: Format changed cleanup Dart
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.1
+          cache: true
+
+      - name: Format changed first-party Dart files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(
+            git diff --name-only "${{ github.event.pull_request.base.sha }}...HEAD" -- 'lib/**/*.dart' 'test/**/*.dart' |
+              grep -vE '(^|/)generated/|\.g\.dart$|^packages/' || true
+          )
+          if [ "${#files[@]}" -eq 0 ]; then
+            exit 0
+          fi
+          dart format "${files[@]}"
+          if ! git diff --quiet -- "${files[@]}"; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add -- "${files[@]}"
+            git commit -m 'style: format cleanup Dart changes'
+            git pull --rebase origin "$GITHUB_HEAD_REF"
+            git push origin "HEAD:$GITHUB_HEAD_REF"
+          fi
+
   analyze-and-test:
     name: Analyze and test
     runs-on: ubuntu-latest
