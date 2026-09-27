@@ -26,12 +26,13 @@
 - Platform/native map: Android 46 files, iOS 49, macOS 30, Windows 19, `native/**` 13.
 - Vendored boundary: `packages/video_view/**` contains 158 tracked files and stays outside ordinary app cleanup unless fork-local debris is proven safe to remove.
 - Generated scope includes generated localization/output files and `*.g.dart`/other generated Dart; generated/plugin registration output is regenerated through project tooling rather than hand-cleaned.
-- The historical Flutter Checks run `36314643667` is not evidence for the corrected baseline: its checkout log merged head `ece762e` into stale `main@0ec75a8` immediately before the PR base retarget. A fresh head commit is required to obtain CI on the corrected PR merge ref.
+- The historical Flutter Checks run `36314643667` is not evidence for the corrected baseline: its checkout log merged head `ece762e` into stale `main@0ec75a8` immediately before the PR base retarget.
+- Corrected-baseline Flutter Checks run `36317030147` (#2941) completed successfully on commit `5e42de2c612b6402cbca3644f77f79d6eb73108a`: dependency/source generation, analyzer, focused V2 tests, full Flutter suite, and native Swift logger typecheck all passed. The iOS build job remains intentionally disabled by the workflow.
 
 ### Task 1: Re-establish corrected baseline and repository map
 - [x] Record corrected base commit/branch and refresh tree/file/subsystem metrics.
 - [x] Classify first-party, generated, vendored, and platform/native scopes.
-- [ ] Capture a green CI baseline on the corrected branch.
+- [x] Capture a green CI baseline on the corrected branch.
 - [ ] Verify a Build Preview from this branch contains the latest `feat/manga-manhwa` UI baseline.
 
 ### Task 2 evidence — repository debris
@@ -44,10 +45,16 @@
 ### Task 2: Revalidate repository debris
 - [x] Scan tracked backup/temp/exact-duplicate artifacts.
 - [x] Delete only candidates proven unused or byte-identical.
-- [ ] Verify build/config references and CI.
+- [x] Verify build/config references and CI.
+
+### Task 3 evidence — direct dependency inventory
+
+- Direct dependency inventory was re-scanned by package name across app, hook, platform/plugin registration, and native/build files.
+- Packages without normal Dart imports still have non-Dart roles: `media_kit_libs_video` supplies runtime media libraries; `code_assets`, `hooks`, and `native_toolchain_c` are used by `hook/build.dart`; `flutter_avif_ios` is the iOS plugin implementation paired with the AVIF platform interface; `disk_usage` currently appears only as a plugin dependency/registration candidate.
+- The archived stale-baseline cleanup also removed `disk_usage`, which makes it a candidate for revalidation, not an automatic deletion. It must only be removed together with regenerated lock/plugin metadata via Flutter tooling.
 
 ### Task 3: Revalidate direct dependencies
-- [ ] Check every direct dependency for Dart/build-hook/plugin/native use.
+- [x] Check every direct dependency for Dart/build-hook/plugin/native use.
 - [ ] Remove only genuinely unused dependencies.
 - [ ] Regenerate lock/plugin metadata rather than editing generated registrants manually.
 - [ ] Run analyzer/tests/platform gates.
