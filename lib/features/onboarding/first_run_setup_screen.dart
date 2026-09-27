@@ -785,7 +785,6 @@ class _Choices<T> extends StatelessWidget {
 
 class _OptionTile extends StatelessWidget {
   const _OptionTile({
-    super.key,
     required this.selected,
     required this.icon,
     required this.title,
