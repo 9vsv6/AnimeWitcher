@@ -85,7 +85,7 @@ void main() {
       final source = File('lib/core/services/persistent_parallel_download.dart')
           .readAsStringSync();
       final start = source.indexOf('void _scheduleAggregateProgress(');
-      final end = source.indexOf('Duration _aggregateTimeRemaining', start);
+      final end = source.indexOf('void _scheduleCoordinatorRecovery', start);
       expect(start, greaterThanOrEqualTo(0));
       expect(end, greaterThan(start));
       final section = source.substring(start, end);
