@@ -164,8 +164,8 @@ void main() {
       return LogicalDownloadRecordV2(
         schemaVersion: kLogicalDownloadSchemaVersionV2,
         logicalId: logicalId,
-        animeId: 'anilist:$anime',
-        episodeKey: '$episode',
+        mediaId: 'anilist:$anime',
+        unitKey: '$episode',
         variantKey: 'sub:1080p',
         generation: 1,
         taskId: taskIdForGeneration(logicalId, 1),
@@ -240,8 +240,8 @@ void main() {
       return LogicalDownloadRecordV2(
         schemaVersion: kLogicalDownloadSchemaVersionV2,
         logicalId: logicalId,
-        animeId: 'anilist:$anime',
-        episodeKey: '$episode',
+        mediaId: 'anilist:$anime',
+        unitKey: '$episode',
         variantKey: 'sub:1080p',
         generation: 1,
         taskId: taskIdForGeneration(logicalId, 1),
@@ -301,8 +301,8 @@ void main() {
         return LogicalDownloadRecordV2(
           schemaVersion: kLogicalDownloadSchemaVersionV2,
           logicalId: logicalId,
-          animeId: 'anilist:$anime',
-          episodeKey: '$episode',
+          mediaId: 'anilist:$anime',
+          unitKey: '$episode',
           variantKey: 'sub:1080p',
           generation: 1,
           taskId: taskIdForGeneration(logicalId, 1),
@@ -385,8 +385,8 @@ Future<_StartupFixture> _startupFixture({
   final record = LogicalDownloadRecordV2(
     schemaVersion: kLogicalDownloadSchemaVersionV2,
     logicalId: logicalId,
-    animeId: 'anilist:21',
-    episodeKey: '12',
+    mediaId: 'anilist:21',
+    unitKey: '12',
     variantKey: 'sub:1080p',
     generation: 1,
     taskId: taskIdForGeneration(logicalId, 1),
