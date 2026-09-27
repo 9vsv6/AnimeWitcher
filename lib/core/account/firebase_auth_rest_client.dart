@@ -394,13 +394,12 @@ class FirebaseAuthRestClient {
     AnimeWitcherSession session,
     Map<String, dynamic> user,
   ) {
+    final providerIds = _providerIds(user['providerUserInfo']);
     return session.copyWith(
       email: _optionalString(user['email']),
       displayName: _optionalString(user['displayName']),
       photoUrl: _optionalString(user['photoUrl']),
-      providerIds: _providerIds(user['providerUserInfo']).isEmpty
-          ? session.providerIds
-          : _providerIds(user['providerUserInfo']),
+      providerIds: providerIds.isEmpty ? session.providerIds : providerIds,
     );
   }
 }
