@@ -158,8 +158,8 @@ DownloadStartRequestV2 _request({
 }) {
   return DownloadStartRequestV2(
     logicalId: logicalId,
-    animeId: 'anime:review',
-    episodeKey: logicalId.value,
+    mediaId: 'anime:review',
+    unitKey: logicalId.value,
     variantKey: 'sub|1080p',
     destinationPath: destinationPath,
     sourceDescriptor: const <String, Object?>{
@@ -182,8 +182,8 @@ LogicalDownloadRecordV2 _record({
   return LogicalDownloadRecordV2(
     schemaVersion: kLogicalDownloadSchemaVersionV2,
     logicalId: logicalId,
-    animeId: 'anime:review',
-    episodeKey: logicalId.value,
+    mediaId: 'anime:review',
+    unitKey: logicalId.value,
     variantKey: 'sub|1080p',
     generation: 1,
     taskId: taskIdForGeneration(logicalId, 1),
