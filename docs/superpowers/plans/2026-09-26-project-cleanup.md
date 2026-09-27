@@ -34,9 +34,16 @@
 - [ ] Capture a green CI baseline on the corrected branch.
 - [ ] Verify a Build Preview from this branch contains the latest `feat/manga-manhwa` UI baseline.
 
+### Task 2 evidence — repository debris
+
+- Recursive tree scan found one tracked backup artifact: `android/gradle.properties.orig`.
+- Its blob SHA matched `android/gradle.properties` exactly (`598d2863…`), and repository code search found no references to the `.orig` path.
+- The duplicate backup was removed in commit `65b17a33784e13496de83cf9fbe15b22c23436c8`.
+- Other byte-identical groups are expected platform assets/configuration or files under the vendored `packages/video_view/example/**` boundary and are retained.
+
 ### Task 2: Revalidate repository debris
-- [ ] Scan tracked backup/temp/exact-duplicate artifacts.
-- [ ] Delete only candidates proven unused or byte-identical.
+- [x] Scan tracked backup/temp/exact-duplicate artifacts.
+- [x] Delete only candidates proven unused or byte-identical.
 - [ ] Verify build/config references and CI.
 
 ### Task 3: Revalidate direct dependencies
