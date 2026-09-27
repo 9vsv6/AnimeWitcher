@@ -2,9 +2,6 @@ allprojects {
     repositories {
         google()
         mavenCentral()
-        maven {
-            url = uri(File(rootProject.projectDir, "../packages/flutter_torrent_server/android/repo"))
-        }
     }
 }
 
