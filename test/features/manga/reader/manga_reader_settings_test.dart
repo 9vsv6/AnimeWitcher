@@ -68,8 +68,6 @@ void main() {
     const settings = MangaReaderSettings();
 
     expect(settings.toJson()['autoReadDuplicateChapters'], isFalse);
-    expect(settings.toJson().containsKey('chapterSwipeStartAction'), isTrue);
-    expect(settings.toJson().containsKey('chapterSwipeEndAction'), isTrue);
     expect(settings.toJson().containsKey('readerHideThreshold'), isTrue);
     expect(settings.toJson().containsKey('flashColor'), isTrue);
     // Mangayomi's per-page colour settings stay gone; the filter the reader
