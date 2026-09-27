@@ -43,7 +43,7 @@ class LatestMangaChapterCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final manga = entry.manga;
     return MultimediaCard(
-      imageUrl: AppImageFallbacks.poster(manga.posterUrl, label: manga.title),
+      imageUrl: AppImageFallbacks.poster(manga.posterUrl),
       title: manga.title,
       episodeBadge: mangaChapterDisplayName(entry.chapter),
       subtitle: mangaChapterReleaseTime(entry.chapter.publishedAt),
