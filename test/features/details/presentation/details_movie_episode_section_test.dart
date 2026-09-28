@@ -4,6 +4,7 @@ import 'package:animewitcher/core/storage/storage_service.dart';
 import 'package:animewitcher/features/details/presentation/details_controller.dart';
 import 'package:animewitcher/features/details/presentation/details_screen.dart';
 import 'package:animewitcher/features/details/presentation/widgets/details_hero_actions.dart';
+import 'package:animewitcher/features/details/presentation/widgets/details_layout_widgets.dart';
 import 'package:animewitcher/features/library/presentation/library_media_kind.dart';
 import 'package:animewitcher/features/library/presentation/library_provider.dart';
 import 'package:animewitcher/features/library/presentation/library_state.dart';
@@ -89,7 +90,7 @@ void main() {
   testWidgets('movie play control lives inside the expanded episodes section', (
     tester,
   ) async {
-    await tester.binding.setSurfaceSize(const Size(590, 1400));
+    await tester.binding.setSurfaceSize(const Size(590, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     final movie = MultimediaItem(
@@ -139,14 +140,62 @@ void main() {
     expect(fade.opacity.value, greaterThan(0));
     expect(fade.opacity.value, lessThan(1));
 
+    await tester.pumpAndSettle();
+    expect(find.byType(DetailsHeroPlayPill), findsOneWidget);
+  });
+
+  testWidgets('episode controls consume the same reveal animation as rows', (
+    tester,
+  ) async {
+    final movie = MultimediaItem(
+      title: 'Movie',
+      url: 'https://example.test/movie-controls',
+      posterUrl: '',
+      contentType: MultimediaContentType.movie,
+      episodes: <Episode>[
+        Episode(name: 'Movie', url: 'episode://movie-controls', episode: 1),
+      ],
+    );
+    const reveal = AlwaysStoppedAnimation<double>(0.4);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          storageServiceProvider.overrideWithValue(_Storage()),
+          detailsControllerProvider(movie.url).overrideWith(
+            () => _MovieController(movie),
+          ),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          theme: ThemeData.dark(),
+          home: Scaffold(
+            body: CustomScrollView(
+              slivers: <Widget>[
+                SliverDetailsEpisodeList(
+                  parentItem: movie,
+                  itemUrl: movie.url,
+                  isMovie: false,
+                  transition: reveal,
+                  transitionOffset: Offset(0, -0.045),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
     final controlsReveal = find.byKey(
       const ValueKey<String>('details-episode-controls-reveal'),
-      skipOffstage: false,
     );
     expect(controlsReveal, findsOneWidget);
-    final controlsFade = tester.widget<FadeTransition>(controlsReveal);
-    expect(controlsFade.opacity.value, greaterThan(0));
-    expect(controlsFade.opacity.value, lessThan(1));
+    expect(
+      tester.widget<FadeTransition>(controlsReveal).opacity.value,
+      0.4,
+    );
     expect(
       find.descendant(
         of: controlsReveal,
@@ -161,8 +210,5 @@ void main() {
       ),
       findsOneWidget,
     );
-
-    await tester.pumpAndSettle();
-    expect(find.byType(DetailsHeroPlayPill), findsOneWidget);
   });
 }
