@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -173,6 +175,7 @@ class DetailsScreen extends ConsumerStatefulWidget {
 class _DetailsScreenState extends ConsumerState<DetailsScreen>
     with TickerProviderStateMixin {
   bool _didTriggerAutoPlay = false;
+  bool _episodesExpanded = false;
   final GlobalKey _extraTabsKey = GlobalKey();
   int? _userRating;
   bool _loadingUserRating = false;
@@ -271,21 +274,22 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   }) {
     final LibraryCategory? category =
         libraryNotifier.itemCategory(item.url) as LibraryCategory?;
-    final details = ref
-        .watch(detailsControllerProvider(widget.item.url))
-        .details
-        .value;
+    final detailsState = ref.watch(
+      detailsControllerProvider(widget.item.url),
+    );
+    final details = detailsState.details.value;
 
     return Wrap(
       spacing: 12,
       runSpacing: 12,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        DetailsHeroPlayPill(
-          item: item,
-          details: details,
-          itemUrl: widget.item.url,
-        ),
+        if (detailsState.isMovie)
+          DetailsHeroPlayPill(
+            item: item,
+            details: details,
+            itemUrl: widget.item.url,
+          ),
         PopupMenuButton<String>(
           tooltip: appText(
             context,
@@ -984,49 +988,95 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     );
   }
 
-  /// The seasons and the episodes for the phone page, the list built as it
-  /// scrolls into view.
+  void _toggleEpisodes() {
+    final expanded = !_episodesExpanded;
+    setState(() => _episodesExpanded = expanded);
+    if (expanded) {
+      unawaited(
+        ref
+            .read(detailsControllerProvider(widget.item.url).notifier)
+            .loadEpisodesOnDemand(),
+      );
+    }
+  }
+
+  Widget _episodesSectionHeader(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: const ValueKey<String>('details-episodes-toggle'),
+        onTap: _toggleEpisodes,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  AppLocalizations.of(context)!.episodes,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              Icon(
+                _episodesExpanded
+                    ? Icons.keyboard_arrow_up_rounded
+                    : Icons.keyboard_arrow_down_rounded,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Franchise seasons stay visible, while the expensive episode catalog is
+  /// collapsed and unfetched until the viewer asks to open it.
   List<Widget> _buildPhoneEpisodeSlivers(
     BuildContext context,
     MultimediaItem item,
     AsyncValue<List<Episode>> episodesState,
   ) {
+    final header = SliverToBoxAdapter(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          DetailsSeasonsBar(
+            itemUrl: widget.item.url,
+            current: item,
+            onOpen: (child) => _openExtraAnime(item, child),
+          ),
+          const SizedBox(height: 12),
+          _episodesSectionHeader(context),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+    if (!_episodesExpanded) return <Widget>[header];
+
     final ready =
         episodesState.hasValue && (episodesState.value?.isNotEmpty ?? false);
     if (!ready) {
-      return [
+      return <Widget>[
+        header,
         SliverToBoxAdapter(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Franchise seasons are independent from episode availability.
-              // Upcoming seasons can legitimately have no episodes yet.
-              DetailsSeasonsBar(
-                itemUrl: widget.item.url,
-                current: item,
-                onOpen: (child) => _openExtraAnime(item, child),
-              ),
-              SizedBox(
-                height: 200,
-                child: Center(
-                  child: _episodeLoadStatus(context, episodesState),
-                ),
-              ),
-            ],
+          child: SizedBox(
+            height: 200,
+            child: Center(child: _episodeLoadStatus(context, episodesState)),
           ),
         ),
       ];
     }
-    return [
+
+    return <Widget>[
+      header,
       SliverToBoxAdapter(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            DetailsSeasonsBar(
-              itemUrl: widget.item.url,
-              current: item,
-              onOpen: (child) => _openExtraAnime(item, child),
-            ),
+          children: <Widget>[
             DetailsSeasonListWrapper(itemUrl: widget.item.url),
             const SizedBox(height: 12),
           ],
@@ -1692,41 +1742,36 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     MultimediaItem item,
     AsyncValue<List<Episode>> episodesState,
   ) {
-    if (episodesState.hasValue && (episodesState.value?.isNotEmpty ?? false)) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          DetailsSeasonsBar(
-            itemUrl: widget.item.url,
-            current: item,
-            onOpen: (child) => _openExtraAnime(item, child),
-          ),
-          DetailsSeasonListWrapper(itemUrl: widget.item.url),
-          const SizedBox(height: 16),
-          DetailsDesktopEpisodeColumn(
-            parentItem: item,
-            itemUrl: widget.item.url,
-            isMovie: false,
-          ),
-        ],
-      );
-    }
-
+    final ready =
+        episodesState.hasValue && (episodesState.value?.isNotEmpty ?? false);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Keep the franchise chain available even before this season airs its
-        // first episode (or while episode loading fails independently).
+      children: <Widget>[
         DetailsSeasonsBar(
           itemUrl: widget.item.url,
           current: item,
           onOpen: (child) => _openExtraAnime(item, child),
         ),
-        SizedBox(
-          height: 280,
-          width: double.infinity,
-          child: Center(child: _episodeLoadStatus(context, episodesState)),
-        ),
+        const SizedBox(height: 12),
+        _episodesSectionHeader(context),
+        if (_episodesExpanded) ...<Widget>[
+          const SizedBox(height: 12),
+          if (!ready)
+            SizedBox(
+              height: 280,
+              width: double.infinity,
+              child: Center(child: _episodeLoadStatus(context, episodesState)),
+            )
+          else ...<Widget>[
+            DetailsSeasonListWrapper(itemUrl: widget.item.url),
+            const SizedBox(height: 16),
+            DetailsDesktopEpisodeColumn(
+              parentItem: item,
+              itemUrl: widget.item.url,
+              isMovie: false,
+            ),
+          ],
+        ],
       ],
     );
   }
