@@ -995,6 +995,7 @@ class DetailsDesktopEpisodeColumn extends ConsumerWidget {
           query,
           allEpisodes: orderedEpisodes,
           selectionActive: detailsState.selectedEpisodeKeys.isNotEmpty,
+          details: detailsState.item ?? detailsState.details.asData?.value,
         );
       },
     );
@@ -1006,6 +1007,7 @@ class DetailsDesktopEpisodeColumn extends ConsumerWidget {
     String query, {
     required List<Episode> allEpisodes,
     required bool selectionActive,
+    required MultimediaItem? details,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1013,33 +1015,33 @@ class DetailsDesktopEpisodeColumn extends ConsumerWidget {
         Padding(
           padding: const EdgeInsets.only(bottom: LayoutConstants.spacingMd),
           child: Wrap(
-            alignment: WrapAlignment.spaceBetween,
+            spacing: 10,
+            runSpacing: 10,
             crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            runSpacing: 12,
-            children: [
-              Text(
-                AppLocalizations.of(context)!.episodes,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  const EpisodeSearchButton(),
-                  const EpisodeViewModeToggle(),
-                  DetailsEpisodeFilterBar(itemUrl: itemUrl),
-                ],
-              ),
+            children: const <Widget>[
+              EpisodeSearchButton(),
+              EpisodeViewModeToggle(),
             ],
           ),
         ),
         Padding(
           padding: const EdgeInsets.only(bottom: LayoutConstants.spacingMd),
-          child: EpisodeBrowseBar(episodes: allEpisodes),
+          child: EpisodeBrowseBar(
+            episodes: allEpisodes,
+            leading: DetailsEpisodeFilterBar(itemUrl: itemUrl),
+            trailing: DetailsEpisodeSortButton(itemUrl: itemUrl),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: LayoutConstants.spacingMd),
+          child: Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: DetailsHeroPlayPill(
+              item: parentItem,
+              details: details,
+              itemUrl: itemUrl,
+            ),
+          ),
         ),
         if (displayedEpisodes.isEmpty && query.trim().isEmpty)
           const EpisodeBrowseEmpty()
