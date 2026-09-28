@@ -223,7 +223,7 @@ void main() {
     final bannerBefore = tester.getTopLeft(banner).dy;
     final closeBefore = tester.getTopLeft(close).dy;
 
-    await tester.drag(list, const Offset(0, -220));
+    await tester.drag(list, const Offset(0, -80));
     await tester.pumpAndSettle();
 
     expect(tester.getTopLeft(banner).dy, lessThan(bannerBefore - 20));
