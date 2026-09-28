@@ -9,6 +9,7 @@ import 'package:animewitcher/core/utils/episode_label.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/domain/entity/multimedia_item.dart';
+import '../../../core/domain/stream_source_preferences.dart';
 import '../../../core/extensions/extension_manager.dart';
 import '../../../core/extensions/base_provider.dart';
 import '../../../core/network/dio_client_provider.dart';
