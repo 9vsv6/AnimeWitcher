@@ -17,6 +17,7 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           locale: const Locale('ar'),
+          supportedLocales: const <Locale>[Locale('ar')],
           home: Consumer(
             builder: (context, ref, _) {
               entries = phoneFixedSideMenuEntries(
@@ -88,18 +89,28 @@ void main() {
                 currentBranchIndex: TaskbarDestination.home.branchIndex,
                 onDestination: picked.add,
               );
+              final manga = entries.firstWhere(
+                (entry) => entry.id == 'manga-search',
+              );
+              final characters = entries.firstWhere(
+                (entry) => entry.id == 'characters-search',
+              );
               return Column(
                 children: [
                   Text(
                     ref.watch(searchDomainProvider).name,
                     key: const ValueKey<String>('domain'),
                   ),
-                  for (final entry in entries)
-                    TextButton(
-                      key: ValueKey<String>('entry-${entry.id}'),
-                      onPressed: entry.onTap,
-                      child: Text(entry.id),
-                    ),
+                  TextButton(
+                    key: const ValueKey<String>('entry-manga-search'),
+                    onPressed: manga.onTap,
+                    child: const Text('manga-search'),
+                  ),
+                  TextButton(
+                    key: const ValueKey<String>('entry-characters-search'),
+                    onPressed: characters.onTap,
+                    child: const Text('characters-search'),
+                  ),
                 ],
               );
             },
