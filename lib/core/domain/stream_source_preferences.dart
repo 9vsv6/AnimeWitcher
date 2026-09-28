@@ -35,12 +35,12 @@ List<String> normalizeStreamPriority(
   return List<String>.unmodifiable(result);
 }
 
-StreamResult? selectPreferredStreamSource(
+List<StreamResult> orderStreamSourcesByPreference(
   List<StreamResult> sources, {
   required List<String> qualityPriority,
   required List<String> serverPriority,
 }) {
-  if (sources.isEmpty) return null;
+  if (sources.isEmpty) return const <StreamResult>[];
   final ordered = List<({StreamResult source, int index})>.generate(
     sources.length,
     (index) => (source: sources[index], index: index),
@@ -81,9 +81,52 @@ StreamResult? selectPreferredStreamSource(
     return a.index.compareTo(b.index);
   });
 
-  return ordered.first.source;
+  return List<StreamResult>.unmodifiable(
+    ordered.map((entry) => entry.source),
+  );
 }
 
+Future<StreamResult?> resolvePreferredStreamSource(
+  List<StreamResult> sources, {
+  required List<String> qualityPriority,
+  required List<String> serverPriority,
+  required Future<List<StreamResult>> Function(StreamResult candidate)
+  resolveCandidate,
+}) async {
+  final ordered = orderStreamSourcesByPreference(
+    sources,
+    qualityPriority: qualityPriority,
+    serverPriority: serverPriority,
+  );
+  for (final candidate in ordered) {
+    if (!candidate.requiresResolution) return candidate;
+    try {
+      final resolved = await resolveCandidate(candidate);
+      if (resolved.isEmpty) continue;
+      final first = resolved.first;
+      final refreshUrl = first.refreshUrl?.trim() ?? '';
+      return refreshUrl.isNotEmpty
+          ? first
+          : first.copyWith(refreshUrl: candidate.url);
+    } catch (_) {
+      // One dead server must not skip the rest of the same quality tier.
+    }
+  }
+  return null;
+}
+
+StreamResult? selectPreferredStreamSource(
+  List<StreamResult> sources, {
+  required List<String> qualityPriority,
+  required List<String> serverPriority,
+}) {
+  final ordered = orderStreamSourcesByPreference(
+    sources,
+    qualityPriority: qualityPriority,
+    serverPriority: serverPriority,
+  );
+  return ordered.isEmpty ? null : ordered.first;
+}
 String streamServerPreferenceKey(String source) {
   final normalized = source.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
   if (normalized.startsWith('PD') || normalized.contains('PIXELDRAIN')) {
