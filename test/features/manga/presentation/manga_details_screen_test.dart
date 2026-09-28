@@ -420,7 +420,28 @@ void main() {
       );
       // One page, not the phone's two tabs.
       expect(find.byType(TabBarView), findsNothing);
-      // Nothing read yet, so the white pill starts the manga.
+      // Chapter-only controls stay out of the hero and remain hidden until
+      // the collapsed section is opened.
+      expect(
+        find.byKey(const ValueKey<String>('manga-read-pill')),
+        findsNothing,
+      );
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey<String>('manga-chapters-toggle')),
+        200,
+        scrollable: page,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('manga-chapters-toggle')),
+      );
+      await _pumpUntil(
+        tester,
+        () => find
+            .byKey(const ValueKey<String>('manga-read-pill'))
+            .evaluate()
+            .isNotEmpty,
+        reason: 'opening chapters did not reveal the read button',
+      );
       expect(
         find.descendant(
           of: find.byKey(const ValueKey<String>('manga-read-pill')),
@@ -440,7 +461,7 @@ void main() {
     },
   );
   testWidgets(
-    'chapter sort control shares the chapters heading row',
+    'chapter sort control sits on the filter row at the physical left',
     (tester) async {
       tester.view.physicalSize = const Size(1400, 900);
       tester.view.devicePixelRatio = 1;
@@ -450,21 +471,41 @@ void main() {
       await tester.pumpWidget(_app(_MangaProvider()));
       await _pumpUntil(
         tester,
-        () => find.text('الفصول (1)').evaluate().isNotEmpty,
-        reason: 'the chapters heading did not appear',
+        () => find
+            .byKey(const ValueKey<String>('manga-chapters-toggle'))
+            .evaluate()
+            .isNotEmpty,
+        reason: 'the collapsed chapters heading did not appear',
       );
 
-      final page = find.byType(Scrollable).first;
-      await tester.scrollUntilVisible(
+      expect(
         find.byKey(const ValueKey<String>('manga-chapter-sort-toggle')),
-        200,
-        scrollable: page,
+        findsNothing,
       );
-      final titleCenter = tester.getCenter(find.text('الفصول (1)'));
-      final sortCenter = tester.getCenter(
-        find.byKey(const ValueKey<String>('manga-chapter-sort-toggle')),
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('manga-chapters-toggle')),
       );
-      expect((titleCenter.dy - sortCenter.dy).abs(), lessThan(12));
+      await _pumpUntil(
+        tester,
+        () => find
+            .byKey(const ValueKey<String>('manga-chapter-sort-toggle'))
+            .evaluate()
+            .isNotEmpty,
+        reason: 'opening chapters did not reveal the sort control',
+      );
+
+      final filter = find.byKey(
+        const ValueKey<String>('manga-chapter-filter-all'),
+      );
+      final sort = find.byKey(
+        const ValueKey<String>('manga-chapter-sort-toggle'),
+      );
+      final filterCenter = tester.getCenter(filter);
+      final sortCenter = tester.getCenter(sort);
+
+      expect((filterCenter.dy - sortCenter.dy).abs(), lessThan(12));
+      expect(sortCenter.dx, lessThan(filterCenter.dx));
     },
   );
 
