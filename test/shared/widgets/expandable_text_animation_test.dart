@@ -17,7 +17,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        locale: const Locale('en'),
+        locale: const Locale('ar'),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: const Scaffold(
@@ -36,7 +36,7 @@ void main() {
     final storyFinder = find.byKey(const ValueKey<String>('story'));
     final collapsed = tester.getSize(storyFinder).height;
 
-    await tester.tap(find.text('Show more'));
+    await tester.tap(find.text('عرض المزيد'));
     await tester.pump(const Duration(milliseconds: 80));
     final mid = tester.getSize(storyFinder).height;
 
@@ -46,7 +46,7 @@ void main() {
     expect(mid, greaterThan(collapsed));
     expect(mid, lessThan(expanded));
 
-    await tester.tap(find.text('Show less'));
+    await tester.tap(find.text('عرض أقل'));
     await tester.pump(const Duration(milliseconds: 80));
     final collapsing = tester.getSize(storyFinder).height;
     expect(collapsing, lessThan(expanded));
