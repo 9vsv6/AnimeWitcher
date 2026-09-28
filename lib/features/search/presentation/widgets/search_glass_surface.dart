@@ -8,7 +8,7 @@ class SearchGlassSurface extends StatelessWidget {
     this.focusNode,
   });
 
-  static const double height = 48;
+  static const double height = 42;
   final Widget child;
   final FocusNode? focusNode;
 
