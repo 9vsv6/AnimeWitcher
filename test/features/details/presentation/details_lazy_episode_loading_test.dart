@@ -2,12 +2,15 @@ import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
 import 'package:animewitcher/core/extensions/base_provider.dart';
 import 'package:animewitcher/core/extensions/extension_manager.dart';
 import 'package:animewitcher/core/providers/episode_sort_provider.dart';
+import 'package:animewitcher/core/storage/storage_service.dart';
 import 'package:animewitcher/features/details/presentation/details_controller.dart';
 import 'package:animewitcher/features/library/presentation/downloads_provider.dart';
 import 'package:animewitcher/features/library/presentation/history_provider.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../../support/memory_storage_service.dart';
 
 final class _Provider extends AnimeWitcherProvider {
   int detailsCalls = 0;
@@ -113,6 +116,7 @@ void main() {
         extensionManagerProvider.overrideWith(() => _Manager(provider)),
         activeProviderProvider.overrideWithValue(provider),
         episodeSortAscendingProvider.overrideWith(() => _AscendingSort()),
+        storageServiceProvider.overrideWithValue(MemoryStorageService()),
         downloadsProvider.overrideWith(() => _EmptyDownloads()),
         watchHistoryProvider.overrideWith(() => _EmptyHistory()),
       ],
