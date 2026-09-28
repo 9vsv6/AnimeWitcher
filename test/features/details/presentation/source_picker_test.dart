@@ -156,7 +156,7 @@ void main() {
       ],
       qualityPriority: const <String>['1080p', '720p'],
       serverPriority: const <String>['PD', 'MF'],
-      resolveCandidate: (candidate) async {
+      resolveCandidate: (StreamResult candidate) async {
         attempted.add(candidate.url);
         if (candidate.url == 'mf-1080-token') {
           return const <StreamResult>[
