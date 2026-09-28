@@ -131,6 +131,14 @@ void main() {
       contentType: MultimediaContentType.anime,
       provider: provider.packageName,
     );
+    // This family is auto-disposed when nobody listens. Keep the tested
+    // controller alive while exercising the two explicit load calls.
+    final subscription = container.listen<DetailsState>(
+      detailsControllerProvider(url),
+      (_, _) {},
+      fireImmediately: true,
+    );
+    addTearDown(subscription.close);
     final controller = container.read(detailsControllerProvider(url).notifier);
 
     await controller.loadDetails(item);
