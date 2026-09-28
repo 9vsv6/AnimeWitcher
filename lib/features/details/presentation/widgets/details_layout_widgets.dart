@@ -542,6 +542,7 @@ class SliverDetailsEpisodeList extends ConsumerWidget {
           allEpisodes: orderedEpisodes,
           displayedEpisodes: displayedEpisodes,
           selectionActive: detailsState.selectedEpisodeKeys.isNotEmpty,
+          details: detailsState.item ?? detailsState.details.asData?.value,
         );
       },
     );
@@ -552,33 +553,31 @@ class SliverDetailsEpisodeList extends ConsumerWidget {
     required List<Episode> allEpisodes,
     required List<Episode> displayedEpisodes,
     required bool selectionActive,
+    required MultimediaItem? details,
   }) {
     return SliverMainAxisGroup(
       slivers: [
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.only(bottom: LayoutConstants.spacingMd),
-            child: Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 8,
-              runSpacing: 12,
-              children: [
-                Text(
-                  AppLocalizations.of(context)!.episodes,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                ),
-                DetailsEpisodeFilterBar(itemUrl: itemUrl),
-              ],
+            child: EpisodeBrowseBar(
+              episodes: allEpisodes,
+              leading: DetailsEpisodeFilterBar(itemUrl: itemUrl),
+              trailing: DetailsEpisodeSortButton(itemUrl: itemUrl),
             ),
           ),
         ),
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.only(bottom: LayoutConstants.spacingMd),
-            child: EpisodeBrowseBar(episodes: allEpisodes),
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: DetailsHeroPlayPill(
+                item: parentItem,
+                details: details,
+                itemUrl: itemUrl,
+              ),
+            ),
           ),
         ),
         if (displayedEpisodes.isEmpty)
@@ -614,12 +613,9 @@ class DetailsEpisodeFilterBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final detailsState = ref.watch(detailsControllerProvider(itemUrl));
-
     final allEpisodes =
         detailsState.seasonMap[detailsState.selectedSeason] ?? [];
 
-    // Movies (and AnimeWitcher مترجم/مدبلج catalogs) list every variant as its
-    // own row. Do not show a ترجمة/دبلجة filter that would hide half of them.
     final isStandaloneCatalog = isStandaloneEpisodeCatalog([
       for (final episode in allEpisodes)
         (serverName: episode.serverName, name: episode.name),
@@ -628,54 +624,14 @@ class DetailsEpisodeFilterBar extends ConsumerWidget {
     final hasSub = allEpisodes.any((e) => e.dubStatus == DubStatus.subbed);
     final showLanguageToggle =
         !detailsState.isMovie && !isStandaloneCatalog && hasDub && hasSub;
-    final selectedDub = detailsState.selectedDubStatus;
+    if (!showLanguageToggle) return const SizedBox.shrink();
 
     return SizedBox(
       height: 40,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (showLanguageToggle) ...[
-            _buildLanguageToggle(context, ref, selectedDub),
-            const SizedBox(width: 8),
-          ],
-          // The same capsule the view modes beside it wear: a grey rounded
-          // box next to two glass ones read as a control from another page.
-          AppleLiquidGlassSurface(
-            borderRadius: BorderRadius.circular(20),
-            interactive: true,
-            fallbackColor: kDetailsHeroGlassFallback,
-            fallbackBorder: BorderSide(
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurfaceVariant.withValues(alpha: 0.12),
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(20),
-                onTap: () => ref
-                    .read(detailsControllerProvider(itemUrl).notifier)
-                    .toggleSort(),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Icon(
-                    detailsState.isAscending
-                        ? Icons.arrow_downward_rounded
-                        : Icons.arrow_upward_rounded,
-                    size: 22,
-                    // The same colour as the view-mode glyphs it sits beside.
-                    // Painting it in the accent while they stayed neutral made
-                    // one button of a row of four look like a different kind
-                    // of control.
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
+      child: _buildLanguageToggle(
+        context,
+        ref,
+        detailsState.selectedDubStatus,
       ),
     );
   }
@@ -710,6 +666,51 @@ class DetailsEpisodeFilterBar extends ConsumerWidget {
                 .setDubStatus(DubStatus.dubbed),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class DetailsEpisodeSortButton extends ConsumerWidget {
+  const DetailsEpisodeSortButton({super.key, required this.itemUrl});
+
+  final String itemUrl;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ascending = ref.watch(
+      detailsControllerProvider(itemUrl).select((state) => state.isAscending),
+    );
+    return SizedBox(
+      height: 40,
+      child: AppleLiquidGlassSurface(
+        borderRadius: BorderRadius.circular(20),
+        interactive: true,
+        fallbackColor: kDetailsHeroGlassFallback,
+        fallbackBorder: BorderSide(
+          color: Theme.of(context).colorScheme.onSurfaceVariant
+              .withValues(alpha: 0.12),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            key: const ValueKey<String>('episode-sort-toggle'),
+            borderRadius: BorderRadius.circular(20),
+            onTap: () => ref
+                .read(detailsControllerProvider(itemUrl).notifier)
+                .toggleSort(),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Icon(
+                ascending
+                    ? Icons.arrow_downward_rounded
+                    : Icons.arrow_upward_rounded,
+                size: 22,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
