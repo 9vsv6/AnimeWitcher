@@ -51,11 +51,17 @@ void main() {
         'characters-search',
         'broadcast-schedule',
         'news',
+        'settings',
       ],
     );
     expect(
       entries.where((entry) => entry.dividerBefore).map((entry) => entry.id),
-      <String>['global-statistics', 'library', 'characters-search'],
+      <String>[
+        'global-statistics',
+        'library',
+        'characters-search',
+        'settings',
+      ],
     );
     expect(entries.first.selected, isTrue);
     expect(entries.map((entry) => entry.label), containsAllInOrder(<String>[
@@ -72,6 +78,7 @@ void main() {
       'الشخصيات',
       'جدول الحلقات',
       'الأخبار',
+      'الإعدادات',
     ]));
   });
 
