@@ -3,6 +3,7 @@ import 'package:animewitcher/core/storage/library_category.dart';
 import 'package:animewitcher/core/storage/storage_service.dart';
 import 'package:animewitcher/features/details/presentation/details_controller.dart';
 import 'package:animewitcher/features/details/presentation/details_screen.dart';
+import 'package:animewitcher/features/details/presentation/widgets/details_hero_actions.dart';
 import 'package:animewitcher/features/details/presentation/widgets/details_seasons_bar.dart';
 import 'package:animewitcher/features/library/presentation/library_media_kind.dart';
 import 'package:animewitcher/features/library/presentation/library_provider.dart';
@@ -65,7 +66,7 @@ void main() {
   testWidgets('seasons stay visible when an anime has no episodes yet', (
     tester,
   ) async {
-    await tester.binding.setSurfaceSize(const Size(590, 900));
+    await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     final firstSeason = MultimediaItem(
@@ -113,6 +114,11 @@ void main() {
     expect(
       find.byKey(const ValueKey<String>('details-episodes-toggle')),
       findsOneWidget,
+    );
+    expect(
+      find.byType(DetailsHeroPlayPill),
+      findsNothing,
+      reason: 'series playback stays inside the collapsed episodes section',
     );
   });
 }
