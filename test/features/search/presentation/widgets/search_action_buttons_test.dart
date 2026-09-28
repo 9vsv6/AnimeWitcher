@@ -117,9 +117,9 @@ void main() {
     expect(actions.height, field.height);
     expect(actions.top, field.top);
     expect(actions.left - field.right, 10);
-    // The field is a plain filled pill now, like the library's; only the
-    // action capsule is glass.
-    expect(find.byType(AppleLiquidGlassSurface), findsOneWidget);
+    // Match the library header: sort/filter are plain icon buttons, not a
+    // separate circular/glass capsule.
+    expect(find.byType(AppleLiquidGlassSurface), findsNothing);
     expect(find.text('2'), findsOneWidget);
     final theme = Theme.of(tester.element(find.byType(SearchActionButtons)));
     final badgeBox = tester.widget<Container>(
