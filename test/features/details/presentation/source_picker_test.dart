@@ -102,6 +102,35 @@ void main() {
     );
   });
 
+  test('auto selection keeps quality ahead of server priority', () {
+    final selected = selectPreferredStreamSource(
+      const <StreamResult>[
+        StreamResult(url: 'pd-720', source: 'PD', quality: '720'),
+        StreamResult(url: 'mf-1080', source: 'MF', quality: '1080'),
+        StreamResult(url: 'st-1080', source: 'ST', quality: '1080'),
+        StreamResult(url: 'pd-480', source: 'PD', quality: '480'),
+      ],
+      qualityPriority: const <String>['1080p', '720p', '480p'],
+      serverPriority: const <String>['PD', 'MF', 'ST'],
+    );
+
+    expect(selected?.url, 'mf-1080');
+  });
+
+  test('auto selection respects custom quality and server ordering', () {
+    final selected = selectPreferredStreamSource(
+      const <StreamResult>[
+        StreamResult(url: 'pd-1080', source: 'PD', quality: '1080'),
+        StreamResult(url: 'mf-720', source: 'MF2', quality: '720p'),
+        StreamResult(url: 'st-720', source: 'ST', quality: '720'),
+      ],
+      qualityPriority: const <String>['720p', '1080p', '480p'],
+      serverPriority: const <String>['ST', 'MF', 'PD'],
+    );
+
+    expect(selected?.url, 'st-720');
+  });
+
   testWidgets('shows a loading state in the sheet until servers arrive', (
     tester,
   ) async {
