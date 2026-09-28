@@ -79,7 +79,7 @@ class MangaDetailsScreen extends ConsumerStatefulWidget {
   ConsumerState<MangaDetailsScreen> createState() => _MangaDetailsScreenState();
 }
 
-class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen> {
+class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen>\n    with SingleTickerProviderStateMixin {
   static const String _removeLibraryAction = '__remove_from_library__';
 
   int? _userRating;
@@ -88,10 +88,23 @@ class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen> {
   String? _loadedUserRatingMangaId;
   Widget? _chapterSelectionBar;
   bool _chaptersExpanded = false;
+  bool _chaptersVisible = false;
+  late final AnimationController _chaptersRevealController;
+  late final Animation<double> _chaptersReveal;
 
   @override
   void initState() {
     super.initState();
+    _chaptersRevealController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 240),
+      reverseDuration: const Duration(milliseconds: 190),
+    );
+    _chaptersReveal = CurvedAnimation(
+      parent: _chaptersRevealController,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ref
@@ -102,6 +115,7 @@ class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen> {
 
   @override
   void dispose() {
+    _chaptersRevealController.dispose();
     super.dispose();
   }
 
@@ -723,22 +737,46 @@ class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen> {
   }
 
   void _toggleChapters() {
-    final expanded = !_chaptersExpanded;
-    setState(() {
-      _chaptersExpanded = expanded;
-      if (!expanded) {
-        // The selection bar belongs to the chapter section; it must disappear
-        // with the list instead of staying pinned over the collapsed page.
-        _chapterSelectionBar = null;
-      }
-    });
-    if (expanded) {
+    if (!_chaptersExpanded) {
+      setState(() {
+        _chaptersExpanded = true;
+        _chaptersVisible = true;
+      });
       unawaited(
         ref
             .read(mangaDetailsControllerProvider(widget.item.url).notifier)
             .loadChaptersOnDemand(),
       );
+      unawaited(_chaptersRevealController.forward());
+      return;
     }
+
+    setState(() {
+      _chaptersExpanded = false;
+      // The selection bar belongs to the chapter section; it disappears as
+      // soon as the section starts folding away.
+      _chapterSelectionBar = null;
+    });
+    unawaited(
+      _chaptersRevealController.reverse().then((_) {
+        if (!mounted || _chaptersExpanded) return;
+        setState(() => _chaptersVisible = false);
+      }),
+    );
+  }
+
+  Widget _chapterReveal(Widget child) {
+    return FadeTransition(
+      key: const ValueKey<String>('manga-chapters-reveal'),
+      opacity: _chaptersReveal,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, -0.045),
+          end: Offset.zero,
+        ).animate(_chaptersReveal),
+        child: child,
+      ),
+    );
   }
 
   /// A wide window gets the anime page's layout: the artwork across the top
@@ -839,23 +877,29 @@ class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen> {
         ),
         // The chapters are built as they scroll into view.
         slivers: <Widget>[
-          if (_chaptersExpanded)
+          if (_chaptersVisible)
             state.chapters.when(
-              loading: () => const SliverToBoxAdapter(
-                child: SizedBox(
-                  height: 200,
-                  child: Center(child: AppLoadingIndicator()),
+              loading: () => SliverToBoxAdapter(
+                child: _chapterReveal(
+                  const SizedBox(
+                    height: 200,
+                    child: Center(child: AppLoadingIndicator()),
+                  ),
                 ),
               ),
               error: (_, _) => SliverToBoxAdapter(
-                child: SizedBox(
-                  height: 200,
-                  child: _RetryPanel(onRetry: controller.retry),
+                child: _chapterReveal(
+                  SizedBox(
+                    height: 200,
+                    child: _RetryPanel(onRetry: controller.retry),
+                  ),
                 ),
               ),
               data: (chapters) => MangaChapterList(
                 embedded: true,
                 chapters: chapters,
+                transition: _chaptersReveal,
+                revealKey: const ValueKey<String>('manga-chapters-reveal'),
                 topAction: Align(
                   alignment: AlignmentDirectional.centerStart,
                   child: _readPill(context, chapters, open),
