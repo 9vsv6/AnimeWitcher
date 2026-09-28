@@ -50,6 +50,7 @@ Future<_Harness> _pump(
   WidgetTester tester, {
   bool signedIn = false,
   Size size = const Size(400, 860),
+  int fillerEntries = 0,
 }) async {
   final harness = _Harness();
   tester.view.physicalSize = size;
@@ -82,6 +83,13 @@ Future<_Harness> _pump(
               label: 'الإعدادات',
               onTap: () => harness.settingsOpened++,
             ),
+            for (var index = 0; index < fillerEntries; index++)
+              AppSideMenuEntry(
+                id: 'filler-$index',
+                icon: Icons.circle_outlined,
+                label: 'عنصر $index',
+                onTap: () {},
+              ),
           ],
           child: Scaffold(
             body: Stack(
@@ -198,6 +206,7 @@ void main() {
       tester,
       signedIn: true,
       size: const Size(400, 500),
+      fillerEntries: 8,
     );
     await tester.tap(find.byKey(const ValueKey('app-side-menu-button')));
     await tester.pumpAndSettle();
