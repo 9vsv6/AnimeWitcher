@@ -677,59 +677,63 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               );
             }
 
-            return TextField(
-              controller: _controller,
-              focusNode: _focusNode,
-              autofocus: false,
-              style: TextStyle(
-                fontSize: 14,
-                color: theme.colorScheme.onSurface,
-              ),
-              textDirection: searchTextDirection(
-                _controller.text,
-                fallback: TextDirection.ltr,
-              ),
-              textAlign: TextAlign.start,
-              textAlignVertical: TextAlignVertical.center,
-              textInputAction: TextInputAction.search,
-              enableInteractiveSelection: true,
-              contextMenuBuilder: (context, editableTextState) {
-                return AdaptiveTextSelectionToolbar.buttonItems(
-                  anchors: editableTextState.contextMenuAnchors,
-                  buttonItems: editableTextState.contextMenuButtonItems,
-                );
-              },
-              onChanged: (val) {
-                ref
-                    .read(searchSuggestionControllerProvider.notifier)
-                    .onQueryChanged(val);
-              },
-              onSubmitted: _submitSearch,
-              decoration: InputDecoration(
-                hintText: searchPlaceholder,
-                border: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                filled: false,
-                isDense: true,
-                contentPadding: EdgeInsets.zero,
-                hintStyle: TextStyle(
-                  fontSize: 13,
-                  color: theme.colorScheme.onSurfaceVariant,
+            final fieldDirection = Directionality.of(context);
+            return Directionality(
+              textDirection: fieldDirection,
+              child: TextField(
+                controller: _controller,
+                focusNode: _focusNode,
+                autofocus: false,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: theme.colorScheme.onSurface,
                 ),
-                prefixIcon: Icon(
-                  Icons.search_rounded,
-                  size: 20,
-                  color: theme.colorScheme.onSurfaceVariant,
+                textDirection: searchTextDirection(
+                  _controller.text,
+                  fallback: fieldDirection,
                 ),
-                prefixIconConstraints: const BoxConstraints(
-                  minWidth: 44,
-                  minHeight: SearchGlassSurface.height,
-                ),
-                suffixIcon: suffix,
-                suffixIconConstraints: const BoxConstraints(
-                  minWidth: 42,
-                  minHeight: SearchGlassSurface.height,
+                textAlign: TextAlign.start,
+                textAlignVertical: TextAlignVertical.center,
+                textInputAction: TextInputAction.search,
+                enableInteractiveSelection: true,
+                contextMenuBuilder: (context, editableTextState) {
+                  return AdaptiveTextSelectionToolbar.buttonItems(
+                    anchors: editableTextState.contextMenuAnchors,
+                    buttonItems: editableTextState.contextMenuButtonItems,
+                  );
+                },
+                onChanged: (val) {
+                  ref
+                      .read(searchSuggestionControllerProvider.notifier)
+                      .onQueryChanged(val);
+                },
+                onSubmitted: _submitSearch,
+                decoration: InputDecoration(
+                  hintText: searchPlaceholder,
+                  border: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  filled: false,
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                  hintStyle: TextStyle(
+                    fontSize: 13,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  prefixIcon: Icon(
+                    Icons.search_rounded,
+                    size: 20,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  prefixIconConstraints: const BoxConstraints(
+                    minWidth: 44,
+                    minHeight: SearchGlassSurface.height,
+                  ),
+                  suffixIcon: suffix,
+                  suffixIconConstraints: const BoxConstraints(
+                    minWidth: 42,
+                    minHeight: SearchGlassSurface.height,
+                  ),
                 ),
               ),
             );
