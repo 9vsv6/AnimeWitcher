@@ -5,11 +5,11 @@ import 'package:animewitcher/core/navigation/app_layout_style.dart';
 import 'package:animewitcher/core/navigation/taskbar_destination.dart';
 import 'package:animewitcher/core/storage/storage_service.dart';
 import 'package:animewitcher/features/news/presentation/open_news.dart';
-import 'package:animewitcher/features/more/presentation/more_screen.dart';
 import 'package:animewitcher/features/onboarding/first_run_setup_screen.dart';
 import 'package:animewitcher/shared/widgets/account_avatar_button.dart';
 import 'package:animewitcher/shared/widgets/app_navigation_bars.dart';
 import 'package:animewitcher/shared/widgets/app_side_menu.dart';
+import 'package:animewitcher/shared/widgets/phone_fixed_side_menu.dart';
 import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:animewitcher/shared/widgets/custom_bottom_nav.dart';
 
@@ -216,11 +216,16 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
     );
     if (layoutsAvailable) return withShellPopScope(dock);
 
-    // A phone has both: the bar, and the side menu pulled out from the left
-    // with the bar's pages and everything the More tab held.
+    // The phone side menu is intentionally independent from the dock:
+    // hiding/reordering bottom items must never change this fixed browse list.
     return AppSideMenuShell(
-      destinations: dockDestinations,
-      entries: phoneMoreMenuEntries(context),
+      destinations: const <TaskbarDestination>[],
+      entries: phoneFixedSideMenuEntries(
+        context,
+        ref,
+        currentBranchIndex: currentIndex,
+        onDestination: onDestination,
+      ),
       currentBranchIndex: currentIndex,
       onDestination: onDestination,
       onAccount: () => openAccountScreen(context),
