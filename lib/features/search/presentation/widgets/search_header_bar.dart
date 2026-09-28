@@ -200,10 +200,12 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                               );
                             }
 
-                            // The field reads left-to-right in every locale: magnifier
-                            // on the left, hint and caret starting there.
+                            // Keep the field itself in the locale direction even
+                            // though the surrounding action row stays physically
+                            // pinned. Arabic therefore starts from the right.
+                            final fieldDirection = Directionality.of(context);
                             return Directionality(
-                              textDirection: TextDirection.ltr,
+                              textDirection: fieldDirection,
                               child: TextField(
                                 controller: widget.textController,
                                 focusNode: widget.searchFocusNode,
@@ -214,7 +216,7 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                                 ),
                                 textDirection: searchTextDirection(
                                   value.text,
-                                  fallback: TextDirection.ltr,
+                                  fallback: fieldDirection,
                                 ),
                                 textAlign: TextAlign.start,
                                 textAlignVertical: TextAlignVertical.center,
