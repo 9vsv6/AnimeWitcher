@@ -91,7 +91,8 @@ class DownloadLauncher {
           sources,
           qualityPriority: preferences.streamQualityPriority,
           serverPriority: preferences.streamServerPriority,
-          resolveCandidate: (candidate) => provider.loadStreams(candidate.url),
+          resolveCandidate: (StreamResult candidate) =>
+              provider!.loadStreams(candidate.url),
         );
         if (selected == null) {
           throw Exception('لم يتم العثور على مصادر تشغيل.');
