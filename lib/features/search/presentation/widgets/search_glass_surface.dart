@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Shared geometry for the editable search field and its action capsule.
+/// Shared geometry for the editable search field and its adjacent actions.
 class SearchGlassSurface extends StatelessWidget {
   const SearchGlassSurface({
     super.key,

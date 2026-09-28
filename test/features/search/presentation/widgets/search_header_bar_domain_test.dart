@@ -1,5 +1,6 @@
 import 'package:animewitcher/features/search/presentation/search_provider.dart';
 import 'package:animewitcher/features/search/presentation/widgets/search_header_bar.dart';
+import 'package:animewitcher/features/search/presentation/widgets/search_glass_surface.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter/material.dart';
@@ -149,4 +150,59 @@ void main() {
       expect(find.byTooltip('الفلاتر'), findsOneWidget);
     },
   );
+
+  testWidgets('character search expands into the missing sort space', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(500, 300));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final controller = TextEditingController();
+    final searchFocus = FocusNode();
+    final clearFocus = FocusNode();
+    addTearDown(controller.dispose);
+    addTearDown(searchFocus.dispose);
+    addTearDown(clearFocus.dispose);
+
+    Future<double> searchWidth({required bool showSort}) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            searchPagedResultsProvider.overrideWith(_IdleSearchNotifier.new),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: SearchHeaderBar(
+                textController: controller,
+                searchFocusNode: searchFocus,
+                clearButtonFocusNode: clearFocus,
+                onSubmitted: (_) {},
+                onChanged: (_) {},
+                onShowFilters: () {},
+                onSortSelected: (_) {},
+                sortValue: 'favorites',
+                sortItems: const <AppleNativeMenuItem>[
+                  AppleNativeMenuItem(value: 'favorites', label: 'Favorites'),
+                ],
+                sortIcon: Icons.star_rounded,
+                sortSystemImage: 'star.fill',
+                sortTooltip: 'Sort',
+                activeFilterCount: 0,
+                isFilterLoading: false,
+                showSort: showSort,
+                showFilter: true,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      return tester.getRect(find.byType(SearchGlassSurface)).width;
+    }
+
+    final regular = await searchWidth(showSort: true);
+    final characters = await searchWidth(showSort: false);
+
+    expect(characters, greaterThan(regular + 30));
+  });
 }

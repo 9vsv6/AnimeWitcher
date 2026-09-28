@@ -76,9 +76,10 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
       ref.watch(searchDomainProvider),
     );
 
-    final actionWidth = SearchActionButtons.groupWidthForHeight(
+    // Keep the row's full two-action width even when one action is hidden.
+    // Expanded search then consumes that freed slot (characters have no sort).
+    final fullActionWidth = SearchActionButtons.groupWidthForHeight(
       SearchGlassSurface.height,
-      visibleControls: (widget.showSort ? 1 : 0) + (widget.showFilter ? 1 : 0),
     );
     return Padding(
       padding: EdgeInsets.symmetric(
@@ -89,7 +90,7 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
         child: Center(
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              maxWidth: isCompact ? 360 : 460 + 12 + actionWidth,
+              maxWidth: isCompact ? 360 : 460 + 12 + fullActionWidth,
             ),
             child: Directionality(
               textDirection: TextDirection.ltr,
@@ -287,8 +288,8 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                         arabic: 'الفلاتر',
                       ),
                       onFilterPressed: widget.onShowFilters,
-                      // Neutral, like the glyphs it sits beside.
-                      tintColor: theme.colorScheme.onSurfaceVariant,
+                      // Match the library filter's theme accent.
+                      tintColor: theme.colorScheme.primary,
                       height: SearchGlassSurface.height,
                     ),
                     SizedBox(

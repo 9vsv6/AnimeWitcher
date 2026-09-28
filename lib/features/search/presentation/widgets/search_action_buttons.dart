@@ -5,12 +5,8 @@ import 'search_glass_surface.dart';
 import '../../../../shared/widgets/apple_liquid_glass.dart';
 import '../../../../shared/widgets/animated_sort_menu_button.dart';
 
-/// Sort + filter controls.
-///
-/// Layout is always [sort | filter] left-to-right. On iOS the sort trigger is
-/// the real native Liquid Glass menu button, so the system morphs that same
-/// control into the UIMenu and back instead of hiding Flutter chrome over an
-/// invisible native anchor.
+/// Plain sort + filter controls matching the library header.
+/// Layout is always [sort | filter] left-to-right.
 class SearchActionButtons extends StatefulWidget {
   const SearchActionButtons({
     super.key,
@@ -45,19 +41,16 @@ class SearchActionButtons extends StatefulWidget {
   final double height;
   final Color? tintColor;
 
-  /// Visible sort/filter tap targets (no divider chrome). The search
-  /// category is picked in the filter sheet.
+  /// Visible square tap targets. The search category is picked in the
+  /// filter sheet, so hidden actions give their width back to search.
   static double groupWidthForHeight(double height, {int visibleControls = 2}) =>
-      height * visibleControls +
-      (appleUsesPersistentLiquidGlassHeader && visibleControls > 0 ? 32 : 0);
+      height * visibleControls;
 
   @override
   State<SearchActionButtons> createState() => _SearchActionButtonsState();
 }
 
 class _SearchActionButtonsState extends State<SearchActionButtons> {
-  static const _showDuration = Duration(milliseconds: 200);
-
   @override
   Widget build(BuildContext context) {
     final tint = widget.tintColor ?? Theme.of(context).colorScheme.primary;
@@ -69,107 +62,55 @@ class _SearchActionButtonsState extends State<SearchActionButtons> {
       visibleControls: visibleControls,
     );
 
-    final native = appleUsesPersistentLiquidGlassHeader;
-    final badge = widget.showFilter && widget.filterCount > 0
-        ? SearchFilterBadge(count: widget.filterCount)
-        : null;
-    final fallbackControls = <Widget>[
-      if (widget.showSort)
-        AnimatedSortMenuButton(
-          tooltip: widget.sortTooltip,
-          selectedValue: widget.sortValue,
-          items: widget.sortItems,
-          onSelected: widget.onSortSelected,
-          icon: widget.sortIcon,
-          systemImage: widget.sortSystemImage,
-          tintColor: tint,
-          size: height,
-        ),
-      if (widget.showFilter)
-        _ActionIcon(
-          tooltip: widget.filterTooltip,
-          icon: Icons.tune_rounded,
-          color: tint,
-          size: height,
-          onPressed: widget.isFilterLoading ? null : widget.onFilterPressed,
-          isLoading: widget.isFilterLoading,
-          badgeCount: widget.filterCount,
-        ),
-    ];
-
+    // AppBar leading slots can impose their own 56pt constraints. Align
+    // loosens those for the keyed control so its intended 48pt height is kept;
+    // Expanded only compresses the icons when a caller gives the pair less
+    // horizontal room than their normal two 48pt tap targets.
     return Align(
       widthFactor: 1,
       heightFactor: 1,
-      child: AnimatedContainer(
+      child: SizedBox(
         key: const ValueKey('search-action-capsule'),
         width: width,
         height: height,
-        duration: _showDuration,
-        curve: Curves.easeOutCubic,
         child: Directionality(
           textDirection: TextDirection.ltr,
-          child: native
-              ? Stack(
-                  children: <Widget>[
-                    AppleLiquidGlassActionGroup(
-                      height: height,
-                      captureGestures: true,
-                      children: <Widget>[
-                        if (widget.showSort)
-                          AnimatedSortMenuButton(
-                            tooltip: widget.sortTooltip,
-                            selectedValue: widget.sortValue,
-                            items: widget.sortItems,
-                            onSelected: widget.onSortSelected,
-                            icon: widget.sortIcon,
-                            systemImage: widget.sortSystemImage,
-                            tintColor: tint,
-                            size: height,
-                          ),
-                        if (widget.showFilter)
-                          AppleLiquidGlassToolbarButton(
-                            icon: Icons.tune_rounded,
-                            systemImage: widget.isFilterLoading
-                                ? 'hourglass'
-                                : 'slider.horizontal.3',
-                            tooltip: widget.filterTooltip,
-                            color: tint,
-                            onPressed: widget.isFilterLoading
-                                ? null
-                                : widget.onFilterPressed,
-                            width: height,
-                          ),
-                      ],
-                    ),
-                    if (badge != null)
-                      Positioned(
-                        top: 2,
-                        right: 14,
-                        child: IgnorePointer(child: badge),
-                      ),
-                  ],
-                )
-              : AppleLiquidGlassSurface(
-                  borderRadius: BorderRadius.circular(height / 2),
-                  interactive: true,
-                  // The search field's own fill, so the two read as one.
-                  fallbackColor: Theme.of(context)
-                      .colorScheme
-                      .surfaceContainerHighest
-                      .withValues(alpha: 0.6),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: <Widget>[
-                      for (final control in fallbackControls)
-                        Expanded(child: control),
-                    ],
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              if (widget.showSort)
+                Expanded(
+                  child: AnimatedSortMenuButton(
+                    tooltip: widget.sortTooltip,
+                    selectedValue: widget.sortValue,
+                    items: widget.sortItems,
+                    onSelected: widget.onSortSelected,
+                    icon: widget.sortIcon,
+                    systemImage: widget.sortSystemImage,
+                    tintColor: tint,
+                    size: height,
                   ),
                 ),
+              if (widget.showFilter)
+                Expanded(
+                  child: _ActionIcon(
+                    tooltip: widget.filterTooltip,
+                    icon: Icons.tune_rounded,
+                    color: tint,
+                    size: height,
+                    onPressed: widget.isFilterLoading
+                        ? null
+                        : widget.onFilterPressed,
+                    isLoading: widget.isFilterLoading,
+                    badgeCount: widget.filterCount,
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
   }
-
 
 }
 

@@ -22,6 +22,60 @@ void main() {
     expect(12 + 22, 34);
   });
 
+  testWidgets('characters immediately give the missing sort width to search', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    var showSort = true;
+    late StateSetter update;
+    final fieldKey = UniqueKey();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              update = setState;
+              return Row(
+                children: [
+                  Expanded(
+                    child: SearchGlassSurface(
+                      key: fieldKey,
+                      child: const TextField(),
+                    ),
+                  ),
+                  SearchActionButtons(
+                    showSort: showSort,
+                    sortValue: 'default',
+                    sortItems: const <AppleNativeMenuItem>[
+                      AppleNativeMenuItem(value: 'default', label: 'Default'),
+                    ],
+                    onSortSelected: (_) {},
+                    onFilterPressed: () {},
+                    sortTooltip: 'Sort',
+                    filterTooltip: 'Filters',
+                    sortIcon: Icons.swap_vert_rounded,
+                    sortSystemImage: 'arrow.up.arrow.down',
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final regular = tester.getRect(find.byKey(fieldKey)).width;
+    update(() => showSort = false);
+    await tester.pump();
+    final characters = tester.getRect(find.byKey(fieldKey)).width;
+
+    expect(characters, greaterThan(regular + 30));
+  });
+
   testWidgets('the button group keeps its height inside an AppBar slot', (
     tester,
   ) async {

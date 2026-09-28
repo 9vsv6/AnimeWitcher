@@ -155,6 +155,26 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
   });
 
+  testWidgets('phone: library filter sits on the physical right of search', (
+    tester,
+  ) async {
+    await _pump(tester, size: const Size(400, 860));
+
+    final search = tester.getRect(
+      find.byKey(const ValueKey('library-search')),
+    );
+    final filter = tester.getRect(
+      find.byKey(const ValueKey('library-filter')),
+    );
+
+    expect(
+      filter.center.dx,
+      greaterThan(search.right),
+      reason: 'the library filter belongs to the physical right of search',
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+  });
+
   testWidgets('phone: search folds the rows into one tagged grid', (
     tester,
   ) async {

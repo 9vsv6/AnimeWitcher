@@ -225,18 +225,20 @@ class _LibraryPhoneShelvesState extends ConsumerState<LibraryPhoneShelves>
                 ),
               ),
             ),
-            actions: [
-              IconButton(
-                key: const ValueKey<String>('library-filter'),
-                tooltip: _t(context, 'Filter', 'تصفية'),
-                icon: Icon(Icons.tune_rounded, color: colors.primary),
-                onPressed: () => _openFilterSheet(context),
-              ),
-              // The side menu's button, in the corner the menu comes from.
-              const AppSideMenuButton(
+            // In RTL AppBar geometry, leading is the physical right edge.
+            // Put the library filter there to match Search, while the side
+            // menu stays in the physical left corner.
+            leading: IconButton(
+              key: const ValueKey<String>('library-filter'),
+              tooltip: _t(context, 'Filter', 'تصفية'),
+              icon: Icon(Icons.tune_rounded, color: colors.primary),
+              onPressed: () => _openFilterSheet(context),
+            ),
+            actions: const [
+              AppSideMenuButton(
                 padding: EdgeInsetsDirectional.only(start: 2, end: 4),
               ),
-              const SizedBox(width: 4),
+              SizedBox(width: 4),
             ],
             bottom: FilterStyleTabBar(
               controller: _tabs,
