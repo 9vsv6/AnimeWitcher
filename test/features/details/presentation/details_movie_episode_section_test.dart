@@ -141,6 +141,7 @@ void main() {
 
     final controlsReveal = find.byKey(
       const ValueKey<String>('details-episode-controls-reveal'),
+      skipOffstage: false,
     );
     expect(controlsReveal, findsOneWidget);
     final controlsFade = tester.widget<FadeTransition>(controlsReveal);
