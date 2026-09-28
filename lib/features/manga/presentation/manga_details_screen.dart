@@ -809,19 +809,19 @@ class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Row(
                     children: <Widget>[
-                      Expanded(
-                        child: Text(
-                          chapterTitle,
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(fontWeight: FontWeight.bold),
-                        ),
+                      Text(
+                        chapterTitle,
+                        style: Theme.of(context).textTheme.titleLarge
+                            ?.copyWith(fontWeight: FontWeight.bold),
                       ),
+                      const SizedBox(width: 6),
                       Icon(
                         _chaptersExpanded
                             ? Icons.keyboard_arrow_up_rounded
                             : Icons.keyboard_arrow_down_rounded,
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
+                      const Spacer(),
                     ],
                   ),
                 ),
