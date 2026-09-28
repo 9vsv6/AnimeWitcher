@@ -104,6 +104,7 @@ void main() {
     await tester.tap(
       find.byKey(const ValueKey<String>('details-episodes-toggle')),
     );
+    await tester.pump();
     await tester.pump(const Duration(milliseconds: 80));
 
     expect(
