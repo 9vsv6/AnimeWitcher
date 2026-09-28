@@ -20,6 +20,7 @@ import '../../../core/theme/theme_provider.dart';
 import 'widgets/settings_widgets.dart';
 import 'widgets/settings_dialogs.dart';
 import 'widgets/taskbar_customization_dialog.dart';
+import 'widgets/stream_source_priority_dialog.dart';
 import 'player_settings_provider.dart';
 import 'general_settings_provider.dart';
 import '../../manga/reader/manga_reader_settings_screen.dart';
@@ -199,6 +200,67 @@ class SettingsScreen extends ConsumerWidget {
                 .label(arabic: isArabic),
             onTap: () => showSeasonsBarStylePicker(context, ref),
           ),
+          SettingsTile(
+            key: const ValueKey<String>('settings-auto-source-selection'),
+            icon: Icons.auto_awesome_rounded,
+            title: appText(
+              context,
+              english: 'Automatic server selection',
+              arabic: 'الاختيار التلقائي للسيرفر',
+            ),
+            subtitle: appText(
+              context,
+              english:
+                  'Automatically picks a source for playback and downloads. '
+                  'Quality priority is always applied before server priority.',
+              arabic:
+                  'يختار المصدر تلقائيًا للتشغيل والتنزيل. أولوية الجودة '
+                  'تُطبق دائمًا قبل أولوية السيرفر.',
+            ),
+            trailing: Switch(
+              value: generalSettings.autoSelectStreamSource,
+              onChanged: (value) => ref
+                  .read(generalSettingsProvider.notifier)
+                  .setAutoSelectStreamSource(value),
+            ),
+            onTap: () => ref
+                .read(generalSettingsProvider.notifier)
+                .setAutoSelectStreamSource(
+                  !generalSettings.autoSelectStreamSource,
+                ),
+          ),
+          if (generalSettings.autoSelectStreamSource) ...[
+            SettingsTile(
+              key: const ValueKey<String>('settings-quality-priority'),
+              icon: Icons.high_quality_rounded,
+              title: appText(
+                context,
+                english: 'Quality priority',
+                arabic: 'أولوية الجودة',
+              ),
+              subtitle: generalSettings.streamQualityPriority.join(' ← '),
+              onTap: () => showStreamQualityPriorityDialog(
+                context,
+                ref,
+                generalSettings.streamQualityPriority,
+              ),
+            ),
+            SettingsTile(
+              key: const ValueKey<String>('settings-server-priority'),
+              icon: Icons.dns_rounded,
+              title: appText(
+                context,
+                english: 'Server priority',
+                arabic: 'أولوية السيرفرات',
+              ),
+              subtitle: generalSettings.streamServerPriority.join(' ← '),
+              onTap: () => showStreamServerPriorityDialog(
+                context,
+                ref,
+                generalSettings.streamServerPriority,
+              ),
+            ),
+          ],
           SettingsTile(
             icon: Icons.home_rounded,
             title: l10n.defaultHomeScreen,
