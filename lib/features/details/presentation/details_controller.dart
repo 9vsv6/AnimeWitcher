@@ -415,9 +415,13 @@ class DetailsController extends _$DetailsController {
       }
 
       unawaited(_loadBasicDetails(provider, item, generation));
-      // Episodes are fetched right away so the Episodes tab is already
-      // populated when the user first opens it.
-      unawaited(loadEpisodesOnDemand());
+      // Series episodes are intentionally lazy: the collapsed Episodes
+      // section owns the first request. Movies/livestreams still need their
+      // single playable unit immediately, and an explicit autoplay request is
+      // itself user intent to resolve playback now.
+      if (state.isMovie || autoPlay) {
+        unawaited(loadEpisodesOnDemand());
+      }
 
       if (provider.supportsIndependentDetailSections) {
         unawaited(
@@ -476,8 +480,8 @@ class DetailsController extends _$DetailsController {
     provider.prepareForNetworkRetry();
     provider.invalidateDetailCaches(item.url);
 
+    final reloadEpisodes = _episodesRequested || state.isMovie;
     _episodesLoadFuture = null;
-    _episodesRequested = false;
     _episodesFetched = false;
 
     final reloadCast = state.cast.hasValue;
@@ -494,7 +498,7 @@ class DetailsController extends _$DetailsController {
 
     final tasks = <Future<void>>[
       _loadBasicDetails(provider, item, generation),
-      loadEpisodesOnDemand(forceReload: true),
+      if (reloadEpisodes) loadEpisodesOnDemand(forceReload: true),
     ];
     if (provider.supportsIndependentDetailSections) {
       tasks.add(
