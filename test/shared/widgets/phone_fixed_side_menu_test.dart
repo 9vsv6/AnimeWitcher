@@ -1,5 +1,6 @@
 import 'package:animewitcher/core/navigation/taskbar_destination.dart';
 import 'package:animewitcher/features/search/presentation/search_domain.dart';
+import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:animewitcher/shared/widgets/app_side_menu.dart';
 import 'package:animewitcher/shared/widgets/phone_fixed_side_menu.dart';
 import 'package:flutter/material.dart';
@@ -17,7 +18,8 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           locale: const Locale('ar'),
-          supportedLocales: const <Locale>[Locale('ar')],
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Consumer(
             builder: (context, ref, _) {
               entries = phoneFixedSideMenuEntries(
