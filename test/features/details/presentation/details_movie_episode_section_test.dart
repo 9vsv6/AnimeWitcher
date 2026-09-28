@@ -89,7 +89,7 @@ void main() {
   testWidgets('movie play control lives inside the expanded episodes section', (
     tester,
   ) async {
-    await tester.binding.setSurfaceSize(const Size(590, 900));
+    await tester.binding.setSurfaceSize(const Size(590, 1400));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     final movie = MultimediaItem(
