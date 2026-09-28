@@ -619,10 +619,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       sortTooltip:
           '${appText(context, english: 'Sort by', arabic: 'الترتيب حسب')}: ${sortOption.label(context)}',
       filterTooltip: appText(context, english: 'Filters', arabic: 'الفلاتر'),
-      // Neutral rather than the accent: these sit beside the search field's
-      // own magnifier and the taskbar's glyphs, and one pair of buttons in
-      // the app's yellow read as the only lit control on the bar.
-      tintColor: Theme.of(context).colorScheme.onSurfaceVariant,
+      // Match the library filter's theme accent.
+      tintColor: Theme.of(context).colorScheme.primary,
       height: SearchGlassSurface.height,
       onFilterPressed: _showSearchFilters,
     );
