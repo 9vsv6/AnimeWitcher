@@ -110,11 +110,6 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
-    await tester.ensureVisible(
-      find.byKey(const ValueKey<String>('details-episodes-toggle')),
-    );
-    await tester.pump();
-
     expect(find.byType(DetailsSeasonsBar), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('details-episodes-toggle')),
