@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
+import 'package:animewitcher/core/domain/stream_source_preferences.dart';
 import 'package:animewitcher/features/details/presentation/source_picker.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:animewitcher/shared/widgets/loading_indicator.dart';
