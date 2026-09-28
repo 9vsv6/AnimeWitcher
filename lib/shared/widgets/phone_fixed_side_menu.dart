@@ -10,6 +10,7 @@ import '../../features/more/presentation/recent_watched_screen.dart';
 import '../../features/more/presentation/seasons_screen.dart';
 import '../../features/news/presentation/open_news.dart';
 import '../../features/search/presentation/search_domain.dart';
+import '../../features/settings/presentation/settings_screen.dart';
 import 'app_side_menu.dart';
 
 /// The phone side menu has a product-defined order. It deliberately does not
@@ -133,6 +134,13 @@ List<AppSideMenuEntry> phoneFixedSideMenuEntries(
       icon: Icons.newspaper_rounded,
       label: arabic ? 'الأخبار' : 'News',
       onTap: () => openNewsScreen(context, ref),
+    ),
+    AppSideMenuEntry(
+      id: 'settings',
+      icon: Icons.settings_rounded,
+      label: arabic ? 'الإعدادات' : 'Settings',
+      dividerBefore: true,
+      onTap: () => open(const SettingsScreen()),
     ),
   ];
 }
