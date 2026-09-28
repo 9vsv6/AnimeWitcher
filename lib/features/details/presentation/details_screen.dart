@@ -996,9 +996,23 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     if (!ready) {
       return [
         SliverToBoxAdapter(
-          child: SizedBox(
-            height: 200,
-            child: Center(child: _episodeLoadStatus(context, episodesState)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Franchise seasons are independent from episode availability.
+              // Upcoming seasons can legitimately have no episodes yet.
+              DetailsSeasonsBar(
+                itemUrl: widget.item.url,
+                current: item,
+                onOpen: (child) => _openExtraAnime(item, child),
+              ),
+              SizedBox(
+                height: 200,
+                child: Center(
+                  child: _episodeLoadStatus(context, episodesState),
+                ),
+              ),
+            ],
           ),
         ),
       ];
@@ -1698,10 +1712,22 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       );
     }
 
-    return SizedBox(
-      height: 280,
-      width: double.infinity,
-      child: Center(child: _episodeLoadStatus(context, episodesState)),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Keep the franchise chain available even before this season airs its
+        // first episode (or while episode loading fails independently).
+        DetailsSeasonsBar(
+          itemUrl: widget.item.url,
+          current: item,
+          onOpen: (child) => _openExtraAnime(item, child),
+        ),
+        SizedBox(
+          height: 280,
+          width: double.infinity,
+          child: Center(child: _episodeLoadStatus(context, episodesState)),
+        ),
+      ],
     );
   }
 }
