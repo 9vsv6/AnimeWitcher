@@ -1012,20 +1012,20 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Row(
             children: <Widget>[
-              Expanded(
-                child: Text(
-                  AppLocalizations.of(context)!.episodes,
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              Text(
+                AppLocalizations.of(context)!.episodes,
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
                 ),
               ),
+              const SizedBox(width: 6),
               Icon(
                 _episodesExpanded
                     ? Icons.keyboard_arrow_up_rounded
                     : Icons.keyboard_arrow_down_rounded,
                 color: theme.colorScheme.onSurfaceVariant,
               ),
+              const Spacer(),
             ],
           ),
         ),
