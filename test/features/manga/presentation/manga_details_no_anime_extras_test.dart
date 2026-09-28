@@ -174,8 +174,8 @@ void main() {
           mangaReaderCustomCoversProvider.overrideWith(
             _EmptyCustomCoverNotifier.new,
           ),
-          // A wide window names the chapter to read next as soon as the
-          // page opens, which reads reading progress.
+          // Reading progress is consulted only after the collapsed chapters
+          // section is opened.
           mangaReadingRepositoryProvider.overrideWithValue(
             MangaReadingRepository(MemoryStorageService()),
           ),
@@ -198,8 +198,30 @@ void main() {
     );
     await _pumpUntil(
       tester,
+      () =>
+          provider.mangaDetailsCalls == 1 &&
+          find
+              .byKey(const ValueKey<String>('manga-chapters-toggle'))
+              .evaluate()
+              .isNotEmpty,
+      reason: 'manga details did not complete',
+    );
+
+    expect(provider.mangaChapterCalls, 0);
+
+    final page = find.byType(Scrollable).first;
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey<String>('manga-chapters-toggle')),
+      200,
+      scrollable: page,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('manga-chapters-toggle')),
+    );
+    await _pumpUntil(
+      tester,
       () => provider.mangaChapterCalls == 1,
-      reason: 'manga chapter load did not complete',
+      reason: 'opening chapters did not start the manga chapter request',
     );
 
     expect(provider.mangaDetailsCalls, 1);
