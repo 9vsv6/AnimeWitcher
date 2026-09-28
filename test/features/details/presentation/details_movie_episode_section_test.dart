@@ -139,16 +139,27 @@ void main() {
     expect(fade.opacity.value, greaterThan(0));
     expect(fade.opacity.value, lessThan(1));
 
-    for (final control in <Finder>[
-      find.byKey(const ValueKey<String>('episode-filter-all')),
-      find.byType(DetailsHeroPlayPill),
-    ]) {
-      expect(
-        find.ancestor(of: control, matching: find.byType(FadeTransition)),
-        findsOneWidget,
-        reason: 'episode controls should reveal with the episode list',
-      );
-    }
+    final controlsReveal = find.byKey(
+      const ValueKey<String>('details-episode-controls-reveal'),
+    );
+    expect(controlsReveal, findsOneWidget);
+    final controlsFade = tester.widget<FadeTransition>(controlsReveal);
+    expect(controlsFade.opacity.value, greaterThan(0));
+    expect(controlsFade.opacity.value, lessThan(1));
+    expect(
+      find.descendant(
+        of: controlsReveal,
+        matching: find.byKey(const ValueKey<String>('episode-filter-all')),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: controlsReveal,
+        matching: find.byType(DetailsHeroPlayPill),
+      ),
+      findsOneWidget,
+    );
 
     await tester.pumpAndSettle();
     expect(find.byType(DetailsHeroPlayPill), findsOneWidget);
