@@ -33,22 +33,25 @@ void main() {
       ),
     );
 
-    final storyFinder = find.byKey(const ValueKey<String>('story'));
-    final collapsed = tester.getSize(storyFinder).height;
+    final reveal = find.byKey(
+      const ValueKey<String>('expandable-text-size-transition'),
+    );
+    expect(reveal, findsOneWidget);
+    final collapsed = tester.getSize(reveal).height;
 
     await tester.tap(find.text('عرض المزيد'));
     await tester.pump(const Duration(milliseconds: 80));
-    final mid = tester.getSize(storyFinder).height;
+    final mid = tester.getSize(reveal).height;
 
     await tester.pumpAndSettle();
-    final expanded = tester.getSize(storyFinder).height;
+    final expanded = tester.getSize(reveal).height;
 
     expect(mid, greaterThan(collapsed));
     expect(mid, lessThan(expanded));
 
     await tester.tap(find.text('عرض أقل'));
     await tester.pump(const Duration(milliseconds: 80));
-    final collapsing = tester.getSize(storyFinder).height;
+    final collapsing = tester.getSize(reveal).height;
     expect(collapsing, lessThan(expanded));
     expect(collapsing, greaterThan(collapsed));
   });
