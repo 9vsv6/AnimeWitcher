@@ -79,7 +79,8 @@ class MangaDetailsScreen extends ConsumerStatefulWidget {
   ConsumerState<MangaDetailsScreen> createState() => _MangaDetailsScreenState();
 }
 
-class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen>\n    with SingleTickerProviderStateMixin {
+class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen>
+    with SingleTickerProviderStateMixin {
   static const String _removeLibraryAction = '__remove_from_library__';
 
   int? _userRating;
