@@ -256,6 +256,10 @@ void main() {
         findsOneWidget,
       );
 
+      await tester.ensureVisible(
+        find.byKey(const ValueKey<String>('manga-chapters-toggle')),
+      );
+      await tester.pump();
       await tester.tap(
         find.byKey(const ValueKey<String>('manga-chapters-toggle')),
       );
