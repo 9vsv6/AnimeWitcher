@@ -86,10 +86,11 @@ class DownloadLauncher {
       final StreamResult? selected;
       if (preferences.autoSelectStreamSource) {
         final sources = await sourceFuture;
-        selected = selectPreferredStreamSource(
+        selected = await resolvePreferredStreamSource(
           sources,
           qualityPriority: preferences.streamQualityPriority,
           serverPriority: preferences.streamServerPriority,
+          resolveCandidate: (candidate) => provider.loadStreams(candidate.url),
         );
         if (selected == null) {
           throw Exception('لم يتم العثور على مصادر تشغيل.');
