@@ -558,24 +558,28 @@ class SliverDetailsEpisodeList extends ConsumerWidget {
     return SliverMainAxisGroup(
       slivers: [
         SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: LayoutConstants.spacingMd),
-            child: EpisodeBrowseBar(
-              episodes: allEpisodes,
-              leading: DetailsEpisodeFilterBar(itemUrl: itemUrl),
-              trailing: DetailsEpisodeSortButton(itemUrl: itemUrl),
+          child: _withTransition(
+            Padding(
+              padding: const EdgeInsets.only(bottom: LayoutConstants.spacingMd),
+              child: EpisodeBrowseBar(
+                episodes: allEpisodes,
+                leading: DetailsEpisodeFilterBar(itemUrl: itemUrl),
+                trailing: DetailsEpisodeSortButton(itemUrl: itemUrl),
+              ),
             ),
           ),
         ),
         SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: LayoutConstants.spacingMd),
-            child: Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: DetailsHeroPlayPill(
-                item: parentItem,
-                details: details,
-                itemUrl: itemUrl,
+          child: _withTransition(
+            Padding(
+              padding: const EdgeInsets.only(bottom: LayoutConstants.spacingMd),
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: DetailsHeroPlayPill(
+                  item: parentItem,
+                  details: details,
+                  itemUrl: itemUrl,
+                ),
               ),
             ),
           ),
