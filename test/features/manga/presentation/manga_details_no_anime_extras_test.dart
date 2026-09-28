@@ -209,12 +209,10 @@ void main() {
 
     expect(provider.mangaChapterCalls, 0);
 
-    final page = find.byType(Scrollable).first;
-    await tester.scrollUntilVisible(
+    await tester.ensureVisible(
       find.byKey(const ValueKey<String>('manga-chapters-toggle')),
-      200,
-      scrollable: page,
     );
+    await tester.pump();
     await tester.tap(
       find.byKey(const ValueKey<String>('manga-chapters-toggle')),
     );
