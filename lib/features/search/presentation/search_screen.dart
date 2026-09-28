@@ -628,6 +628,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   Widget _buildMobileSearchField(BuildContext context) {
     final theme = Theme.of(context);
+    final fieldDirection = Directionality.of(context);
     final searchPlaceholder = searchDomainHint(
       context,
       ref.watch(searchDomainProvider),
@@ -677,7 +678,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               );
             }
 
-            final fieldDirection = Directionality.of(context);
             return Directionality(
               textDirection: fieldDirection,
               child: TextField(
