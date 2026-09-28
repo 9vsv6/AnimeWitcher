@@ -288,7 +288,7 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                         arabic: 'الفلاتر',
                       ),
                       onFilterPressed: widget.onShowFilters,
-                      // Neutral, like the glyphs it sits beside.
+                      // Match the library filter's theme accent.
                       tintColor: theme.colorScheme.primary,
                       height: SearchGlassSurface.height,
                     ),
