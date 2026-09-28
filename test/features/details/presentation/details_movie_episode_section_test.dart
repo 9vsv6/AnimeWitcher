@@ -20,6 +20,25 @@ final class _Storage extends MemoryStorageService {
 
   @override
   int getPosition(String url) => 0;
+
+  @override
+  List<Map<String, dynamic>> getWatchHistory() => const <Map<String, dynamic>>[];
+
+  @override
+  int getEpisodePosition(
+    String epUrl, {
+    String? mainUrl,
+    int? season,
+    int? episode,
+  }) => 0;
+
+  @override
+  int getEpisodeDuration(
+    String epUrl, {
+    String? mainUrl,
+    int? season,
+    int? episode,
+  }) => 0;
 }
 
 final class _EmptyLibrary extends Library {
