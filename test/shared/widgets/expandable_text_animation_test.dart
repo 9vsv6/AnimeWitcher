@@ -40,6 +40,7 @@ void main() {
     final collapsed = tester.getSize(reveal).height;
 
     await tester.tap(find.text('عرض المزيد'));
+    await tester.pump();
     await tester.pump(const Duration(milliseconds: 80));
     final mid = tester.getSize(reveal).height;
 
@@ -50,6 +51,7 @@ void main() {
     expect(mid, lessThan(expanded));
 
     await tester.tap(find.text('عرض أقل'));
+    await tester.pump();
     await tester.pump(const Duration(milliseconds: 80));
     final collapsing = tester.getSize(reveal).height;
     expect(collapsing, lessThan(expanded));
