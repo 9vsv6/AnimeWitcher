@@ -377,10 +377,25 @@ void main() {
     expect(find.byIcon(Icons.favorite_border_rounded), findsWidgets);
 
     final page = find.byType(Scrollable).first;
-    await tester.scrollUntilVisible(
+    expect(
       find.byKey(const ValueKey<String>('manga-chapter-row-12.5')),
+      findsNothing,
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey<String>('manga-chapters-toggle')),
       200,
       scrollable: page,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('manga-chapters-toggle')),
+    );
+    await _pumpUntil(
+      tester,
+      () => find
+          .byKey(const ValueKey<String>('manga-chapter-row-12.5'))
+          .evaluate()
+          .isNotEmpty,
+      reason: 'opening chapters did not render the chapter row',
     );
     expect(find.text('الفصل 12.5'), findsOneWidget);
     // Nothing of the anime page's own sections.
@@ -406,13 +421,7 @@ void main() {
             .isNotEmpty,
         reason: 'the wide page did not appear',
       );
-      // The rows are built as the page scrolls to them.
       final page = find.byType(Scrollable).first;
-      await tester.scrollUntilVisible(
-        find.byKey(const ValueKey<String>('manga-chapter-row-12.5')),
-        200,
-        scrollable: page,
-      );
 
       expect(
         find.byKey(const ValueKey<String>('manga-details-wide')),
@@ -525,6 +534,22 @@ void main() {
 
       final page = find.byType(Scrollable).first;
       await tester.scrollUntilVisible(
+        find.byKey(const ValueKey<String>('manga-chapters-toggle')),
+        200,
+        scrollable: page,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('manga-chapters-toggle')),
+      );
+      await _pumpUntil(
+        tester,
+        () => find
+            .byKey(const ValueKey<String>('manga-chapter-range-menu'))
+            .evaluate()
+            .isNotEmpty,
+        reason: 'opening chapters did not reveal chapter tools',
+      );
+      await tester.scrollUntilVisible(
         find.byKey(const ValueKey<String>('manga-chapter-range-menu')),
         200,
         scrollable: page,
@@ -579,6 +604,22 @@ void main() {
         reason: 'the wide page did not appear',
       );
       final page = find.byType(Scrollable).first;
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey<String>('manga-chapters-toggle')),
+        200,
+        scrollable: page,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('manga-chapters-toggle')),
+      );
+      await _pumpUntil(
+        tester,
+        () => find
+            .byKey(const ValueKey<String>('manga-chapter-range-menu'))
+            .evaluate()
+            .isNotEmpty,
+        reason: 'opening chapters did not reveal the range menu',
+      );
       // Down to the chapters, and a screen into them.
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey<String>('manga-chapter-range-menu')),
