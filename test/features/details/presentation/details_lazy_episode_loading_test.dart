@@ -1,6 +1,7 @@
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
 import 'package:animewitcher/core/extensions/base_provider.dart';
 import 'package:animewitcher/core/extensions/extension_manager.dart';
+import 'package:animewitcher/core/providers/episode_sort_provider.dart';
 import 'package:animewitcher/features/details/presentation/details_controller.dart';
 import 'package:animewitcher/features/library/presentation/downloads_provider.dart';
 import 'package:animewitcher/features/library/presentation/history_provider.dart';
@@ -80,6 +81,14 @@ final class _Manager extends ExtensionManager {
   List<AnimeWitcherProvider> build() => <AnimeWitcherProvider>[provider];
 }
 
+final class _AscendingSort extends EpisodeSortAscendingNotifier {
+  @override
+  bool build() => true;
+
+  @override
+  void setAscending(bool value) => state = value;
+}
+
 final class _EmptyDownloads extends DownloadsNotifier {
   @override
   Future<List<DownloadItem>> build() async => const <DownloadItem>[];
@@ -103,6 +112,7 @@ void main() {
       overrides: [
         extensionManagerProvider.overrideWith(() => _Manager(provider)),
         activeProviderProvider.overrideWithValue(provider),
+        episodeSortAscendingProvider.overrideWith(() => _AscendingSort()),
         downloadsProvider.overrideWith(() => _EmptyDownloads()),
         watchHistoryProvider.overrideWith(() => _EmptyHistory()),
       ],
