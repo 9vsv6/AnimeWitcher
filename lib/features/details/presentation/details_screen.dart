@@ -990,13 +990,17 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
 
   void _toggleEpisodes() {
     final expanded = !_episodesExpanded;
+    final controller = ref.read(
+      detailsControllerProvider(widget.item.url).notifier,
+    );
+    if (!expanded) {
+      // Collapsing the section hides every episode-owned control, including
+      // the pinned multi-selection surface.
+      controller.clearEpisodeSelection();
+    }
     setState(() => _episodesExpanded = expanded);
     if (expanded) {
-      unawaited(
-        ref
-            .read(detailsControllerProvider(widget.item.url).notifier)
-            .loadEpisodesOnDemand(),
-      );
+      unawaited(controller.loadEpisodesOnDemand());
     }
   }
 
