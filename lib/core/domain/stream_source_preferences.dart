@@ -5,12 +5,16 @@ const List<String> defaultStreamServerPriority = <String>[
   'MF',
   'ST',
   'SF',
+  'GF',
+  'KF',
 ];
 
 const List<String> defaultStreamQualityPriority = <String>[
+  '2160p',
   '1080p',
   '720p',
   '480p',
+  '360p',
   'متعدد',
 ];
 
