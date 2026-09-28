@@ -46,9 +46,13 @@ final class _Harness {
   bool canOpen = true;
 }
 
-Future<_Harness> _pump(WidgetTester tester, {bool signedIn = false}) async {
+Future<_Harness> _pump(
+  WidgetTester tester, {
+  bool signedIn = false,
+  Size size = const Size(400, 860),
+}) async {
   final harness = _Harness();
-  tester.view.physicalSize = const Size(400, 860);
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -185,6 +189,36 @@ void main() {
       find.byKey(const ValueKey<String>('app-side-menu-account-cover')),
     );
     expect((cover.image as NetworkImage).url, 'https://example.test/banner.jpg');
+  });
+
+  testWidgets('account banner scrolls with pages while close stays pinned', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      signedIn: true,
+      size: const Size(400, 500),
+    );
+    await tester.tap(find.byKey(const ValueKey('app-side-menu-button')));
+    await tester.pumpAndSettle();
+
+    final banner = find.byKey(
+      const ValueKey<String>('app-side-menu-account-banner'),
+    );
+    final close = find.byKey(const ValueKey<String>('app-side-menu-close'));
+    final list = find.descendant(
+      of: _menu,
+      matching: find.byType(ListView),
+    );
+
+    final bannerBefore = tester.getTopLeft(banner).dy;
+    final closeBefore = tester.getTopLeft(close).dy;
+
+    await tester.drag(list, const Offset(0, -220));
+    await tester.pumpAndSettle();
+
+    expect(tester.getTopLeft(banner).dy, lessThan(bannerBefore - 20));
+    expect(tester.getTopLeft(close).dy, closeTo(closeBefore, 0.5));
   });
 
   testWidgets('✕, a tap on the page and the back button all close it', (
