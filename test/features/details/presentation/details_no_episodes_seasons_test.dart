@@ -110,6 +110,13 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
+    final page = find.byType(Scrollable).first;
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey<String>('details-episodes-toggle')),
+      160,
+      scrollable: page,
+    );
+
     expect(find.byType(DetailsSeasonsBar), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('details-episodes-toggle')),
