@@ -126,9 +126,28 @@ class PlaybackLauncher {
               .sources(provider, episodeDataUrl);
     final preferences = _ref.read(generalSettingsProvider);
     if (preferences.autoSelectStreamSource) {
+      var canceled = false;
+      var dialogDismissed = false;
+      unawaited(
+        LoadingDialog.show(
+          context,
+          message: AppLocalizations.of(context)!.loading,
+          onCancel: () {
+            canceled = true;
+            dialogDismissed = true;
+          },
+        ),
+      );
+
+      void dismissLoading() {
+        if (dialogDismissed || !context.mounted) return;
+        Navigator.of(context, rootNavigator: true).pop();
+        dialogDismissed = true;
+      }
+
       try {
         final sources = await future;
-        if (!context.mounted) return null;
+        if (canceled || !context.mounted) return null;
         final selected = await resolvePreferredStreamSource(
           sources,
           qualityPriority: preferences.streamQualityPriority,
@@ -136,6 +155,8 @@ class PlaybackLauncher {
           resolveCandidate: (StreamResult candidate) =>
               provider.loadStreams(candidate.url),
         );
+        if (canceled || !context.mounted) return null;
+        dismissLoading();
         if (selected == null) {
           _ref
               .read(notificationServiceProvider)
@@ -143,7 +164,8 @@ class PlaybackLauncher {
         }
         return selected;
       } catch (error) {
-        if (context.mounted) {
+        dismissLoading();
+        if (context.mounted && !canceled) {
           _ref
               .read(notificationServiceProvider)
               .showError(
