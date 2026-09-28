@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:animewitcher/shared/widgets/app_side_menu.dart';
 
 import '../../../core/account/account_providers.dart';
 import '../../../core/navigation/app_layout_style.dart';
