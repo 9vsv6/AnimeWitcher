@@ -17,6 +17,9 @@ import '../../../support/memory_storage_service.dart';
 final class _Storage extends MemoryStorageService {
   @override
   String? getString(String key) => settings[key] as String?;
+
+  @override
+  int getPosition(String url) => 0;
 }
 
 final class _EmptyLibrary extends Library {
