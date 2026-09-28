@@ -62,39 +62,51 @@ class _SearchActionButtonsState extends State<SearchActionButtons> {
       visibleControls: visibleControls,
     );
 
-    return SizedBox(
-      key: const ValueKey('search-action-capsule'),
-      width: width,
-      height: height,
-      child: Directionality(
-        textDirection: TextDirection.ltr,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            if (widget.showSort)
-              AnimatedSortMenuButton(
-                tooltip: widget.sortTooltip,
-                selectedValue: widget.sortValue,
-                items: widget.sortItems,
-                onSelected: widget.onSortSelected,
-                icon: widget.sortIcon,
-                systemImage: widget.sortSystemImage,
-                tintColor: tint,
-                size: height,
-              ),
-            if (widget.showFilter)
-              _ActionIcon(
-                tooltip: widget.filterTooltip,
-                icon: Icons.tune_rounded,
-                color: tint,
-                size: height,
-                onPressed: widget.isFilterLoading
-                    ? null
-                    : widget.onFilterPressed,
-                isLoading: widget.isFilterLoading,
-                badgeCount: widget.filterCount,
-              ),
-          ],
+    // AppBar leading slots can impose their own 56pt constraints. Align
+    // loosens those for the keyed control so its intended 48pt height is kept;
+    // Expanded only compresses the icons when a caller gives the pair less
+    // horizontal room than their normal two 48pt tap targets.
+    return Align(
+      widthFactor: 1,
+      heightFactor: 1,
+      child: SizedBox(
+        key: const ValueKey('search-action-capsule'),
+        width: width,
+        height: height,
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              if (widget.showSort)
+                Expanded(
+                  child: AnimatedSortMenuButton(
+                    tooltip: widget.sortTooltip,
+                    selectedValue: widget.sortValue,
+                    items: widget.sortItems,
+                    onSelected: widget.onSortSelected,
+                    icon: widget.sortIcon,
+                    systemImage: widget.sortSystemImage,
+                    tintColor: tint,
+                    size: height,
+                  ),
+                ),
+              if (widget.showFilter)
+                Expanded(
+                  child: _ActionIcon(
+                    tooltip: widget.filterTooltip,
+                    icon: Icons.tune_rounded,
+                    color: tint,
+                    size: height,
+                    onPressed: widget.isFilterLoading
+                        ? null
+                        : widget.onFilterPressed,
+                    isLoading: widget.isFilterLoading,
+                    badgeCount: widget.filterCount,
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
