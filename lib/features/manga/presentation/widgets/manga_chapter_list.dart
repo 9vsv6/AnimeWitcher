@@ -68,6 +68,8 @@ class MangaChapterList extends ConsumerStatefulWidget {
     this.embedded = false,
     this.onSelectionBarChanged,
     this.topAction,
+    this.transition,
+    this.revealKey,
   });
 
   final List<MangaChapter> chapters;
@@ -77,6 +79,8 @@ class MangaChapterList extends ConsumerStatefulWidget {
   final ValueChanged<DownloadItem>? onDeleteDownload;
   final ValueChanged<Widget?>? onSelectionBarChanged;
   final Widget? topAction;
+  final Animation<double>? transition;
+  final Key? revealKey;
 
   /// Laid out as part of a longer page that does the scrolling — the wide
   /// details layout, where the chapters follow the synopsis the way the
@@ -90,6 +94,22 @@ class MangaChapterList extends ConsumerStatefulWidget {
 
 class _MangaChapterListState extends ConsumerState<MangaChapterList> {
   final Set<String> _selectedChapterIds = <String>{};
+
+  Widget _withTransition(Widget child, {Key? key}) {
+    final animation = widget.transition;
+    if (animation == null) return child;
+    return FadeTransition(
+      key: key,
+      opacity: animation,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, -0.045),
+          end: Offset.zero,
+        ).animate(animation),
+        child: child,
+      ),
+    );
+  }
 
   /// The range menu's pick; null shows every chapter, which is the default.
   int? _rangeIndex;
@@ -739,19 +759,23 @@ class _MangaChapterListState extends ConsumerState<MangaChapterList> {
       return SliverMainAxisGroup(
         slivers: <Widget>[
           SliverToBoxAdapter(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                toolbar,
-                const SizedBox(height: 8),
-              ],
+            child: _withTransition(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  toolbar,
+                  const SizedBox(height: 8),
+                ],
+              ),
+              key: widget.revealKey,
             ),
           ),
           if (chapters.isEmpty) SliverToBoxAdapter(child: emptyNote()),
           SliverList.separated(
             itemCount: chapters.length,
             separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (context, index) => row(chapters[index]),
+            itemBuilder: (context, index) =>
+                _withTransition(row(chapters[index])),
           ),
         ],
       );
