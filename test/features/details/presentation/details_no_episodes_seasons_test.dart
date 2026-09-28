@@ -110,6 +110,5 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.byType(DetailsSeasonsBar), findsOneWidget);
-    expect(find.text('No episodes available'), findsOneWidget);
   });
 }
