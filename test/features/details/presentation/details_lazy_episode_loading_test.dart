@@ -57,7 +57,7 @@ final class _Provider extends AnimeWitcherProvider {
   @override
   Future<List<Episode>> getEpisodes(String url) async {
     episodeCalls++;
-    return const <Episode>[
+    return <Episode>[
       Episode(
         name: 'Episode 1',
         url: 'episode://1',
