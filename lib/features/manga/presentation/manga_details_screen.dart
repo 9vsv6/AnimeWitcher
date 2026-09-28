@@ -87,6 +87,7 @@ class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen> {
   bool _loadedUserRatingSignedIn = false;
   String? _loadedUserRatingMangaId;
   Widget? _chapterSelectionBar;
+  bool _chaptersExpanded = false;
 
   @override
   void initState() {
@@ -504,16 +505,15 @@ class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen> {
       ),
     };
 
-    // White on the artwork like the anime page's play pill: the one control
-    // in the row that is not glass.
-    const background = Color(0xFFF2F3F5);
-    const foreground = Color(0xFF101114);
+    final colors = Theme.of(context).colorScheme;
+    final background = colors.primary;
+    final foreground = colors.onPrimary;
     return Semantics(
       button: true,
       label: label,
       child: Material(
         key: const ValueKey<String>('manga-read-pill'),
-        color: target != null ? background : background.withValues(alpha: 0.45),
+        color: target != null ? background : background.withValues(alpha: 0.38),
         borderRadius: BorderRadius.circular(kDetailsHeroActionHeight / 2),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -525,7 +525,7 @@ class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  const Icon(
+                  Icon(
                     Icons.menu_book_rounded,
                     size: 22,
                     color: foreground,
@@ -537,7 +537,7 @@ class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen> {
                       label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: foreground,
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
@@ -558,8 +558,6 @@ class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen> {
   Widget _heroActions(
     BuildContext context,
     MultimediaItem item, {
-    required List<MangaChapter>? chapters,
-    required void Function(MangaChapter chapter) open,
     required dynamic libraryNotifier,
     required bool isFavorite,
     required LibraryCategory? currentCategory,
@@ -572,7 +570,6 @@ class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen> {
       runSpacing: 12,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: <Widget>[
-        _readPill(context, chapters, open),
         PopupMenuButton<String>(
           tooltip: appText(
             context,
@@ -725,6 +722,25 @@ class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen> {
     );
   }
 
+  void _toggleChapters() {
+    final expanded = !_chaptersExpanded;
+    setState(() {
+      _chaptersExpanded = expanded;
+      if (!expanded) {
+        // The selection bar belongs to the chapter section; it must disappear
+        // with the list instead of staying pinned over the collapsed page.
+        _chapterSelectionBar = null;
+      }
+    });
+    if (expanded) {
+      unawaited(
+        ref
+            .read(mangaDetailsControllerProvider(widget.item.url).notifier)
+            .loadChaptersOnDemand(),
+      );
+    }
+  }
+
   /// A wide window gets the anime page's layout: the artwork across the top
   /// with the title, the buttons and the synopsis on it, then the chapters
   /// on the same page, then the particulars.
@@ -781,8 +797,6 @@ class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen> {
         heroActions: _heroActions(
           context,
           item,
-          chapters: chapters,
-          open: open,
           libraryNotifier: libraryNotifier,
           isFavorite: isFavorite,
           currentCategory: currentCategory,
@@ -792,53 +806,73 @@ class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen> {
           key: const ValueKey<String>('manga-details-wide'),
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: Text(
-                    chapterTitle,
-                    style: Theme.of(context).textTheme.titleLarge
-                        ?.copyWith(fontWeight: FontWeight.bold),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                key: const ValueKey<String>('manga-chapters-toggle'),
+                onTap: _toggleChapters,
+                borderRadius: BorderRadius.circular(14),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    children: <Widget>[
+                      Text(
+                        chapterTitle,
+                        style: Theme.of(context).textTheme.titleLarge
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(width: 6),
+                      Icon(
+                        _chaptersExpanded
+                            ? Icons.keyboard_arrow_up_rounded
+                            : Icons.keyboard_arrow_down_rounded,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                      const Spacer(),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                const MangaChapterSortButton(),
-              ],
+              ),
             ),
             const SizedBox(height: 12),
           ],
         ),
         // The chapters are built as they scroll into view.
         slivers: <Widget>[
-          state.chapters.when(
-            loading: () => const SliverToBoxAdapter(
-              child: SizedBox(
-                height: 200,
-                child: Center(child: AppLoadingIndicator()),
+          if (_chaptersExpanded)
+            state.chapters.when(
+              loading: () => const SliverToBoxAdapter(
+                child: SizedBox(
+                  height: 200,
+                  child: Center(child: AppLoadingIndicator()),
+                ),
+              ),
+              error: (_, _) => SliverToBoxAdapter(
+                child: SizedBox(
+                  height: 200,
+                  child: _RetryPanel(onRetry: controller.retry),
+                ),
+              ),
+              data: (chapters) => MangaChapterList(
+                embedded: true,
+                chapters: chapters,
+                topAction: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: _readPill(context, chapters, open),
+                ),
+                onSelectionBarChanged: (bar) {
+                  if (!mounted || identical(_chapterSelectionBar, bar)) return;
+                  setState(() => _chapterSelectionBar = bar);
+                },
+                downloads: downloads,
+                onDeleteDownload: (download) =>
+                    unawaited(confirmAndRemoveDownload(context, ref, download)),
+                onOpen: open,
+                onDownload:
+                    widget.onDownloadChapter ??
+                    (chapter) => unawaited(controller.downloadChapter(chapter)),
               ),
             ),
-            error: (_, _) => SliverToBoxAdapter(
-              child: SizedBox(
-                height: 200,
-                child: _RetryPanel(onRetry: controller.retry),
-              ),
-            ),
-            data: (chapters) => MangaChapterList(
-              embedded: true,
-              chapters: chapters,
-              onSelectionBarChanged: (bar) {
-                if (!mounted || identical(_chapterSelectionBar, bar)) return;
-                setState(() => _chapterSelectionBar = bar);
-              },
-              downloads: downloads,
-              onDeleteDownload: (download) =>
-                  unawaited(confirmAndRemoveDownload(context, ref, download)),
-              onOpen: open,
-              onDownload:
-                  widget.onDownloadChapter ??
-                  (chapter) => unawaited(controller.downloadChapter(chapter)),
-            ),
-          ),
           SliverToBoxAdapter(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,

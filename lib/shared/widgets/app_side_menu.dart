@@ -20,12 +20,20 @@ class AppSideMenuEntry {
     required this.icon,
     required this.label,
     required this.onTap,
+    this.selected = false,
+    this.dividerBefore = false,
   });
 
   final String id;
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+
+  /// Marks the row when it represents the page/search domain currently open.
+  final bool selected;
+
+  /// Starts a new fixed menu group with the same divider used after account.
+  final bool dividerBefore;
 }
 
 /// Lets a page open the side menu from a button of its own. Present only
@@ -527,14 +535,28 @@ class AppSideMenuPanel extends ConsumerWidget {
                         color: colors.outlineVariant.withValues(alpha: 0.5),
                       ),
                     ),
-                  for (final entry in entries)
+                  for (final entry in entries) ...[
+                    if (entry.dividerBefore)
+                      Padding(
+                        key: ValueKey<String>(
+                          'app-side-menu-divider-before-${entry.id}',
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Divider(
+                          height: 1,
+                          indent: 4,
+                          endIndent: 4,
+                          color: colors.outlineVariant.withValues(alpha: 0.5),
+                        ),
+                      ),
                     _SideMenuRow(
                       key: ValueKey<String>('app-side-menu-page-${entry.id}'),
                       icon: entry.icon,
                       label: entry.label,
-                      selected: false,
+                      selected: entry.selected,
                       onTap: () => onEntry?.call(entry),
                     ),
+                  ],
                 ],
               ),
             ),

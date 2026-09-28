@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:animewitcher/shared/widgets/app_side_menu.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:animewitcher/shared/widgets/app_side_menu.dart';
 
 import '../../../core/account/account_providers.dart';
 import '../../../core/navigation/app_layout_style.dart';
@@ -19,49 +19,6 @@ import 'seasons_screen.dart';
 import '../../../core/utils/localized_text.dart';
 import '../../../core/utils/layout_constants.dart';
 import 'more_sidebar_shell.dart';
-
-/// The pages the phone's More tab held, as rows of the side menu that took
-/// its place: the account heads the menu already, so these are the rest.
-List<AppSideMenuEntry> phoneMoreMenuEntries(BuildContext context) {
-  final isArabic =
-      Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
-  void open(Widget page) => Navigator.of(
-    context,
-    rootNavigator: true,
-  ).push(MaterialPageRoute<void>(builder: (_) => page));
-  return <AppSideMenuEntry>[
-    AppSideMenuEntry(
-      id: 'coming-soon',
-      icon: Icons.upcoming_rounded,
-      label: isArabic ? 'القادم قريبًا' : 'Coming soon',
-      onTap: () => open(const ComingSoonScreen()),
-    ),
-    AppSideMenuEntry(
-      id: 'global-statistics',
-      icon: Icons.query_stats_rounded,
-      label: isArabic ? 'الإحصائيات العالمية' : 'Global statistics',
-      onTap: () => open(const GlobalStatisticsScreen()),
-    ),
-    AppSideMenuEntry(
-      id: 'seasons',
-      icon: Icons.calendar_month_rounded,
-      label: isArabic ? 'المواسم' : 'Seasons',
-      onTap: () => open(const SeasonsScreen()),
-    ),
-    AppSideMenuEntry(
-      id: 'broadcast-schedule',
-      icon: Icons.calendar_view_week_rounded,
-      label: isArabic ? 'جدول البث' : 'Broadcast schedule',
-      onTap: () => open(const BroadcastScheduleScreen()),
-    ),
-    AppSideMenuEntry(
-      id: 'settings',
-      icon: Icons.settings_rounded,
-      label: isArabic ? 'الإعدادات' : 'Settings',
-      onTap: () => open(const SettingsScreen()),
-    ),
-  ];
-}
 
 class MoreScreen extends ConsumerWidget {
   const MoreScreen({super.key});

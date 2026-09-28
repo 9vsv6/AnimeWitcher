@@ -55,16 +55,15 @@ class DetailsHeroPlayPill extends ConsumerWidget {
       itemUrl: itemUrl,
     );
 
-    // White on the artwork, the way the one unmissable control on a poster
-    // frame is: everything else in this row is glass, and this is not.
-    const background = Color(0xFFF2F3F5);
-    const foreground = Color(0xFF101114);
+    final colors = Theme.of(context).colorScheme;
+    final background = colors.primary;
+    final foreground = colors.onPrimary;
 
     return Semantics(
       button: true,
       label: label,
       child: Material(
-        color: ready ? background : background.withValues(alpha: 0.45),
+        color: ready ? background : background.withValues(alpha: 0.38),
         borderRadius: BorderRadius.circular(kDetailsHeroActionHeight / 2),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -81,7 +80,7 @@ class DetailsHeroPlayPill extends ConsumerWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (isLaunching)
-                    const SizedBox.square(
+                    SizedBox.square(
                       dimension: 18,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
@@ -89,7 +88,7 @@ class DetailsHeroPlayPill extends ConsumerWidget {
                       ),
                     )
                   else
-                    const Icon(
+                    Icon(
                       Icons.play_arrow_rounded,
                       size: 24,
                       color: foreground,
@@ -97,7 +96,7 @@ class DetailsHeroPlayPill extends ConsumerWidget {
                   const SizedBox(width: 8),
                   Text(
                     label,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: foreground,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,

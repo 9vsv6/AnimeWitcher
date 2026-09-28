@@ -102,6 +102,9 @@ Future<DownloadStartRequestV2> mangaChapterDownloadRequest(
 @riverpod
 class MangaDetailsController extends _$MangaDetailsController {
   bool _started = false;
+  bool _chaptersRequested = false;
+  bool _chaptersFetched = false;
+  Future<void>? _chaptersLoadFuture;
 
   @override
   MangaDetailsState build(String itemUrl) => const MangaDetailsState();
@@ -129,7 +132,27 @@ class MangaDetailsController extends _$MangaDetailsController {
   Future<void> retry() async {
     final item = state.item;
     if (item == null) return;
-    await _load(item);
+    final provider = _providerFor(item);
+    await _loadDetails(provider, item);
+    if (!ref.mounted || !_chaptersRequested) return;
+    await loadChaptersOnDemand(forceReload: true);
+  }
+
+  Future<void> loadChaptersOnDemand({bool forceReload = false}) async {
+    _chaptersRequested = true;
+    final activeLoad = _chaptersLoadFuture;
+    if (activeLoad != null) {
+      await activeLoad;
+      return;
+    }
+    if (!forceReload && _chaptersFetched) return;
+
+    final item = state.item;
+    if (item == null) return;
+    final provider = _providerFor(item);
+    state = state.copyWith(chapters: const AsyncLoading<List<MangaChapter>>());
+    _chaptersLoadFuture = _loadChapters(provider, item);
+    await _chaptersLoadFuture;
   }
 
   Future<void> downloadChapter(MangaChapter chapter) async {
@@ -178,16 +201,12 @@ class MangaDetailsController extends _$MangaDetailsController {
     state = state.copyWith(
       item: item,
       details: const AsyncLoading<MultimediaItem?>(),
-      chapters: const AsyncLoading<List<MangaChapter>>(),
     );
 
-    // The real AnimeWitcher chapter endpoint resolves Manga metadata through
-    // getMangaDetails as well. Finish the route-owned details request first so
-    // the chapter load reuses the populated provider cache instead of racing a
-    // second manga_list/<id> document read.
+    // Chapter data is deliberately not requested here. The collapsed Chapters
+    // section starts that request on first open, after route-owned metadata is
+    // available and the provider cache is warm.
     await _loadDetails(provider, item);
-    if (!ref.mounted) return;
-    await _loadChapters(provider, item);
   }
 
   Future<void> _loadDetails(
@@ -217,12 +236,15 @@ class MangaDetailsController extends _$MangaDetailsController {
     try {
       final chapters = await provider.getMangaChapters(item.url);
       if (!ref.mounted) return;
+      _chaptersFetched = true;
       state = state.copyWith(chapters: AsyncData<List<MangaChapter>>(chapters));
     } catch (error, stackTrace) {
       if (!ref.mounted) return;
       state = state.copyWith(
         chapters: AsyncError<List<MangaChapter>>(error, stackTrace),
       );
+    } finally {
+      _chaptersLoadFuture = null;
     }
   }
 }

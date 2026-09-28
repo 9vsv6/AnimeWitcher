@@ -114,10 +114,17 @@ List<Episode> browseEpisodesFor({
 /// The block menu, when the series runs past one block, and the filter
 /// chips beside it.
 class EpisodeBrowseBar extends StatelessWidget {
-  const EpisodeBrowseBar({super.key, required this.episodes});
+  const EpisodeBrowseBar({
+    super.key,
+    required this.episodes,
+    this.leading,
+    this.trailing,
+  });
 
   /// Every episode of the season, before any block or filter.
   final List<Episode> episodes;
+  final Widget? leading;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -144,11 +151,12 @@ class EpisodeBrowseBar extends StatelessWidget {
           showCheckmark: false,
           onSelected: (_) => episodeListFilter.value = value,
         );
-        return Wrap(
+        final filters = Wrap(
           spacing: 8,
           runSpacing: 8,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: <Widget>[
+            if (leading != null) leading!,
             if (ranges.isNotEmpty)
               PopupMenuButton<int>(
                 key: const ValueKey<String>('episode-range-menu'),
@@ -205,6 +213,15 @@ class EpisodeBrowseBar extends StatelessWidget {
             chip(EpisodeListFilter.all, t('All', 'الكل')),
             chip(EpisodeListFilter.unwatched, t('Unwatched', 'لم تُشاهد')),
             chip(EpisodeListFilter.downloaded, t('Downloaded', 'المُنزّلة')),
+          ],
+        );
+        if (trailing == null) return filters;
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(child: filters),
+            const SizedBox(width: 8),
+            trailing!,
           ],
         );
       },

@@ -559,8 +559,9 @@ class _DetailsSeasonsBarState extends ConsumerState<DetailsSeasonsBar> {
   @override
   void initState() {
     super.initState();
-    // The related list used to wait for its tab to be opened. The bar is
-    // drawn from it, so it is asked for as soon as the episodes are here.
+    // The related list used to wait for its tab to be opened. The seasons
+    // bar is independent from episode availability, so ask as soon as the
+    // details page mounts it (including upcoming anime with zero episodes).
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ref
