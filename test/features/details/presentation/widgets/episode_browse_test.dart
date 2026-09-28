@@ -103,6 +103,38 @@ void main() {
       );
     });
 
+    testWidgets('trailing episode control stays at physical left in RTL', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Directionality(
+            textDirection: TextDirection.rtl,
+            child: Scaffold(
+              body: EpisodeBrowseBar(
+                episodes: _episodes(24),
+                trailing: const SizedBox(
+                  key: ValueKey<String>('episode-sort-probe'),
+                  width: 40,
+                  height: 40,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final filter = tester.getCenter(
+        find.byKey(const ValueKey<String>('episode-filter-all')),
+      );
+      final trailing = tester.getCenter(
+        find.byKey(const ValueKey<String>('episode-sort-probe')),
+      );
+
+      expect((filter.dy - trailing.dy).abs(), lessThan(12));
+      expect(trailing.dx, lessThan(filter.dx));
+    });
+
     testWidgets('a block and a filter picked from the bar', (tester) async {
       await pump(tester, 1122);
       await tester.tap(
