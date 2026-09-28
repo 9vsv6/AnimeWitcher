@@ -67,6 +67,7 @@ class MangaChapterList extends ConsumerStatefulWidget {
     this.onDeleteDownload,
     this.embedded = false,
     this.onSelectionBarChanged,
+    this.topAction,
   });
 
   final List<MangaChapter> chapters;
@@ -75,6 +76,7 @@ class MangaChapterList extends ConsumerStatefulWidget {
   final List<DownloadItem> downloads;
   final ValueChanged<DownloadItem>? onDeleteDownload;
   final ValueChanged<Widget?>? onSelectionBarChanged;
+  final Widget? topAction;
 
   /// Laid out as part of a longer page that does the scrolling — the wide
   /// details layout, where the chapters follow the synopsis the way the
@@ -297,28 +299,41 @@ class _MangaChapterListState extends ConsumerState<MangaChapterList> {
       MangaChapterFilter.unread: _isArabic ? 'غير المقروءة' : 'Unread',
       MangaChapterFilter.downloaded: _isArabic ? 'المنزّلة' : 'Downloaded',
     };
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        for (final entry in labels.entries)
-          ChoiceChip(
-            key: ValueKey<String>('manga-chapter-filter-${entry.key.name}'),
-            label: Text(entry.value),
-            selected: _filter == entry.key,
-            showCheckmark: false,
-            onSelected: (_) => setState(() => _filter = entry.key),
-            labelStyle: TextStyle(
-              fontSize: 13,
-              color: _filter == entry.key ? colors.primary : colors.onSurface,
-            ),
-            side: BorderSide(
-              color: _filter == entry.key
-                  ? colors.primary
-                  : colors.onSurfaceVariant.withValues(alpha: 0.16),
-            ),
-            shape: const StadiumBorder(),
+        Expanded(
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              for (final entry in labels.entries)
+                ChoiceChip(
+                  key: ValueKey<String>(
+                    'manga-chapter-filter-${entry.key.name}',
+                  ),
+                  label: Text(entry.value),
+                  selected: _filter == entry.key,
+                  showCheckmark: false,
+                  onSelected: (_) => setState(() => _filter = entry.key),
+                  labelStyle: TextStyle(
+                    fontSize: 13,
+                    color: _filter == entry.key
+                        ? colors.primary
+                        : colors.onSurface,
+                  ),
+                  side: BorderSide(
+                    color: _filter == entry.key
+                        ? colors.primary
+                        : colors.onSurfaceVariant.withValues(alpha: 0.16),
+                  ),
+                  shape: const StadiumBorder(),
+                ),
+            ],
           ),
+        ),
+        const SizedBox(width: 8),
+        const MangaChapterSortButton(),
       ],
     );
   }
@@ -343,6 +358,10 @@ class _MangaChapterListState extends ConsumerState<MangaChapterList> {
         ),
         const SizedBox(height: 10),
         _filterChips(context),
+        if (widget.topAction != null) ...<Widget>[
+          const SizedBox(height: 10),
+          widget.topAction!,
+        ],
       ],
     );
   }
@@ -760,7 +779,6 @@ class _MangaChapterListState extends ConsumerState<MangaChapterList> {
                         style: Theme.of(context).textTheme.titleLarge
                             ?.copyWith(fontWeight: FontWeight.bold),
                       ),
-                      const MangaChapterSortButton(),
                     ],
                   ),
                 ),
