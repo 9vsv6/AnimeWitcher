@@ -263,6 +263,17 @@ void main() {
       await tester.tap(
         find.byKey(const ValueKey<String>('manga-chapters-toggle')),
       );
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(
+        find.byKey(const ValueKey<String>('manga-chapters-reveal')),
+        findsOneWidget,
+      );
+      final reveal = tester.widget<FadeTransition>(
+        find.byKey(const ValueKey<String>('manga-chapters-reveal')),
+      );
+      expect(reveal.opacity.value, greaterThan(0));
+      expect(reveal.opacity.value, lessThan(1));
+
       await _pumpUntil(
         tester,
         () => provider.chaptersCalls == 1,
