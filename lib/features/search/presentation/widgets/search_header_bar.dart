@@ -68,6 +68,7 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
     );
     final isCompact = widget.isCompact;
     final isDark = theme.brightness == Brightness.dark;
+    final fieldDirection = Directionality.of(context);
     // The same wording the home bar uses, so the two read as one control.
     // Names what is being searched, so a manga search does not read as an
     // anime one.
@@ -203,7 +204,6 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                             // Keep the field itself in the locale direction even
                             // though the surrounding action row stays physically
                             // pinned. Arabic therefore starts from the right.
-                            final fieldDirection = Directionality.of(context);
                             return Directionality(
                               textDirection: fieldDirection,
                               child: TextField(
