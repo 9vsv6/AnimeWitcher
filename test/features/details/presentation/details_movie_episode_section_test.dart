@@ -47,6 +47,9 @@ final class _MovieController extends DetailsController {
     trailers: const AsyncData<List<Trailer>>(<Trailer>[]),
     related: const AsyncData<List<MultimediaItem>>(<MultimediaItem>[]),
     recommendations: const AsyncData<List<MultimediaItem>>(<MultimediaItem>[]),
+    seasonMap: <int, List<Episode>>{
+      1: item.episodes ?? const <Episode>[],
+    },
     item: item,
     isMovie: true,
     basicDetailsResolved: true,
