@@ -724,7 +724,14 @@ class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen> {
 
   void _toggleChapters() {
     final expanded = !_chaptersExpanded;
-    setState(() => _chaptersExpanded = expanded);
+    setState(() {
+      _chaptersExpanded = expanded;
+      if (!expanded) {
+        // The selection bar belongs to the chapter section; it must disappear
+        // with the list instead of staying pinned over the collapsed page.
+        _chapterSelectionBar = null;
+      }
+    });
     if (expanded) {
       unawaited(
         ref
