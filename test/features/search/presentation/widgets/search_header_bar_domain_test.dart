@@ -151,6 +151,66 @@ void main() {
     },
   );
 
+  testWidgets('Arabic search field is RTL and uses a softer rectangle', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    final searchFocus = FocusNode();
+    final clearFocus = FocusNode();
+    addTearDown(controller.dispose);
+    addTearDown(searchFocus.dispose);
+    addTearDown(clearFocus.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          searchPagedResultsProvider.overrideWith(_IdleSearchNotifier.new),
+        ],
+        child: MaterialApp(
+          locale: const Locale('ar'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: SearchHeaderBar(
+              textController: controller,
+              searchFocusNode: searchFocus,
+              clearButtonFocusNode: clearFocus,
+              onSubmitted: (_) {},
+              onChanged: (_) {},
+              onShowFilters: () {},
+              onSortSelected: (_) {},
+              sortValue: 'favorites',
+              sortItems: const <AppleNativeMenuItem>[
+                AppleNativeMenuItem(value: 'favorites', label: 'Favorites'),
+              ],
+              sortIcon: Icons.star_rounded,
+              sortSystemImage: 'star.fill',
+              sortTooltip: 'Sort',
+              activeFilterCount: 0,
+              isFilterLoading: false,
+              showSort: false,
+              showFilter: true,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final fieldFinder = find.byType(TextField);
+    final field = tester.widget<TextField>(fieldFinder);
+    expect(field.textDirection, TextDirection.rtl);
+    expect(Directionality.of(tester.element(fieldFinder)), TextDirection.rtl);
+
+    final surface = find.byType(SearchGlassSurface);
+    final container = tester.widget<AnimatedContainer>(
+      find.descendant(of: surface, matching: find.byType(AnimatedContainer)),
+    );
+    final decoration = container.decoration! as BoxDecoration;
+    final radius = decoration.borderRadius! as BorderRadius;
+    expect(radius.topLeft.x, lessThan(SearchGlassSurface.height / 2));
+  });
+
   testWidgets('character search expands into the missing sort space', (
     tester,
   ) async {
