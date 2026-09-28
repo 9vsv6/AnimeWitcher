@@ -712,14 +712,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 enabledBorder: InputBorder.none,
                 filled: false,
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+                contentPadding: EdgeInsets.zero,
                 hintStyle: TextStyle(
                   fontSize: 13,
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
                 prefixIcon: Icon(
-                  Icons.search,
-                  size: 18,
+                  Icons.search_rounded,
+                  size: 20,
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
                 prefixIconConstraints: const BoxConstraints(
