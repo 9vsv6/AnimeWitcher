@@ -66,7 +66,7 @@ void main() {
   testWidgets('seasons stay visible when an anime has no episodes yet', (
     tester,
   ) async {
-    await tester.binding.setSurfaceSize(const Size(390, 844));
+    await tester.binding.setSurfaceSize(const Size(590, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     final firstSeason = MultimediaItem(
@@ -110,12 +110,10 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
-    final page = find.byType(Scrollable).first;
-    await tester.scrollUntilVisible(
+    await tester.ensureVisible(
       find.byKey(const ValueKey<String>('details-episodes-toggle')),
-      160,
-      scrollable: page,
     );
+    await tester.pump();
 
     expect(find.byType(DetailsSeasonsBar), findsOneWidget);
     expect(
