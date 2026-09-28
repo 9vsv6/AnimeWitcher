@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 
 import '../../../core/domain/entity/multimedia_item.dart';
-export '../../../core/domain/stream_source_preferences.dart';
 import '../../../core/utils/episode_label.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 import '../../../shared/widgets/taskbar_visibility.dart';
