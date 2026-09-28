@@ -397,167 +397,184 @@ class AppSideMenuPanel extends ConsumerWidget {
       color: colors.surfaceContainerLow,
       child: SafeArea(
         right: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: Stack(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
-              child: Stack(
+            Positioned.fill(
+              child: ListView(
+                padding: EdgeInsets.zero,
                 children: [
-                  InkWell(
-                    key: const ValueKey<String>('app-side-menu-account'),
-                    borderRadius: BorderRadius.circular(16),
-                    onTap: onAccount,
-                    child: ClipRRect(
-                      key: const ValueKey<String>(
-                        'app-side-menu-account-banner',
-                      ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
+                    child: InkWell(
+                      key: const ValueKey<String>('app-side-menu-account'),
                       borderRadius: BorderRadius.circular(16),
-                      child: SizedBox(
-                        height: 156,
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            ColoredBox(
-                              color: colors.surfaceContainerHighest,
-                            ),
-                            if (cover.isNotEmpty)
-                              Image.network(
-                                cover,
-                                key: const ValueKey<String>(
-                                  'app-side-menu-account-cover',
-                                ),
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) =>
-                                    const SizedBox.shrink(),
-                              ),
-                            if (cover.isNotEmpty)
+                      onTap: onAccount,
+                      child: ClipRRect(
+                        key: const ValueKey<String>(
+                          'app-side-menu-account-banner',
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        child: SizedBox(
+                          height: 156,
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
                               ColoredBox(
-                                color: Colors.black.withValues(alpha: 0.38),
+                                color: colors.surfaceContainerHighest,
                               ),
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(56, 10, 12, 10),
-                              child: Row(
-                                children: [
-                                  AccountAvatarButton(
-                                    onTap: onAccount,
-                                    size: 80,
+                              if (cover.isNotEmpty)
+                                Image.network(
+                                  cover,
+                                  key: const ValueKey<String>(
+                                    'app-side-menu-account-cover',
                                   ),
-                                  const SizedBox(width: 14),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          title,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: theme.textTheme.titleLarge
-                                              ?.copyWith(
-                                                color: cover.isNotEmpty
-                                                    ? Colors.white
-                                                    : colors.onSurface,
-                                                fontSize: 22,
-                                                fontWeight: FontWeight.w800,
-                                              ),
-                                        ),
-                                        if (subtitle.isNotEmpty)
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) =>
+                                      const SizedBox.shrink(),
+                                ),
+                              if (cover.isNotEmpty)
+                                ColoredBox(
+                                  color: Colors.black.withValues(alpha: 0.38),
+                                ),
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  56,
+                                  10,
+                                  12,
+                                  10,
+                                ),
+                                child: Row(
+                                  children: [
+                                    AccountAvatarButton(
+                                      onTap: onAccount,
+                                      size: 80,
+                                    ),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
                                           Text(
-                                            subtitle,
+                                            title,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
-                                            style: theme.textTheme.bodySmall
+                                            style: theme.textTheme.titleLarge
                                                 ?.copyWith(
                                                   color: cover.isNotEmpty
-                                                      ? Colors.white70
-                                                      : colors
-                                                            .onSurfaceVariant,
+                                                      ? Colors.white
+                                                      : colors.onSurface,
+                                                  fontSize: 22,
+                                                  fontWeight: FontWeight.w800,
                                                 ),
                                           ),
-                                      ],
+                                          if (subtitle.isNotEmpty)
+                                            Text(
+                                              subtitle,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: theme.textTheme.bodySmall
+                                                  ?.copyWith(
+                                                    color: cover.isNotEmpty
+                                                        ? Colors.white70
+                                                        : colors
+                                                              .onSurfaceVariant,
+                                                  ),
+                                            ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                  Positioned(
-                    left: 4,
-                    top: 4,
-                    child: IconButton(
-                      key: const ValueKey<String>('app-side-menu-close'),
-                      tooltip: arabic ? 'إغلاق' : 'Close',
-                      onPressed: onClose,
-                      icon: Icon(
-                        Icons.close_rounded,
-                        color: cover.isNotEmpty
-                            ? Colors.white
-                            : colors.onSurfaceVariant,
-                      ),
+                  Divider(
+                    height: 1,
+                    indent: 16,
+                    endIndent: 16,
+                    color: colors.outlineVariant.withValues(alpha: 0.5),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+                    child: Column(
+                      children: [
+                        for (final destination in destinations)
+                          _SideMenuRow(
+                            key: ValueKey<String>(
+                              'app-side-menu-${destination.id}',
+                            ),
+                            icon:
+                                destination.branchIndex == currentBranchIndex
+                                ? destination.selectedIcon
+                                : destination.icon,
+                            label: destination.label(l10n),
+                            selected:
+                                destination.branchIndex == currentBranchIndex,
+                            onTap: () => onDestination(destination),
+                          ),
+                        if (destinations.isNotEmpty && entries.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Divider(
+                              height: 1,
+                              indent: 4,
+                              endIndent: 4,
+                              color: colors.outlineVariant.withValues(
+                                alpha: 0.5,
+                              ),
+                            ),
+                          ),
+                        for (final entry in entries) ...[
+                          if (entry.dividerBefore)
+                            Padding(
+                              key: ValueKey<String>(
+                                'app-side-menu-divider-before-${entry.id}',
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: Divider(
+                                height: 1,
+                                indent: 4,
+                                endIndent: 4,
+                                color: colors.outlineVariant.withValues(
+                                  alpha: 0.5,
+                                ),
+                              ),
+                            ),
+                          _SideMenuRow(
+                            key: ValueKey<String>(
+                              'app-side-menu-page-${entry.id}',
+                            ),
+                            icon: entry.icon,
+                            label: entry.label,
+                            selected: entry.selected,
+                            onTap: () => onEntry?.call(entry),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-            Divider(
-              height: 1,
-              indent: 16,
-              endIndent: 16,
-              color: colors.outlineVariant.withValues(alpha: 0.5),
-            ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-                children: [
-                  for (final destination in destinations)
-                    _SideMenuRow(
-                      key: ValueKey<String>('app-side-menu-${destination.id}'),
-                      icon: destination.branchIndex == currentBranchIndex
-                          ? destination.selectedIcon
-                          : destination.icon,
-                      label: destination.label(l10n),
-                      selected: destination.branchIndex == currentBranchIndex,
-                      onTap: () => onDestination(destination),
-                    ),
-                  if (entries.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Divider(
-                        height: 1,
-                        indent: 4,
-                        endIndent: 4,
-                        color: colors.outlineVariant.withValues(alpha: 0.5),
-                      ),
-                    ),
-                  for (final entry in entries) ...[
-                    if (entry.dividerBefore)
-                      Padding(
-                        key: ValueKey<String>(
-                          'app-side-menu-divider-before-${entry.id}',
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Divider(
-                          height: 1,
-                          indent: 4,
-                          endIndent: 4,
-                          color: colors.outlineVariant.withValues(alpha: 0.5),
-                        ),
-                      ),
-                    _SideMenuRow(
-                      key: ValueKey<String>('app-side-menu-page-${entry.id}'),
-                      icon: entry.icon,
-                      label: entry.label,
-                      selected: entry.selected,
-                      onTap: () => onEntry?.call(entry),
-                    ),
-                  ],
-                ],
+            Positioned(
+              left: 12,
+              top: 12,
+              child: IconButton(
+                key: const ValueKey<String>('app-side-menu-close'),
+                tooltip: arabic ? 'إغلاق' : 'Close',
+                onPressed: onClose,
+                icon: Icon(
+                  Icons.close_rounded,
+                  color: cover.isNotEmpty
+                      ? Colors.white
+                      : colors.onSurfaceVariant,
+                ),
               ),
             ),
           ],
