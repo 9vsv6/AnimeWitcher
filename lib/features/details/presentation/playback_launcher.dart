@@ -133,7 +133,8 @@ class PlaybackLauncher {
           sources,
           qualityPriority: preferences.streamQualityPriority,
           serverPriority: preferences.streamServerPriority,
-          resolveCandidate: (candidate) => provider.loadStreams(candidate.url),
+          resolveCandidate: (StreamResult candidate) =>
+              provider.loadStreams(candidate.url),
         );
         if (selected == null) {
           _ref
