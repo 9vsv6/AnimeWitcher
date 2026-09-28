@@ -109,6 +109,46 @@ Future<void> _flush() async {
 }
 
 void main() {
+  test('movie details also defer episodes until explicitly opened', () async {
+    final provider = _Provider();
+    final container = ProviderContainer(
+      overrides: [
+        extensionManagerProvider.overrideWith(() => _Manager(provider)),
+        activeProviderProvider.overrideWithValue(provider),
+        episodeSortAscendingProvider.overrideWith(() => _AscendingSort()),
+        storageServiceProvider.overrideWithValue(MemoryStorageService()),
+        downloadsProvider.overrideWith(() => _EmptyDownloads()),
+        watchHistoryProvider.overrideWith(() => _EmptyHistory()),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    const url = 'https://example.test/movie/lazy';
+    final item = MultimediaItem(
+      title: 'Lazy Movie',
+      url: url,
+      posterUrl: '',
+      contentType: MultimediaContentType.movie,
+      provider: provider.packageName,
+    );
+    final subscription = container.listen<DetailsState>(
+      detailsControllerProvider(url),
+      (_, _) {},
+      fireImmediately: true,
+    );
+    addTearDown(subscription.close);
+    final controller = container.read(detailsControllerProvider(url).notifier);
+
+    await controller.loadDetails(item);
+    await _flush();
+
+    expect(provider.detailsCalls, 1);
+    expect(provider.episodeCalls, 0);
+
+    await controller.loadEpisodesOnDemand();
+    expect(provider.episodeCalls, 1);
+  });
+
   test('anime details does not request episodes until explicitly opened', () async {
     final provider = _Provider();
     final container = ProviderContainer(
