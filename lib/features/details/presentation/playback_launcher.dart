@@ -128,10 +128,11 @@ class PlaybackLauncher {
       try {
         final sources = await future;
         if (!context.mounted) return null;
-        final selected = selectPreferredStreamSource(
+        final selected = await resolvePreferredStreamSource(
           sources,
           qualityPriority: preferences.streamQualityPriority,
           serverPriority: preferences.streamServerPriority,
+          resolveCandidate: (candidate) => provider.loadStreams(candidate.url),
         );
         if (selected == null) {
           _ref
