@@ -234,25 +234,51 @@ void _usePhoneWindow(WidgetTester tester) {
 }
 
 void main() {
-  testWidgets('manga details loads details before chapters on route open', (
-    tester,
-  ) async {
-    final provider = _MangaProvider();
+  testWidgets(
+    'manga details defers chapters until the collapsed section opens once',
+    (tester) async {
+      final provider = _MangaProvider();
 
-    expect(provider.detailsCalls, 0);
-    expect(provider.chaptersCalls, 0);
+      expect(provider.detailsCalls, 0);
+      expect(provider.chaptersCalls, 0);
 
-    await tester.pumpWidget(_app(provider));
-    await _pumpUntil(
-      tester,
-      () => provider.chaptersCalls == 1,
-      reason: 'manga chapters did not finish loading',
-    );
+      await tester.pumpWidget(_app(provider));
+      await _pumpUntil(
+        tester,
+        () => provider.detailsFinished,
+        reason: 'manga details did not finish loading',
+      );
 
-    expect(provider.detailsCalls, 1);
-    expect(provider.chaptersCalls, 1);
-    expect(provider.chaptersStartedBeforeDetailsFinished, isFalse);
-  });
+      expect(provider.detailsCalls, 1);
+      expect(provider.chaptersCalls, 0);
+      expect(
+        find.byKey(const ValueKey<String>('manga-chapters-toggle')),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('manga-chapters-toggle')),
+      );
+      await _pumpUntil(
+        tester,
+        () => provider.chaptersCalls == 1,
+        reason: 'opening chapters did not start the chapter request',
+      );
+
+      expect(provider.chaptersStartedBeforeDetailsFinished, isFalse);
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('manga-chapters-toggle')),
+      );
+      await tester.pump();
+      await tester.tap(
+        find.byKey(const ValueKey<String>('manga-chapters-toggle')),
+      );
+      await tester.pump();
+
+      expect(provider.chaptersCalls, 1);
+    },
+  );
 
   test('completed chapter opens the same local directory as Downloads', () {
     final source = File(
