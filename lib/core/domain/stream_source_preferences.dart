@@ -1,4 +1,4 @@
-import 'multimedia_item.dart';
+import 'entity/multimedia_item.dart';
 
 const List<String> defaultStreamServerPriority = <String>[
   'PD',
