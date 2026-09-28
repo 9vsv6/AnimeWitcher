@@ -139,6 +139,17 @@ void main() {
     expect(fade.opacity.value, greaterThan(0));
     expect(fade.opacity.value, lessThan(1));
 
+    for (final control in <Finder>[
+      find.byKey(const ValueKey<String>('episode-filter-all')),
+      find.byType(DetailsHeroPlayPill),
+    ]) {
+      expect(
+        find.ancestor(of: control, matching: find.byType(FadeTransition)),
+        findsOneWidget,
+        reason: 'episode controls should reveal with the episode list',
+      );
+    }
+
     await tester.pumpAndSettle();
     expect(find.byType(DetailsHeroPlayPill), findsOneWidget);
   });
