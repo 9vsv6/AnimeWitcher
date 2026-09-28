@@ -131,6 +131,46 @@ void main() {
     expect(selected?.url, 'st-720');
   });
 
+  test('automatic fallback exhausts servers at a quality before dropping quality', () async {
+    final attempted = <String>[];
+    final selected = await resolvePreferredStreamSource(
+      const <StreamResult>[
+        StreamResult(
+          url: 'pd-1080-token',
+          source: 'PD',
+          quality: '1080',
+          requiresResolution: true,
+        ),
+        StreamResult(
+          url: 'mf-1080-token',
+          source: 'MF',
+          quality: '1080',
+          requiresResolution: true,
+        ),
+        StreamResult(
+          url: 'pd-720-token',
+          source: 'PD',
+          quality: '720',
+          requiresResolution: true,
+        ),
+      ],
+      qualityPriority: const <String>['1080p', '720p'],
+      serverPriority: const <String>['PD', 'MF'],
+      resolveCandidate: (candidate) async {
+        attempted.add(candidate.url);
+        if (candidate.url == 'mf-1080-token') {
+          return const <StreamResult>[
+            StreamResult(url: 'mf-1080-direct', source: 'MF', quality: '1080'),
+          ];
+        }
+        return const <StreamResult>[];
+      },
+    );
+
+    expect(selected?.url, 'mf-1080-direct');
+    expect(attempted, <String>['pd-1080-token', 'mf-1080-token']);
+  });
+
   testWidgets('shows a loading state in the sheet until servers arrive', (
     tester,
   ) async {
