@@ -65,7 +65,7 @@ void main() {
   testWidgets('seasons stay visible when an anime has no episodes yet', (
     tester,
   ) async {
-    await tester.binding.setSurfaceSize(const Size(390, 844));
+    await tester.binding.setSurfaceSize(const Size(590, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     final firstSeason = MultimediaItem(
