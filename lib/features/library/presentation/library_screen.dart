@@ -65,7 +65,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             child: LibraryFilterPanel(
               prefs: _prefs,
               kind: kind,
-              showView: false,
             ),
           ),
         ),
