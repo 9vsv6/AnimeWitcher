@@ -422,9 +422,12 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    await tester.tap(
-      find.byKey(const ValueKey('library-list-tab-pinned')),
+    final pinnedTab = find.byKey(
+      const ValueKey('library-list-tab-pinned'),
     );
+    await tester.ensureVisible(pinnedTab);
+    await tester.pumpAndSettle();
+    await tester.tap(pinnedTab);
     await tester.pump();
 
     expect(
