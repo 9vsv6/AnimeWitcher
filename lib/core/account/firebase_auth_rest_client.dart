@@ -353,11 +353,6 @@ AnimeWitcherAccountException _firebaseException(DioException error) {
       'recent-login-required',
       'Confirm your identity and try again.',
     ),
-    'FEDERATED_USER_ID_ALREADY_LINKED' ||
-    'PROVIDER_ALREADY_LINKED' => const AnimeWitcherAccountException(
-      'provider-already-linked',
-      'This sign-in method is already linked to another account.',
-    ),
     'TOKEN_EXPIRED' ||
     'INVALID_ID_TOKEN' ||
     'INVALID_REFRESH_TOKEN' ||
