@@ -47,7 +47,7 @@ void main() {
     PathProviderPlatform.instance = _PathProvider(newSupport);
 
     final container = ProviderContainer(
-      overrides: <Override>[
+      overrides: [
         storageServiceProvider.overrideWithValue(storage),
       ],
     );
