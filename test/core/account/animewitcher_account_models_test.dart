@@ -28,17 +28,17 @@ void main() {
     expect(restored.providerIds, original.providerIds);
   });
 
-  test('legacy Google auth cache normalizes to email auth', () {
-    final restored = AnimeWitcherSession.fromJson(<String, dynamic>{
-      'uid': 'legacy-google',
-      'idToken': 'token',
-      'refreshToken': 'refresh',
-      'expiresAt': DateTime.utc(2026, 8, 9, 12).toIso8601String(),
-      'signInMethod': 'google',
-      'providerIds': <String>['google.com'],
-    });
-
-    expect(restored.signInMethod, AnimeWitcherSignInMethod.email);
+  test('account cache rejects unsupported sign-in methods', () {
+    expect(
+      () => AnimeWitcherSession.fromJson(<String, dynamic>{
+        'uid': 'uid-unsupported',
+        'idToken': 'token',
+        'refreshToken': 'refresh',
+        'expiresAt': DateTime.utc(2026, 8, 9, 12).toIso8601String(),
+        'signInMethod': 'unsupported',
+      }),
+      throwsFormatException,
+    );
   });
 
   test('account profile preserves AnimeWitcher editable fields', () {
