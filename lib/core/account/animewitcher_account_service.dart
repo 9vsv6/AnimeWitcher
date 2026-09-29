@@ -195,8 +195,7 @@ class AnimeWitcherAccountService {
       );
       final resolvedProfile = await _resolveProfile(
         refreshedSession,
-        createIfMissing:
-            refreshedSession.signInMethod == AnimeWitcherSignInMethod.google,
+        createIfMissing: false,
       );
       if (generation != _sessionGeneration || _session == null) {
         return snapshot;
@@ -1804,9 +1803,7 @@ class AnimeWitcherAccountService {
           'users',
           fields,
           token,
-          documentId: session.signInMethod == AnimeWitcherSignInMethod.email
-              ? session.uid
-              : null,
+          documentId: session.uid,
           serverTimestampFields: const <String>{'registration_date'},
         ),
       );
