@@ -39,6 +39,14 @@ void main() {
       }),
       throwsFormatException,
     );
+    expect(
+      () => AnimeWitcherProfile.fromJson(<String, dynamic>{
+        'documentId': 'profile-unsupported',
+        'uid': 'uid-unsupported',
+        'signInMethod': 'unsupported',
+      }),
+      throwsFormatException,
+    );
   });
 
   test('account profile preserves AnimeWitcher editable fields', () {
