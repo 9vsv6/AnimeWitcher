@@ -71,10 +71,6 @@ class AnimeWitcherAccountController
     await _run(() => _service.signInWithEmail(email: email, password: password));
   }
 
-  Future<void> signInWithGoogle() async {
-    await _run(_service.signInWithGoogle);
-  }
-
   Future<void> createEmailAccount({
     required String userName,
     required String email,
