@@ -24,7 +24,7 @@ void main() {
             _SignedOutAccount.new,
           ),
         ],
-        child: MaterialApp(
+        child: const MaterialApp(
           locale: const Locale('ar'),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
