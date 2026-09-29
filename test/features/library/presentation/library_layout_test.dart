@@ -246,6 +246,31 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
   });
 
+  testWidgets('phone: characters section contains only favorite characters', (
+    tester,
+  ) async {
+    await _pump(tester, size: const Size(400, 860), kind: 'anime');
+
+    await tester.tap(find.byKey(const ValueKey('library-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('library-section-characters')));
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(200, 40));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('library-list-tab-characters')),
+      findsOneWidget,
+    );
+    expect(find.text('الشخصيات المفضلة'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('library-characters')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('أشاهده حاليًا'), findsNothing);
+    expect(find.textContaining('أقرأها حاليًا'), findsNothing);
+  });
+
   testWidgets('phone: the always-grid view sorts by year', (tester) async {
     await _pump(
       tester,
