@@ -9,6 +9,7 @@ import '../../../../core/storage/library_repository.dart';
 import '../../../../core/storage/storage_service.dart';
 import '../../../../shared/widgets/app_search_field.dart';
 import '../../../../shared/widgets/app_side_menu.dart';
+import '../../../../shared/widgets/underline_segment_tabs.dart';
 import '../../../characters/presentation/characters_screen.dart';
 import '../../../more/presentation/recent_watched_screen.dart';
 import '../history_provider.dart';
@@ -179,11 +180,36 @@ class _LibraryPhoneShelvesState extends ConsumerState<LibraryPhoneShelves> {
   }
 
   void _selectList(LibraryMediaKind kind, _LibraryListTab tab) {
+    if (_selectedListKey == tab.key) return;
     setState(() => _selectedListKey = tab.key);
     final category = tab.category;
     if (category != null) {
       unawaited(ref.read(libraryProvider.notifier).select(kind, category));
     }
+  }
+
+  Widget _listBody(
+    LibraryRepository repository,
+    LibraryMediaKind kind,
+    _LibraryListTab tab,
+  ) {
+    if (tab.key == LibraryShelfPrefs.recentKey) {
+      return RecentWatchedBody(
+        key: const ValueKey<String>('library-recent'),
+        sort: _prefs.sort,
+      );
+    }
+    final category = tab.category!;
+    final items = _list(repository, kind, category);
+    return items.isEmpty
+        ? LibraryEmptyState(mediaKind: kind)
+        : LibraryItemsGrid(
+            key: ValueKey<String>(
+              'library-grid-${kind.storageKey}-${category.storageKey}',
+            ),
+            items: items,
+            heroPrefix: 'lib_${kind.storageKey}_${category.storageKey}',
+          );
   }
 
   void _selectSection(LibraryPhoneSection section) {
@@ -231,106 +257,142 @@ class _LibraryPhoneShelvesState extends ConsumerState<LibraryPhoneShelves> {
               ]
             : _listTabs(kind!, repository, history);
         final selected = _effectiveTab(tabs);
+        final selectedIndex = selected == null
+            ? 0
+            : tabs.indexWhere((tab) => tab.key == selected.key);
+        final controllerKey = ValueKey<String>(
+          'library-tabs-${_section.name}-'
+          '${tabs.map((tab) => tab.key).join('-')}',
+        );
 
-        Widget body;
-        if (_section == LibraryPhoneSection.characters) {
-          body = const CharactersScreen(
-            key: ValueKey<String>('library-characters'),
-            favoritesOnly: true,
-            embedded: true,
-          );
-        } else if (searching) {
-          final shown = _matches(_entries(kind!, repository, history));
-          body = shown.isEmpty
-              ? Center(
-                  child: Text(
-                    _t(context, 'Nothing matches', 'لا توجد نتائج'),
-                    key: const ValueKey<String>('library-search-empty'),
-                  ),
-                )
-              : LibraryItemsGrid(
-                  key: ValueKey<String>(
-                    'library-grid-${kind!.storageKey}-search',
-                  ),
-                  items: shown,
-                  heroPrefix: 'lib_search_${kind!.storageKey}',
-                );
-        } else if (selected == null) {
-          body = LibraryEmptyState(mediaKind: kind!);
-        } else if (selected.key == LibraryShelfPrefs.recentKey) {
-          body = RecentWatchedBody(
-            key: const ValueKey<String>('library-recent'),
-            sort: _prefs.sort,
-          );
-        } else {
-          final category = selected.category!;
-          final items = _list(repository, kind!, category);
-          body = items.isEmpty
-              ? LibraryEmptyState(mediaKind: kind!)
-              : LibraryItemsGrid(
-                  key: ValueKey<String>(
-                    'library-grid-${kind!.storageKey}-${category.storageKey}',
-                  ),
-                  items: items,
-                  heroPrefix:
-                      'lib_${kind!.storageKey}_${category.storageKey}',
-                );
-        }
+        return DefaultTabController(
+          key: controllerKey,
+          length: tabs.isEmpty ? 1 : tabs.length,
+          initialIndex: selectedIndex < 0 ? 0 : selectedIndex,
+          child: Builder(
+            builder: (tabContext) {
+              final controller = DefaultTabController.of(tabContext);
 
-        return Scaffold(
-          appBar: AppBar(
-            titleSpacing: 12,
-            title: AppSearchField(
-              fieldKey: const ValueKey<String>('library-search'),
-              controller: _search,
-              hintText: _t(
-                context,
-                'Search your library',
-                'ابحث في مكتبتك',
-              ),
-              onChanged: (value) {
-                _typing?.cancel();
-                _typing = Timer(_typingPause, () {
-                  if (mounted) setState(() => _query = value);
-                });
-              },
-              onSubmitted: (value) {
-                _typing?.cancel();
-                setState(() => _query = value);
-              },
-              suffixIcon: searching
-                  ? IconButton(
-                      tooltip: _t(context, 'Clear', 'مسح'),
-                      icon: const Icon(Icons.close_rounded, size: 18),
-                      onPressed: () {
-                        _search.clear();
-                        _typing?.cancel();
-                        setState(() => _query = '');
-                      },
-                    )
-                  : null,
-            ),
-            leading: IconButton(
-              key: const ValueKey<String>('library-filter'),
-              tooltip: _t(context, 'Filter', 'تصفية'),
-              icon: Icon(Icons.tune_rounded, color: colors.primary),
-              onPressed: () => _openFilterSheet(context),
-            ),
-            actions: const [
-              AppSideMenuButton(
-                padding: EdgeInsetsDirectional.only(start: 2, end: 4),
-              ),
-              SizedBox(width: 4),
-            ],
-            bottom: _LibraryListBar(
-              tabs: tabs,
-              selectedKey: selected?.key,
-              onTap: (tab) {
-                if (kind != null) _selectList(kind, tab);
-              },
-            ),
+              Widget body;
+              if (_section == LibraryPhoneSection.characters) {
+                body = const CharactersScreen(
+                  key: ValueKey<String>('library-characters'),
+                  favoritesOnly: true,
+                  embedded: true,
+                );
+              } else if (searching) {
+                final shown = _matches(_entries(kind!, repository, history));
+                body = shown.isEmpty
+                    ? Center(
+                        child: Text(
+                          _t(context, 'Nothing matches', 'لا توجد نتائج'),
+                          key: const ValueKey<String>('library-search-empty'),
+                        ),
+                      )
+                    : LibraryItemsGrid(
+                        key: ValueKey<String>(
+                          'library-grid-${kind.storageKey}-search',
+                        ),
+                        items: shown,
+                        heroPrefix: 'lib_search_${kind.storageKey}',
+                      );
+              } else if (tabs.isEmpty) {
+                body = LibraryEmptyState(mediaKind: kind!);
+              } else {
+                body = NotificationListener<ScrollEndNotification>(
+                  onNotification: (notification) {
+                    if (notification.metrics.axis != Axis.horizontal) {
+                      return false;
+                    }
+                    final index = controller.index;
+                    if (index >= 0 && index < tabs.length) {
+                      _selectList(kind!, tabs[index]);
+                    }
+                    return false;
+                  },
+                  child: TabBarView(
+                    key: const ValueKey<String>('library-list-pager'),
+                    controller: controller,
+                    children: [
+                      for (final tab in tabs)
+                        _listBody(repository, kind!, tab),
+                    ],
+                  ),
+                );
+              }
+
+              return Scaffold(
+                appBar: AppBar(
+                  titleSpacing: 12,
+                  title: AppSearchField(
+                    fieldKey: const ValueKey<String>('library-search'),
+                    controller: _search,
+                    hintText: _t(
+                      context,
+                      'Search your library',
+                      'ابحث في مكتبتك',
+                    ),
+                    onChanged: (value) {
+                      _typing?.cancel();
+                      _typing = Timer(_typingPause, () {
+                        if (mounted) setState(() => _query = value);
+                      });
+                    },
+                    onSubmitted: (value) {
+                      _typing?.cancel();
+                      setState(() => _query = value);
+                    },
+                    suffixIcon: searching
+                        ? IconButton(
+                            tooltip: _t(context, 'Clear', 'مسح'),
+                            icon: const Icon(Icons.close_rounded, size: 18),
+                            onPressed: () {
+                              _search.clear();
+                              _typing?.cancel();
+                              setState(() => _query = '');
+                            },
+                          )
+                        : null,
+                  ),
+                  leading: IconButton(
+                    key: const ValueKey<String>('library-filter'),
+                    tooltip: _t(context, 'Filter', 'تصفية'),
+                    icon: Icon(Icons.tune_rounded, color: colors.primary),
+                    onPressed: () => _openFilterSheet(context),
+                  ),
+                  actions: const [
+                    AppSideMenuButton(
+                      padding: EdgeInsetsDirectional.only(start: 2, end: 4),
+                    ),
+                    SizedBox(width: 4),
+                  ],
+                  bottom: tabs.isEmpty
+                      ? const PreferredSize(
+                          preferredSize: Size.fromHeight(46),
+                          child: SizedBox(height: 46),
+                        )
+                      : FilterStyleTabBar(
+                          controller: controller,
+                          tabs: [
+                            for (final tab in tabs)
+                              FilterStyleTab(
+                                key: ValueKey<String>(
+                                  'library-list-tab-${tab.key}',
+                                ),
+                                label: tab.count == null
+                                    ? tab.label
+                                    : '${tab.label} ${tab.count}',
+                              ),
+                          ],
+                          onTap: kind == null
+                              ? null
+                              : (index) => _selectList(kind, tabs[index]),
+                        ),
+                ),
+                body: body,
+              );
+            },
           ),
-          body: body,
         );
       },
     );
@@ -359,86 +421,6 @@ class _LibraryPhoneShelvesState extends ConsumerState<LibraryPhoneShelves> {
   }
 }
 
-class _LibraryListBar extends StatelessWidget implements PreferredSizeWidget {
-  const _LibraryListBar({
-    required this.tabs,
-    required this.selectedKey,
-    required this.onTap,
-  });
-
-  final List<_LibraryListTab> tabs;
-  final String? selectedKey;
-  final ValueChanged<_LibraryListTab> onTap;
-
-  @override
-  Size get preferredSize => const Size.fromHeight(46);
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    if (tabs.isEmpty) return const SizedBox(height: 46);
-    return SizedBox(
-      height: 46,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Row(
-          children: [
-            for (var index = 0; index < tabs.length; index++) ...[
-              if (index > 0) const SizedBox(width: 8),
-              Builder(
-                builder: (context) {
-                  final tab = tabs[index];
-                  final selected = tab.key == selectedKey;
-                  return InkWell(
-                    key: ValueKey<String>('library-list-tab-${tab.key}'),
-                    borderRadius: BorderRadius.circular(10),
-                    onTap: () => onTap(tab),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          Expanded(
-                            child: Center(
-                              child: Text(
-                                tab.count == null
-                                    ? tab.label
-                                    : '${tab.label} ${tab.count}',
-                                maxLines: 1,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  color: selected
-                                      ? colors.primary
-                                      : colors.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                          ),
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 160),
-                            width: 34,
-                            height: 3,
-                            decoration: BoxDecoration(
-                              color: selected
-                                  ? colors.primary
-                                  : Colors.transparent,
-                              borderRadius: BorderRadius.circular(99),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 /// The library filter. On phone it also chooses Anime, Manga, or favorite
 /// Characters. Desktop passes only [kind] and keeps its existing navigation.
