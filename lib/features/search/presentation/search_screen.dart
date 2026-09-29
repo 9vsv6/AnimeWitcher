@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:animewitcher/features/home/presentation/widgets/home_section_header.dart';
 import 'package:animewitcher/shared/widgets/app_side_menu.dart';
+import 'package:animewitcher/shared/widgets/app_search_field.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animewitcher/core/navigation/taskbar_destination.dart';
@@ -639,107 +640,48 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       searchPagedResultsProvider.select((state) => state.isLoading),
     );
 
-    return GestureDetector(
-      onTap: () {
-        if (!_focusNode.hasFocus) {
-          _focusNode.requestFocus();
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: _controller,
+      builder: (context, value, child) {
+        Widget? suffix;
+        if (searching) {
+          suffix = Padding(
+            padding: const EdgeInsets.all(12),
+            child: AppLoadingIndicator(
+              color: theme.colorScheme.primary,
+              constraints: BoxConstraints.tight(const Size(18, 18)),
+            ),
+          );
+        } else if (value.text.isNotEmpty) {
+          suffix = IconButton(
+            tooltip: appText(context, english: 'Clear', arabic: 'مسح'),
+            icon: const Icon(Icons.close_rounded, size: 18),
+            onPressed: () {
+              _controller.clear();
+              ref.read(searchSuggestionControllerProvider.notifier).clear();
+              ref.read(searchQueryProvider.notifier).set('');
+              _focusNode.requestFocus();
+            },
+          );
         }
-      },
-      behavior: HitTestBehavior.opaque,
-      child: SearchGlassSurface(
-        focusNode: _focusNode,
-        child: ValueListenableBuilder<TextEditingValue>(
-          valueListenable: _controller,
-          builder: (context, value, child) {
-            final isSearching = searching;
 
-            Widget? suffix;
-            if (isSearching) {
-              suffix = Padding(
-                padding: const EdgeInsets.all(12),
-                child: AppLoadingIndicator(
-                  color: theme.colorScheme.primary,
-                  constraints: BoxConstraints.tight(const Size(18, 18)),
-                ),
-              );
-            } else if (value.text.isNotEmpty) {
-              suffix = IconButton(
-                icon: const Icon(Icons.clear, size: 18),
-                style: IconButton.styleFrom(
-                  minimumSize: const Size(32, 32),
-                  padding: EdgeInsets.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                onPressed: () {
-                  _controller.clear();
-                  ref.read(searchSuggestionControllerProvider.notifier).clear();
-                  ref.read(searchQueryProvider.notifier).set('');
-                },
-              );
-            }
-
-            return Directionality(
-              textDirection: fieldDirection,
-              child: TextField(
-                controller: _controller,
-                focusNode: _focusNode,
-                autofocus: false,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: theme.colorScheme.onSurface,
-                ),
-                textDirection: searchTextDirection(
-                  _controller.text,
-                  fallback: fieldDirection,
-                ),
-                textAlign: TextAlign.start,
-                textAlignVertical: TextAlignVertical.center,
-                textInputAction: TextInputAction.search,
-                enableInteractiveSelection: true,
-                contextMenuBuilder: (context, editableTextState) {
-                  return AdaptiveTextSelectionToolbar.buttonItems(
-                    anchors: editableTextState.contextMenuAnchors,
-                    buttonItems: editableTextState.contextMenuButtonItems,
-                  );
-                },
-                onChanged: (val) {
-                  ref
-                      .read(searchSuggestionControllerProvider.notifier)
-                      .onQueryChanged(val);
-                },
-                onSubmitted: _submitSearch,
-                decoration: InputDecoration(
-                  hintText: searchPlaceholder,
-                  border: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  filled: false,
-                  isDense: true,
-                  contentPadding: EdgeInsets.zero,
-                  hintStyle: TextStyle(
-                    fontSize: 13,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                  prefixIcon: Icon(
-                    Icons.search_rounded,
-                    size: 20,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                  prefixIconConstraints: const BoxConstraints(
-                    minWidth: 44,
-                    minHeight: SearchGlassSurface.height,
-                  ),
-                  suffixIcon: suffix,
-                  suffixIconConstraints: const BoxConstraints(
-                    minWidth: 42,
-                    minHeight: SearchGlassSurface.height,
-                  ),
-                ),
-              ),
-            );
+        return AppSearchField(
+          controller: _controller,
+          focusNode: _focusNode,
+          hintText: searchPlaceholder,
+          textDirection: searchTextDirection(
+            value.text,
+            fallback: fieldDirection,
+          ),
+          onChanged: (val) {
+            ref
+                .read(searchSuggestionControllerProvider.notifier)
+                .onQueryChanged(val);
           },
-        ),
-      ),
+          onSubmitted: _submitSearch,
+          suffixIcon: suffix,
+        );
+      },
     );
   }
 
