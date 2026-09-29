@@ -3,17 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/account/account_providers.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/storage/library_category.dart';
 import '../../../../core/storage/library_repository.dart';
 import '../../../../core/storage/storage_service.dart';
-import '../../../../shared/widgets/multimedia_card.dart';
-import '../../../../shared/widgets/app_side_menu.dart';
 import '../../../../shared/widgets/app_search_field.dart';
-import '../../../../shared/widgets/app_back_button.dart';
-import '../../../home/presentation/widgets/home_section_header.dart';
-import '../../../../shared/widgets/underline_segment_tabs.dart';
+import '../../../../shared/widgets/app_side_menu.dart';
 import '../../../characters/presentation/characters_screen.dart';
 import '../../../more/presentation/recent_watched_screen.dart';
 import '../history_provider.dart';
@@ -28,12 +23,32 @@ bool _arabic(BuildContext context) =>
 String _t(BuildContext context, String en, String ar) =>
     _arabic(context) ? ar : en;
 
-/// The phone library: a search box and a filter button on top, anime and
-/// manga as two tabs, and each list a row of posters you scroll sideways —
-/// the watch history first. The filter sheet picks which lists get a row,
-/// their order, rows or one grid, and whether empty lists show at all.
-/// Searching folds the rows into one grid of what matches, each poster
-/// tagged with its list.
+enum LibraryPhoneSection { anime, manga, characters }
+
+String _sectionLabel(BuildContext context, LibraryPhoneSection section) =>
+    switch (section) {
+      LibraryPhoneSection.anime => _t(context, 'Anime', 'أنمي'),
+      LibraryPhoneSection.manga => _t(context, 'Manga', 'مانجا'),
+      LibraryPhoneSection.characters =>
+        _t(context, 'Characters', 'شخصيات'),
+    };
+
+LibraryMediaKind? _sectionKind(LibraryPhoneSection section) => switch (section) {
+  LibraryPhoneSection.anime => LibraryMediaKind.anime,
+  LibraryPhoneSection.manga => LibraryMediaKind.manga,
+  LibraryPhoneSection.characters => null,
+};
+
+typedef _LibraryListTab = ({
+  String key,
+  String label,
+  int? count,
+  LibraryCategory? category,
+});
+
+/// The phone library is always a poster grid. The bar below search selects a
+/// concrete list; the filter chooses Anime, Manga, or favorite Characters and
+/// which list tabs are visible.
 class LibraryPhoneShelves extends ConsumerStatefulWidget {
   const LibraryPhoneShelves({super.key});
 
@@ -42,27 +57,29 @@ class LibraryPhoneShelves extends ConsumerStatefulWidget {
       _LibraryPhoneShelvesState();
 }
 
-class _LibraryPhoneShelvesState extends ConsumerState<LibraryPhoneShelves>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabs;
+class _LibraryPhoneShelvesState extends ConsumerState<LibraryPhoneShelves> {
   late final LibraryShelfPrefs _prefs;
+  late LibraryPhoneSection _section;
   final TextEditingController _search = TextEditingController();
+  String _selectedListKey = LibraryCategory.watching.storageKey;
   String _query = '';
 
-  /// Waits for a pause in the typing before searching, so every letter does
-  /// not redraw the grid with a crowd of titles holding it.
   Timer? _typing;
   static const Duration _typingPause = Duration(milliseconds: 500);
+
+  final Map<(LibraryMediaKind, LibraryCategory), List<MultimediaItem>> _lists =
+      <(LibraryMediaKind, LibraryCategory), List<MultimediaItem>>{};
+  Object? _listsFor;
 
   @override
   void initState() {
     super.initState();
     _prefs = LibraryShelfPrefs(ref.read(storageServiceProvider));
-    _tabs = TabController(
-      length: LibraryMediaKind.values.length,
-      vsync: this,
-      initialIndex: ref.read(libraryProvider).mediaKind.index,
-    )..addListener(_onTab);
+    final library = ref.read(libraryProvider);
+    _section = library.mediaKind == LibraryMediaKind.manga
+        ? LibraryPhoneSection.manga
+        : LibraryPhoneSection.anime;
+    _selectedListKey = library.category.storageKey;
     Future<void>.microtask(_syncHistory);
   }
 
@@ -70,36 +87,17 @@ class _LibraryPhoneShelvesState extends ConsumerState<LibraryPhoneShelves>
     try {
       await ref.read(watchHistoryProvider.notifier).refreshFromServer();
     } catch (_) {
-      // The last local history stays on screen when the account is out of
-      // reach.
-    }
-  }
-
-  void _onTab() {
-    if (_tabs.indexIsChanging) return;
-    final kind = LibraryMediaKind.values[_tabs.index];
-    if (kind != ref.read(libraryProvider).mediaKind) {
-      unawaited(ref.read(libraryProvider.notifier).selectMediaKind(kind));
+      // Keep the latest local history when the account is temporarily offline.
     }
   }
 
   @override
   void dispose() {
-    _tabs
-      ..removeListener(_onTab)
-      ..dispose();
     _typing?.cancel();
     _search.dispose();
     _prefs.dispose();
     super.dispose();
   }
-
-  /// Each list, sorted, kept until the library or the sort changes. The
-  /// rows, the tab counts and the search all read the same lists, and each
-  /// read went back to storage and sorted again on every redraw.
-  final Map<(LibraryMediaKind, LibraryCategory), List<MultimediaItem>> _lists =
-      <(LibraryMediaKind, LibraryCategory), List<MultimediaItem>>{};
-  Object? _listsFor;
 
   List<MultimediaItem> _list(
     LibraryRepository repository,
@@ -113,45 +111,99 @@ class _LibraryPhoneShelvesState extends ConsumerState<LibraryPhoneShelves>
     ),
   );
 
-  /// Every title the lists shown hold for [kind], each with its list's name,
-  /// the history last; a title in two lists shows once, under the first.
-  List<(MultimediaItem, String)> _entries(
+  List<MultimediaItem> _entries(
     LibraryMediaKind kind,
     LibraryRepository repository,
     List<HistoryItem> history,
   ) {
     final seen = <String>{};
-    final entries = <(MultimediaItem, String)>[];
+    final entries = <MultimediaItem>[];
     for (final category in LibraryCategory.values) {
       if (!_prefs.shows(category)) continue;
-      final label = libraryCategoryLabel(context, category, kind);
       for (final item in _list(repository, kind, category)) {
-        if (seen.add(item.url)) entries.add((item, label));
+        if (seen.add(item.url)) entries.add(item);
       }
     }
-    if (_prefs.showsRecent()) {
-      final label = libraryRecentLabel(context);
+    if (libraryKindHasRecent(kind) && _prefs.showsRecent()) {
       for (final entry in sortLibraryHistory(
         libraryRecentFor(history, kind),
         _prefs.sort,
       )) {
-        if (seen.add(entry.item.url)) entries.add((entry.item, label));
+        if (seen.add(entry.item.url)) entries.add(entry.item);
       }
     }
     return entries;
   }
 
-  List<(MultimediaItem, String)> _matches(
-    List<(MultimediaItem, String)> entries,
-  ) => [
-    for (final entry in entries)
-      if (libraryItemMatches(entry.$1, _query)) entry,
+  List<MultimediaItem> _matches(List<MultimediaItem> entries) => [
+    for (final item in entries)
+      if (libraryItemMatches(item, _query)) item,
   ];
+
+  List<_LibraryListTab> _listTabs(
+    LibraryMediaKind kind,
+    LibraryRepository repository,
+    List<HistoryItem> history,
+  ) {
+    final tabs = <_LibraryListTab>[];
+    if (libraryKindHasRecent(kind) && _prefs.showsRecent()) {
+      final count = libraryRecentFor(history, kind).length;
+      if (!_prefs.hideEmpty || count > 0) {
+        tabs.add((
+          key: LibraryShelfPrefs.recentKey,
+          label: libraryRecentLabel(context),
+          count: count,
+          category: null,
+        ));
+      }
+    }
+    for (final category in LibraryCategory.values) {
+      if (!_prefs.shows(category)) continue;
+      final count = _list(repository, kind, category).length;
+      if (_prefs.hideEmpty && count == 0) continue;
+      tabs.add((
+        key: category.storageKey,
+        label: libraryCategoryLabel(context, category, kind),
+        count: count,
+        category: category,
+      ));
+    }
+    return tabs;
+  }
+
+  _LibraryListTab? _effectiveTab(List<_LibraryListTab> tabs) {
+    for (final tab in tabs) {
+      if (tab.key == _selectedListKey) return tab;
+    }
+    return tabs.isEmpty ? null : tabs.first;
+  }
+
+  void _selectList(LibraryMediaKind kind, _LibraryListTab tab) {
+    setState(() => _selectedListKey = tab.key);
+    final category = tab.category;
+    if (category != null) {
+      unawaited(ref.read(libraryProvider.notifier).select(kind, category));
+    }
+  }
+
+  void _selectSection(LibraryPhoneSection section) {
+    if (_section == section) return;
+    final kind = _sectionKind(section);
+    setState(() {
+      _section = section;
+      _query = '';
+      _search.clear();
+      _selectedListKey = kind == null
+          ? 'characters'
+          : ref.read(libraryProvider).category.storageKey;
+    });
+    if (kind != null) {
+      unawaited(ref.read(libraryProvider.notifier).selectMediaKind(kind));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    // The library notifier hands out a new state on every change to a list,
-    // which is what brings the rows up to date.
     final library = ref.watch(libraryProvider);
     final history = ref.watch(watchHistoryProvider);
     final repository = ref.read(libraryRepositoryProvider);
@@ -160,23 +212,71 @@ class _LibraryPhoneShelvesState extends ConsumerState<LibraryPhoneShelves>
     return ListenableBuilder(
       listenable: _prefs,
       builder: (context, _) {
-        // The kept lists last until the library or the sort changes.
         final listsFor = (library, _prefs.sort);
         if (listsFor != _listsFor) {
           _lists.clear();
           _listsFor = listsFor;
         }
-        final entriesByKind = {
-          for (final kind in LibraryMediaKind.values)
-            kind: _entries(kind, repository, history),
-        };
+
         final searching = _query.trim().isNotEmpty;
-        // Matched once, for both the tab's count and its grid.
-        final matchesByKind = {
-          if (searching)
-            for (final kind in LibraryMediaKind.values)
-              kind: _matches(entriesByKind[kind]!),
-        };
+        final kind = _sectionKind(_section);
+        final tabs = _section == LibraryPhoneSection.characters
+            ? <_LibraryListTab>[
+                (
+                  key: 'characters',
+                  label: libraryCharactersLabel(context),
+                  count: null,
+                  category: null,
+                ),
+              ]
+            : _listTabs(kind!, repository, history);
+        final selected = _effectiveTab(tabs);
+
+        Widget body;
+        if (_section == LibraryPhoneSection.characters) {
+          body = const CharactersScreen(
+            key: ValueKey<String>('library-characters'),
+            favoritesOnly: true,
+            embedded: true,
+          );
+        } else if (searching) {
+          final shown = _matches(_entries(kind!, repository, history));
+          body = shown.isEmpty
+              ? Center(
+                  child: Text(
+                    _t(context, 'Nothing matches', 'لا توجد نتائج'),
+                    key: const ValueKey<String>('library-search-empty'),
+                  ),
+                )
+              : LibraryItemsGrid(
+                  key: ValueKey<String>(
+                    'library-grid-${kind.storageKey}-search',
+                  ),
+                  items: shown,
+                  heroPrefix: 'lib_search_${kind.storageKey}',
+                );
+        } else if (selected == null) {
+          body = LibraryEmptyState(mediaKind: kind!);
+        } else if (selected.key == LibraryShelfPrefs.recentKey) {
+          body = RecentWatchedBody(
+            key: const ValueKey<String>('library-recent'),
+            sort: _prefs.sort,
+          );
+        } else {
+          final category = selected.category!;
+          final items = _list(repository, kind!, category);
+          body = items.isEmpty
+              ? LibraryEmptyState(mediaKind: kind)
+              : LibraryItemsGrid(
+                  key: ValueKey<String>(
+                    'library-grid-${kind.storageKey}-${category.storageKey}',
+                  ),
+                  items: items,
+                  heroPrefix:
+                      'lib_${kind.storageKey}_${category.storageKey}',
+                );
+        }
+
         return Scaffold(
           appBar: AppBar(
             titleSpacing: 12,
@@ -210,9 +310,6 @@ class _LibraryPhoneShelvesState extends ConsumerState<LibraryPhoneShelves>
                     )
                   : null,
             ),
-            // In RTL AppBar geometry, leading is the physical right edge.
-            // Put the library filter there to match Search, while the side
-            // menu stays in the physical left corner.
             leading: IconButton(
               key: const ValueKey<String>('library-filter'),
               tooltip: _t(context, 'Filter', 'تصفية'),
@@ -225,202 +322,130 @@ class _LibraryPhoneShelvesState extends ConsumerState<LibraryPhoneShelves>
               ),
               SizedBox(width: 4),
             ],
-            bottom: FilterStyleTabBar(
-              controller: _tabs,
-              isScrollable: false,
-              padding: EdgeInsets.zero,
-              tabs: [
-                for (final kind in LibraryMediaKind.values)
-                  FilterStyleTab(
-                    label: searching
-                        ? '${libraryKindLabel(context, kind)} '
-                              '${matchesByKind[kind]!.length}'
-                        : libraryKindLabel(context, kind),
-                  ),
-              ],
+            bottom: _LibraryListBar(
+              tabs: tabs,
+              selectedKey: selected?.key,
+              onTap: (tab) {
+                if (kind != null) _selectList(kind, tab);
+              },
             ),
           ),
-          body: TabBarView(
-            controller: _tabs,
-            children: [
-              for (final kind in LibraryMediaKind.values)
-                _kindBody(
-                  kind,
-                  entriesByKind[kind]!,
-                  repository,
-                  history,
-                  matches: matchesByKind[kind],
-                ),
-            ],
-          ),
+          body: body,
         );
       },
     );
   }
 
-  Widget _kindBody(
-    LibraryMediaKind kind,
-    List<(MultimediaItem, String)> entries,
-    LibraryRepository repository,
-    List<HistoryItem> history, {
-    List<(MultimediaItem, String)>? matches,
-  }) {
-    if (_query.trim().isNotEmpty || _prefs.view == LibraryView.grid) {
-      final shown = _query.trim().isEmpty
-          ? entries
-          : (matches ?? _matches(entries));
-      if (shown.isEmpty) {
-        return _query.trim().isEmpty
-            ? LibraryEmptyState(mediaKind: kind)
-            : Center(
-                child: Text(
-                  _t(context, 'Nothing matches', 'لا توجد نتائج'),
-                  key: const ValueKey<String>('library-search-empty'),
-                ),
-              );
-      }
-      return LibraryItemsGrid(
-        key: ValueKey<String>('library-grid-${kind.storageKey}'),
-        items: [for (final entry in shown) entry.$1],
-        labels: [for (final entry in shown) entry.$2],
-        heroPrefix: 'lib_grid_${kind.storageKey}',
-      );
-    }
-
-    final recent = _prefs.showsRecent()
-        ? sortLibraryHistory(libraryRecentFor(history, kind), _prefs.sort)
-        : const <HistoryItem>[];
-    final signedIn =
-        kind == LibraryMediaKind.manga ||
-        (ref
-                .watch(animeWitcherAccountControllerProvider)
-                .asData
-                ?.value
-                .isSignedIn ??
-            false);
-    final rows = <Widget>[
-      if (libraryKindHasRecent(kind) &&
-          _prefs.showsRecent() &&
-          (recent.isNotEmpty || !_prefs.hideEmpty))
-        _Shelf(
-          key: const ValueKey<String>('library-shelf-recent'),
-          title: libraryRecentLabel(context),
-          count: recent.length,
-          items: [for (final entry in recent) entry.item],
-          progress: [
-            for (final entry in recent)
-              entry.duration <= 0
-                  ? 0.0
-                  : (entry.position / entry.duration).clamp(0.0, 1.0),
-          ],
-          heroPrefix: 'lib_recent',
-          onSeeAll: () => Navigator.of(context, rootNavigator: true).push(
-            MaterialPageRoute<void>(
-              builder: (_) => const RecentWatchedScreen(),
-            ),
-          ),
-        ),
-      if (!signedIn)
-        SizedBox(height: 320, child: LibraryEmptyState(mediaKind: kind))
-      else
-        for (final category in LibraryCategory.values)
-          if (_prefs.shows(category))
-            ..._categoryShelf(kind, category, repository),
-    ];
-    // The favourite characters moved here from the More page: a row that
-    // opens them, under the anime lists.
-    if (kind == LibraryMediaKind.anime) {
-      rows.add(
-        ListTile(
-          key: const ValueKey<String>('library-characters'),
-          contentPadding: EdgeInsets.symmetric(
-            horizontal:
-                MultimediaCardLayout.catalogGridHorizontalPadding(context) + 4,
-          ),
-          leading: Icon(
-            Icons.face_rounded,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-          title: Text(
-            libraryCharactersLabel(context),
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-          trailing: const Icon(Icons.chevron_right_rounded),
-          onTap: () => Navigator.of(context, rootNavigator: true).push(
-            MaterialPageRoute<void>(
-              builder: (_) => const CharactersScreen(favoritesOnly: true),
-            ),
-          ),
-        ),
-      );
-    }
-    if (rows.isEmpty) return LibraryEmptyState(mediaKind: kind);
-    return ListView(
-      key: ValueKey<String>('library-shelves-${kind.storageKey}'),
-      padding: const EdgeInsets.only(top: 8, bottom: 110),
-      children: rows,
-    );
-  }
-
-  List<Widget> _categoryShelf(
-    LibraryMediaKind kind,
-    LibraryCategory category,
-    LibraryRepository repository,
-  ) {
-    final items = _list(repository, kind, category);
-    if (items.isEmpty && _prefs.hideEmpty) return const <Widget>[];
-    final title = libraryCategoryLabel(context, category, kind);
-    return <Widget>[
-      _Shelf(
-        key: ValueKey<String>(
-          'library-shelf-${kind.storageKey}-${category.storageKey}',
-        ),
-        title: title,
-        count: items.length,
-        items: items,
-        heroPrefix: 'lib_${category.storageKey}',
-        onSeeAll: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => LibraryListPage(
-              title: title,
-              kind: kind,
-              category: category,
-              sort: _prefs.sort,
-            ),
-          ),
-        ),
-      ),
-    ];
-  }
-
   void _openFilterSheet(BuildContext context) {
-    final kind = LibraryMediaKind.values[_tabs.index];
+    var section = _section;
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (_) => SafeArea(
-        child: LibraryFilterPanel(prefs: _prefs, kind: kind),
+      builder: (_) => StatefulBuilder(
+        builder: (context, setSheetState) => SafeArea(
+          child: LibraryFilterPanel(
+            prefs: _prefs,
+            kind: _sectionKind(section),
+            phoneSection: section,
+            onPhoneSectionChanged: (value) {
+              setSheetState(() => section = value);
+              _selectSection(value);
+            },
+          ),
+        ),
       ),
     );
   }
 }
 
-/// The library's filter: which lists show, their order, rows or one grid,
-/// and whether empty lists show. The phone opens it as a sheet, PC and
-/// tablet as a dialog from the side list, where [showView] is off since the
-/// side list is the view.
+class _LibraryListBar extends StatelessWidget implements PreferredSizeWidget {
+  const _LibraryListBar({
+    required this.tabs,
+    required this.selectedKey,
+    required this.onTap,
+  });
+
+  final List<_LibraryListTab> tabs;
+  final String? selectedKey;
+  final ValueChanged<_LibraryListTab> onTap;
+
+  @override
+  Size get preferredSize => const Size.fromHeight(46);
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    if (tabs.isEmpty) return const SizedBox(height: 46);
+    return SizedBox(
+      height: 46,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        itemCount: tabs.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final tab = tabs[index];
+          final selected = tab.key == selectedKey;
+          return InkWell(
+            key: ValueKey<String>('library-list-tab-${tab.key}'),
+            borderRadius: BorderRadius.circular(10),
+            onTap: () => onTap(tab),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Center(
+                      child: Text(
+                        tab.count == null
+                            ? tab.label
+                            : '${tab.label} ${tab.count}',
+                        maxLines: 1,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: selected
+                              ? colors.primary
+                              : colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    width: 34,
+                    height: 3,
+                    decoration: BoxDecoration(
+                      color: selected ? colors.primary : Colors.transparent,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// The library filter. On phone it also chooses Anime, Manga, or favorite
+/// Characters. Desktop passes only [kind] and keeps its existing navigation.
 class LibraryFilterPanel extends StatelessWidget {
   const LibraryFilterPanel({
     super.key,
     required this.prefs,
-    required this.kind,
-    this.showView = true,
-  });
+    this.kind,
+    this.phoneSection,
+    this.onPhoneSectionChanged,
+  }) : assert(kind != null || phoneSection != null);
 
   final LibraryShelfPrefs prefs;
-  final LibraryMediaKind kind;
-  final bool showView;
+  final LibraryMediaKind? kind;
+  final LibraryPhoneSection? phoneSection;
+  final ValueChanged<LibraryPhoneSection>? onPhoneSectionChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -428,6 +453,14 @@ class LibraryFilterPanel extends StatelessWidget {
       listenable: prefs,
       builder: (context, _) {
         final theme = Theme.of(context);
+        final activeKind = phoneSection == LibraryPhoneSection.characters
+            ? null
+            : phoneSection == LibraryPhoneSection.manga
+            ? LibraryMediaKind.manga
+            : phoneSection == LibraryPhoneSection.anime
+            ? LibraryMediaKind.anime
+            : kind;
+
         Widget heading(String text) => Padding(
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
           child: Text(
@@ -445,13 +478,16 @@ class LibraryFilterPanel extends StatelessWidget {
           T value,
           T current,
           String label,
-          ValueChanged<T> on,
-        ) => ChoiceChip(
+          ValueChanged<T> on, {
+          Key? key,
+        }) => ChoiceChip(
+          key: key,
           label: Text(label),
           selected: value == current,
           showCheckmark: false,
           onSelected: (_) => on(value),
         );
+
         return SingleChildScrollView(
           padding: const EdgeInsets.only(bottom: 12),
           child: Column(
@@ -459,57 +495,74 @@ class LibraryFilterPanel extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              heading(_t(context, 'Lists shown', 'القوائم الظاهرة')),
-              wrap([
-                if (libraryKindHasRecent(kind))
-                  FilterChip(
-                    key: const ValueKey<String>('library-filter-recent'),
-                    label: Text(libraryRecentLabel(context)),
-                    selected: prefs.showsRecent(),
-                    showCheckmark: false,
-                    onSelected: (on) =>
-                        prefs.setShown(LibraryShelfPrefs.recentKey, on),
-                  ),
-                for (final category in LibraryCategory.values)
-                  FilterChip(
-                    key: ValueKey<String>(
-                      'library-filter-${category.storageKey}',
-                    ),
-                    label: Text(libraryCategoryLabel(context, category, kind)),
-                    selected: prefs.shows(category),
-                    showCheckmark: false,
-                    onSelected: (on) => prefs.setShown(category.storageKey, on),
-                  ),
-              ]),
-              heading(_t(context, 'Sort', 'الترتيب')),
-              wrap([
-                for (final (value, label) in <(LibrarySort, String)>[
-                  (LibrarySort.added, _t(context, 'Latest added', 'آخر إضافة')),
-                  (LibrarySort.name, _t(context, 'Name', 'الاسم')),
-                  (LibrarySort.year, _t(context, 'Year', 'السنة')),
-                ])
-                  choice<LibrarySort>(
-                    value,
-                    prefs.sort,
-                    label,
-                    (v) => prefs.sort = v,
-                  ),
-              ]),
-              if (showView) ...[
-                heading(_t(context, 'View', 'العرض')),
+              if (phoneSection != null) ...[
+                heading(_t(context, 'Library section', 'القسم')),
                 wrap([
-                  choice<LibraryView>(
-                    LibraryView.shelves,
-                    prefs.view,
-                    _t(context, 'Rows', 'رفوف'),
-                    (v) => prefs.view = v,
+                  for (final section in LibraryPhoneSection.values)
+                    choice<LibraryPhoneSection>(
+                      section,
+                      phoneSection!,
+                      _sectionLabel(context, section),
+                      onPhoneSectionChanged ?? (_) {},
+                      key: ValueKey<String>(
+                        'library-section-${section.name}',
+                      ),
+                    ),
+                ]),
+              ],
+              heading(_t(context, 'Lists shown', 'القوائم الظاهرة')),
+              if (phoneSection == LibraryPhoneSection.characters)
+                wrap([
+                  FilterChip(
+                    key: const ValueKey<String>('library-filter-characters'),
+                    label: Text(libraryCharactersLabel(context)),
+                    selected: true,
+                    showCheckmark: false,
+                    onSelected: null,
                   ),
-                  choice<LibraryView>(
-                    LibraryView.grid,
-                    prefs.view,
-                    _t(context, 'Grid', 'شبكة'),
-                    (v) => prefs.view = v,
-                  ),
+                ])
+              else if (activeKind != null)
+                wrap([
+                  if (libraryKindHasRecent(activeKind))
+                    FilterChip(
+                      key: const ValueKey<String>('library-filter-recent'),
+                      label: Text(libraryRecentLabel(context)),
+                      selected: prefs.showsRecent(),
+                      showCheckmark: false,
+                      onSelected: (on) =>
+                          prefs.setShown(LibraryShelfPrefs.recentKey, on),
+                    ),
+                  for (final category in LibraryCategory.values)
+                    FilterChip(
+                      key: ValueKey<String>(
+                        'library-filter-${category.storageKey}',
+                      ),
+                      label: Text(
+                        libraryCategoryLabel(context, category, activeKind),
+                      ),
+                      selected: prefs.shows(category),
+                      showCheckmark: false,
+                      onSelected: (on) =>
+                          prefs.setShown(category.storageKey, on),
+                    ),
+                ]),
+              if (activeKind != null) ...[
+                heading(_t(context, 'Sort', 'الترتيب')),
+                wrap([
+                  for (final (value, label) in <(LibrarySort, String)>[
+                    (
+                      LibrarySort.added,
+                      _t(context, 'Latest added', 'آخر إضافة'),
+                    ),
+                    (LibrarySort.name, _t(context, 'Name', 'الاسم')),
+                    (LibrarySort.year, _t(context, 'Year', 'السنة')),
+                  ])
+                    choice<LibrarySort>(
+                      value,
+                      prefs.sort,
+                      label,
+                      (v) => prefs.sort = v,
+                    ),
                 ]),
               ],
               const SizedBox(height: 6),
@@ -526,171 +579,6 @@ class LibraryFilterPanel extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-}
-
-/// One list as a row: its name and count over posters you scroll sideways,
-/// or, empty, the name alone on one line.
-class _Shelf extends StatelessWidget {
-  const _Shelf({
-    super.key,
-    required this.title,
-    required this.count,
-    required this.items,
-    required this.heroPrefix,
-    required this.onSeeAll,
-    this.progress,
-  });
-
-  final String title;
-  final int count;
-  final List<MultimediaItem> items;
-  final String heroPrefix;
-  final VoidCallback onSeeAll;
-
-  /// How far into each title the history is, for a bar under its poster.
-  final List<double>? progress;
-
-  static const double _cardWidth = 112;
-
-  /// Titles a row shows; "عرض الكل" has the rest.
-  static const int limit = 10;
-  static const double _spacing = 10;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final side = MultimediaCardLayout.catalogGridHorizontalPadding(context);
-    final header = Padding(
-      padding: EdgeInsetsDirectional.fromSTEB(side + 4, 10, side, 6),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              '$title · $count',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: items.isEmpty ? colors.onSurfaceVariant : null,
-              ),
-            ),
-          ),
-          // The same pill as home's rows.
-          if (items.isNotEmpty) HomeViewAllButton(onTap: onSeeAll),
-        ],
-      ),
-    );
-    if (items.isEmpty) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          header,
-          Divider(height: 1, indent: side, endIndent: side),
-        ],
-      );
-    }
-    const posterHeight = _cardWidth * 1.5;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        header,
-        SizedBox(
-          height: MultimediaCardLayout.listHeight(_cardWidth, isPortrait: true),
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: EdgeInsets.symmetric(horizontal: side),
-            itemCount: items.length.clamp(0, limit),
-            separatorBuilder: (_, _) => const SizedBox(width: _spacing),
-            itemBuilder: (context, index) {
-              final item = items[index];
-              final card = MultimediaCard.fromItem(
-                key: ValueKey<String>('$heroPrefix-${item.url}'),
-                item: item,
-                heroTag: '${heroPrefix}_${item.url}_$index',
-                onTap: () => openLibraryItem(context, item),
-              );
-              final fraction = progress?[index] ?? 0;
-              return SizedBox(
-                width: _cardWidth,
-                child: fraction <= 0
-                    ? card
-                    : Stack(
-                        children: [
-                          Positioned.fill(child: card),
-                          Positioned(
-                            left: 6,
-                            right: 6,
-                            top: posterHeight - 9,
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(2),
-                              child: LinearProgressIndicator(
-                                value: fraction,
-                                minHeight: 3,
-                                color: colors.primary,
-                                backgroundColor: Colors.black.withValues(
-                                  alpha: 0.45,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// One list in full, from a row's "عرض الكل".
-class LibraryListPage extends ConsumerWidget {
-  const LibraryListPage({
-    super.key,
-    required this.title,
-    required this.kind,
-    required this.category,
-    required this.sort,
-  });
-
-  final String title;
-  final LibraryMediaKind kind;
-  final LibraryCategory category;
-  final LibrarySort sort;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    ref.watch(libraryProvider);
-    final repository = ref.read(libraryRepositoryProvider);
-    final items = sortLibraryItems(
-      libraryItemsFor(repository, category, kind),
-      sort,
-    );
-    final titleDirection = _arabic(context)
-        ? TextDirection.rtl
-        : TextDirection.ltr;
-    return Scaffold(
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(kToolbarHeight),
-        child: Directionality(
-          textDirection: TextDirection.ltr,
-          child: AppBar(
-            automaticallyImplyLeading: false,
-            leading: const AppBackButton(),
-            title: Directionality(
-              textDirection: titleDirection,
-              child: Text(title),
-            ),
-          ),
-        ),
-      ),
-      body: items.isEmpty
-          ? LibraryEmptyState(mediaKind: kind)
-          : LibraryItemsGrid(items: items, heroPrefix: 'lib_page'),
     );
   }
 }
