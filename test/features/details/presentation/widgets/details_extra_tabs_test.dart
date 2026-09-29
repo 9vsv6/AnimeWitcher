@@ -238,7 +238,7 @@ void main() {
     await tester.pump();
 
     expect(find.text(animeWitcherSimilarTabLabel), findsOneWidget);
-    expect(find.text(animeWitcherRelatedTabLabel), findsNothing);
+    expect(find.text(animeWitcherRelatedTabLabel), findsOneWidget);
     expect(find.text(animeWitcherCharactersTabLabel), findsOneWidget);
     expect(tester.takeException(), isNull);
     expect(find.text('المزيد مثل هذا'), findsNothing);
@@ -266,16 +266,19 @@ void main() {
         )
         .map((ink) => tester.getRect(find.byWidget(ink)))
         .toList();
-    expect(slotRects, hasLength(2));
+    expect(slotRects, hasLength(3));
     expect((slotRects[0].width - slotRects[1].width).abs(), lessThan(1));
-    expect(slotRects[0].width, closeTo(390 / 2, 1));
+    expect((slotRects[1].width - slotRects[2].width).abs(), lessThan(1));
+    expect(slotRects[0].width, closeTo(390 / 3, 1));
     expect(slotRects[0].center.dx, greaterThan(slotRects[1].center.dx));
+    expect(slotRects[1].center.dx, greaterThan(slotRects[2].center.dx));
     final labelRects = tester.widgetList<Tab>(find.byType(Tab)).map((tab) {
       return tester.getRect(find.byWidget(tab));
     }).toList();
-    expect(labelRects, hasLength(2));
+    expect(labelRects, hasLength(3));
     expect(labelRects[0].width, lessThan(slotRects[0].width * 0.85));
     expect(labelRects[1].width, lessThan(slotRects[1].width * 0.85));
+    expect(labelRects[2].width, lessThan(slotRects[2].width * 0.85));
     expect(
       tester.getCenter(find.text(animeWitcherSimilarTabLabel)).dx,
       greaterThan(
@@ -299,6 +302,11 @@ void main() {
     expect(fourth.top, greaterThan(first.bottom - 1));
     expect(find.text('مسلسل'), findsWidgets);
     expect(find.text('2024'), findsWidgets);
+
+    await tester.tap(find.text(animeWitcherRelatedTabLabel));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(visited, contains(detailsExtraRelatedTabIndex));
 
     await tester.tap(find.text(animeWitcherCharactersTabLabel));
     await tester.pump();
