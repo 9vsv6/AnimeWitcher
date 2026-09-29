@@ -31,16 +31,10 @@ String localizedAnimeWitcherAccountError(
     'same-email' => 'هذا هو البريد الإلكتروني الحالي بالفعل.',
     'user-disabled' => 'تم تعطيل هذا الحساب.',
     'too-many-attempts' => 'محاولات كثيرة. حاول لاحقًا.',
-    'google-not-configured' => 'دخول Google غير مهيأ لهذه النسخة.',
-    'google-token-missing' => 'لم يُرجع Google رمز دخول صالحًا.',
-    'wrong-google-account' =>
-      'اختر حساب Google نفسه لتأكيد هويتك.',
     'unsupported-sign-in-provider' =>
       'طريقة تسجيل الدخول الحالية لا تدعم هذه العملية.',
     'recent-login-required' =>
       'يلزم تأكيد هويتك من جديد قبل إكمال العملية.',
-    'provider-already-linked' => 'كلمة المرور مضافة إلى هذا الحساب بالفعل.',
-    'account-email-missing' => 'تعذر قراءة البريد الإلكتروني للحساب.',
     'not-configured' => 'مزامنة AnimeWitcher غير مهيأة لهذه النسخة.',
     'storage-not-configured' => 'رفع صور الحساب غير مهيأ لهذه النسخة.',
     'storage-permission-denied' =>
