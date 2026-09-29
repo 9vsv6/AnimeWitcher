@@ -2,8 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:google_sign_in/google_sign_in.dart';
-
 import '../domain/entity/multimedia_item.dart';
 import '../extensions/providers/animewitcher_manga_mapping.dart';
 import '../storage/library_category.dart';
@@ -59,12 +57,9 @@ class AnimeWitcherAccountService {
   final FirestoreRestClient _firestore;
   final FirebaseStorageRestClient _cloudStorage;
   final FirebaseFunctionsRestClient _functions;
-  final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
-
   AnimeWitcherSession? _session;
   AnimeWitcherProfile? _profile;
   DateTime? _lastSyncAt;
-  bool _googleInitialized = false;
   int _sessionGeneration = 0;
   Future<AnimeWitcherSession>? _refreshInFlight;
   Future<void>? _syncInFlight;
@@ -251,20 +246,6 @@ class AnimeWitcherAccountService {
       email: email,
       password: password,
     );
-    return _completeSignIn(session);
-  }
-
-  Future<AnimeWitcherAccountSnapshot> signInWithGoogle() async {
-    await _initializeGoogleSignIn();
-    final googleAccount = await _googleSignIn.authenticate();
-    final googleToken = googleAccount.authentication.idToken;
-    if (googleToken == null || googleToken.isEmpty) {
-      throw const AnimeWitcherAccountException(
-        'google-token-missing',
-        'Google did not return a usable sign-in token.',
-      );
-    }
-    final session = await _auth.signInWithGoogleIdToken(googleToken);
     return _completeSignIn(session);
   }
 
@@ -546,53 +527,32 @@ class AnimeWitcherAccountService {
         profile.hasPasswordProvider ||
         (profile.providerIds.isEmpty &&
             profile.signInMethod == AnimeWitcherSignInMethod.email);
-    AnimeWitcherSession reauthenticated;
-    if (usesPassword) {
-      final email = profile.email ?? activeSession.email;
-      if (email == null || currentPassword.length < 6) {
-        throw const AnimeWitcherAccountException(
-          'invalid-credentials',
-          'Enter the current password.',
-        );
-      }
-      reauthenticated = await _auth.signInWithEmail(
-        email: email,
-        password: currentPassword,
-        requireVerified: false,
-      );
-    } else if (profile.hasGoogleProvider ||
-        profile.signInMethod == AnimeWitcherSignInMethod.google) {
-      reauthenticated = await _reauthenticateWithGoogle(profile);
-    } else {
+    if (!usesPassword) {
       throw const AnimeWitcherAccountException(
         'unsupported-sign-in-provider',
-        'The current sign-in method cannot change the password.',
+        'This account does not support password changes.',
       );
     }
+    final email = profile.email ?? activeSession.email;
+    if (email == null || currentPassword.length < 6) {
+      throw const AnimeWitcherAccountException(
+        'invalid-credentials',
+        'Enter the current password.',
+      );
+    }
+    var reauthenticated = await _auth.signInWithEmail(
+      email: email,
+      password: currentPassword,
+      requireVerified: false,
+    );
     _ensureSameAccount(profile, reauthenticated);
     reauthenticated = reauthenticated.copyWith(
       signInMethod: activeSession.signInMethod,
     );
-    final AnimeWitcherSession updated;
-    if (usesPassword) {
-      updated = await _auth.updatePassword(
-        previous: reauthenticated,
-        newPassword: newPassword,
-      );
-    } else {
-      final email = reauthenticated.email ?? profile.email;
-      if (email == null || email.trim().isEmpty) {
-        throw const AnimeWitcherAccountException(
-          'account-email-missing',
-          'The account email address could not be read.',
-        );
-      }
-      updated = await _auth.linkEmailPassword(
-        previous: reauthenticated,
-        email: email,
-        newPassword: newPassword,
-      );
-    }
+    final updated = await _auth.updatePassword(
+      previous: reauthenticated,
+      newPassword: newPassword,
+    );
     _session = updated.copyWith(signInMethod: activeSession.signInMethod);
     _profile = profile.copyWith(providerIds: _session!.providerIds);
     await _persistSession();
@@ -630,29 +590,24 @@ class AnimeWitcherAccountService {
         profile.hasPasswordProvider ||
         (profile.providerIds.isEmpty &&
             profile.signInMethod == AnimeWitcherSignInMethod.email);
-    AnimeWitcherSession reauthenticated;
-    if (usesPassword) {
-      final currentEmail = profile.email ?? activeSession.email;
-      if (currentEmail == null || currentPassword.length < 6) {
-        throw const AnimeWitcherAccountException(
-          'invalid-credentials',
-          'Enter the current password.',
-        );
-      }
-      reauthenticated = await _auth.signInWithEmail(
-        email: currentEmail,
-        password: currentPassword,
-        requireVerified: false,
-      );
-    } else if (profile.hasGoogleProvider ||
-        profile.signInMethod == AnimeWitcherSignInMethod.google) {
-      reauthenticated = await _reauthenticateWithGoogle(profile);
-    } else {
+    if (!usesPassword) {
       throw const AnimeWitcherAccountException(
         'unsupported-sign-in-provider',
-        'The current sign-in method cannot change the email address.',
+        'This account does not support email changes.',
       );
     }
+    final currentEmail = profile.email ?? activeSession.email;
+    if (currentEmail == null || currentPassword.length < 6) {
+      throw const AnimeWitcherAccountException(
+        'invalid-credentials',
+        'Enter the current password.',
+      );
+    }
+    final reauthenticated = await _auth.signInWithEmail(
+      email: currentEmail,
+      password: currentPassword,
+      requireVerified: false,
+    );
     _ensureSameAccount(profile, reauthenticated);
     await _auth.sendEmailChangeVerification(
       idToken: reauthenticated.idToken,
@@ -679,55 +634,6 @@ class AnimeWitcherAccountService {
     );
     await signOut();
     return snapshot;
-  }
-
-  Future<void> _initializeGoogleSignIn() async {
-    if (!AnimeWitcherAccountConfig.googleConfigured) {
-      throw const AnimeWitcherAccountException(
-        'google-not-configured',
-        'Google sign-in is not configured for this platform.',
-      );
-    }
-    if (_googleInitialized) return;
-    await _googleSignIn.initialize(
-      clientId: AnimeWitcherAccountConfig.googleIosClientId.trim().isEmpty
-          ? null
-          : AnimeWitcherAccountConfig.googleIosClientId,
-      serverClientId: AnimeWitcherAccountConfig.googleServerClientId,
-    );
-    _googleInitialized = true;
-  }
-
-  Future<AnimeWitcherSession> _reauthenticateWithGoogle(
-    AnimeWitcherProfile profile,
-  ) async {
-    await _initializeGoogleSignIn();
-    try {
-      await _googleSignIn.signOut();
-    } catch (_) {}
-    final googleAccount = await _googleSignIn.authenticate();
-    final googleToken = googleAccount.authentication.idToken;
-    if (googleToken == null || googleToken.isEmpty) {
-      throw const AnimeWitcherAccountException(
-        'google-token-missing',
-        'Google did not return a usable sign-in token.',
-      );
-    }
-    final AnimeWitcherSession session;
-    try {
-      session = await _auth.reauthenticateWithGoogleIdToken(googleToken);
-    } on AnimeWitcherAccountException catch (error) {
-      if (error.code == 'invalid-session' ||
-          error.code == 'account-not-found') {
-        throw const AnimeWitcherAccountException(
-          'wrong-google-account',
-          'Choose the same Google account to confirm your identity.',
-        );
-      }
-      rethrow;
-    }
-    _ensureSameAccount(profile, session);
-    return session;
   }
 
   void _ensureSameAccount(
@@ -783,11 +689,6 @@ class AnimeWitcherAccountService {
   }
 
   Future<void> signOut() async {
-    if (_googleInitialized) {
-      try {
-        await _googleSignIn.signOut();
-      } catch (_) {}
-    }
     await _clearLocalSession();
   }
 
