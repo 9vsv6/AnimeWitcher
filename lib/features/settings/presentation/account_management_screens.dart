@@ -433,11 +433,6 @@ class _AnimeWitcherChangeEmailScreenState
   final _passwordController = TextEditingController();
   bool _submitting = false;
 
-  bool get _usesPassword =>
-      widget.profile.hasPasswordProvider ||
-      (widget.profile.providerIds.isEmpty &&
-          widget.profile.signInMethod == AnimeWitcherSignInMethod.email);
-
   @override
   void dispose() {
     _emailController.dispose();
@@ -458,12 +453,10 @@ class _AnimeWitcherChangeEmailScreenState
           icon: Icons.mark_email_read_rounded,
           text: appText(
             context,
-            english: _usesPassword
-                ? 'Enter your current password. We will send a verification link to the new address, then sign you out.'
-                : 'Confirm with the same Google account. We will send a verification link to the new address, then sign you out.',
-            arabic: _usesPassword
-                ? 'أدخل كلمة المرور الحالية. سنرسل رابط تحقق إلى البريد الجديد ثم نسجل خروجك.'
-                : 'أكد هويتك بحساب Google نفسه. سنرسل رابط تحقق إلى البريد الجديد ثم نسجل خروجك.',
+            english:
+                'Enter your current password. We will send a verification link to the new address, then sign you out.',
+            arabic:
+                'أدخل كلمة المرور الحالية. سنرسل رابط تحقق إلى البريد الجديد ثم نسجل خروجك.',
           ),
         ),
         const SizedBox(height: LayoutConstants.spacingLg),
@@ -471,13 +464,8 @@ class _AnimeWitcherChangeEmailScreenState
           controller: _emailController,
           autofocus: true,
           keyboardType: TextInputType.emailAddress,
-          textInputAction: _usesPassword
-              ? TextInputAction.next
-              : TextInputAction.done,
+          textInputAction: TextInputAction.next,
           autofillHints: const [AutofillHints.newUsername],
-          onSubmitted: (_) {
-            if (!_usesPassword && !_submitting) _submit();
-          },
           decoration: InputDecoration(
             labelText: appText(
               context,
@@ -488,27 +476,25 @@ class _AnimeWitcherChangeEmailScreenState
             border: const OutlineInputBorder(),
           ),
         ),
-        if (_usesPassword) ...[
-          const SizedBox(height: LayoutConstants.spacingMd),
-          TextField(
-            controller: _passwordController,
-            obscureText: true,
-            textInputAction: TextInputAction.done,
-            autofillHints: const [AutofillHints.password],
-            onSubmitted: (_) {
-              if (!_submitting) _submit();
-            },
-            decoration: InputDecoration(
-              labelText: appText(
-                context,
-                english: 'Current password',
-                arabic: 'كلمة المرور الحالية',
-              ),
-              prefixIcon: const Icon(Icons.password_rounded),
-              border: const OutlineInputBorder(),
+        const SizedBox(height: LayoutConstants.spacingMd),
+        TextField(
+          controller: _passwordController,
+          obscureText: true,
+          textInputAction: TextInputAction.done,
+          autofillHints: const [AutofillHints.password],
+          onSubmitted: (_) {
+            if (!_submitting) _submit();
+          },
+          decoration: InputDecoration(
+            labelText: appText(
+              context,
+              english: 'Current password',
+              arabic: 'كلمة المرور الحالية',
             ),
+            prefixIcon: const Icon(Icons.password_rounded),
+            border: const OutlineInputBorder(),
           ),
-        ],
+        ),
         const SizedBox(height: LayoutConstants.spacingLg),
         FilledButton.icon(
           onPressed: _submitting ? null : _submit,
@@ -517,20 +503,12 @@ class _AnimeWitcherChangeEmailScreenState
                   dimension: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : Icon(
-                  _usesPassword
-                      ? Icons.send_rounded
-                      : Icons.account_circle_rounded,
-                ),
+              : const Icon(Icons.send_rounded),
           label: Text(
             appText(
               context,
-              english: _usesPassword
-                  ? 'Send verification link'
-                  : 'Confirm with Google',
-              arabic: _usesPassword
-                  ? 'إرسال رابط التحقق'
-                  : 'التأكيد باستخدام Google',
+              english: 'Send verification link',
+              arabic: 'إرسال رابط التحقق',
             ),
           ),
         ),
@@ -579,11 +557,6 @@ class _AnimeWitcherChangePasswordScreenState
   final _confirmController = TextEditingController();
   bool _submitting = false;
 
-  bool get _usesPassword =>
-      widget.profile.hasPasswordProvider ||
-      (widget.profile.providerIds.isEmpty &&
-          widget.profile.signInMethod == AnimeWitcherSignInMethod.email);
-
   @override
   void dispose() {
     _currentController.dispose();
@@ -594,39 +567,32 @@ class _AnimeWitcherChangePasswordScreenState
 
   @override
   Widget build(BuildContext context) {
-    final addingPassword = !_usesPassword;
     return _AccountFormScaffold(
       title: appText(
         context,
-        english: addingPassword ? 'Add password' : 'Change password',
-        arabic: addingPassword ? 'إضافة كلمة مرور' : 'تغيير كلمة المرور',
+        english: 'Change password',
+        arabic: 'تغيير كلمة المرور',
       ),
       children: [
         _AccountInfoCard(
           icon: Icons.lock_reset_rounded,
           text: appText(
             context,
-            english: addingPassword
-                ? 'Confirm with the same Google account, then add a password so you can also sign in with email.'
-                : 'Confirm your current password before choosing a new one.',
-            arabic: addingPassword
-                ? 'أكد هويتك بحساب Google نفسه، ثم أضف كلمة مرور لتتمكن من الدخول بالبريد أيضًا.'
-                : 'أكد كلمة المرور الحالية قبل اختيار كلمة مرور جديدة.',
+            english: 'Confirm your current password before choosing a new one.',
+            arabic: 'أكد كلمة المرور الحالية قبل اختيار كلمة مرور جديدة.',
           ),
         ),
         const SizedBox(height: LayoutConstants.spacingLg),
-        if (_usesPassword) ...[
-          _passwordField(
-            controller: _currentController,
-            label: appText(
-              context,
-              english: 'Current password',
-              arabic: 'كلمة المرور الحالية',
-            ),
-            action: TextInputAction.next,
+        _passwordField(
+          controller: _currentController,
+          label: appText(
+            context,
+            english: 'Current password',
+            arabic: 'كلمة المرور الحالية',
           ),
-          const SizedBox(height: LayoutConstants.spacingMd),
-        ],
+          action: TextInputAction.next,
+        ),
+        const SizedBox(height: LayoutConstants.spacingMd),
         _passwordField(
           controller: _newController,
           label: appText(
@@ -672,10 +638,8 @@ class _AnimeWitcherChangePasswordScreenState
           label: Text(
             appText(
               context,
-              english: addingPassword ? 'Add password' : 'Change password',
-              arabic: addingPassword
-                  ? 'إضافة كلمة المرور'
-                  : 'تغيير كلمة المرور',
+              english: 'Change password',
+              arabic: 'تغيير كلمة المرور',
             ),
           ),
         ),
