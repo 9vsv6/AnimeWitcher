@@ -1,4 +1,4 @@
-enum AnimeWitcherSignInMethod { email, google }
+enum AnimeWitcherSignInMethod { email }
 
 enum AnimeWitcherProfileImageKind { avatar, cover }
 
@@ -132,10 +132,9 @@ class AnimeWitcherSession {
       expiresAt:
           DateTime.tryParse((json['expiresAt'] ?? '').toString()) ??
           DateTime.fromMillisecondsSinceEpoch(0),
-      signInMethod:
-          (json['signInMethod'] ?? '').toString().toLowerCase() == 'google'
-          ? AnimeWitcherSignInMethod.google
-          : AnimeWitcherSignInMethod.email,
+      // Legacy sessions may still contain "google"; all current auth is
+      // email/password, so normalize cached sessions to the supported method.
+      signInMethod: AnimeWitcherSignInMethod.email,
       email: _optionalString(json['email']),
       displayName: _optionalString(json['displayName']),
       photoUrl: _optionalString(json['photoUrl']),
@@ -174,7 +173,6 @@ class AnimeWitcherProfile {
   final AnimeWitcherPrivacySettings privacySettings;
 
   bool get hasPasswordProvider => providerIds.contains('password');
-  bool get hasGoogleProvider => providerIds.contains('google.com');
 
   AnimeWitcherProfile copyWith({
     String? documentId,
@@ -230,10 +228,7 @@ class AnimeWitcherProfile {
     return AnimeWitcherProfile(
       documentId: (json['documentId'] ?? '').toString(),
       uid: (json['uid'] ?? '').toString(),
-      signInMethod:
-          (json['signInMethod'] ?? '').toString().toLowerCase() == 'google'
-          ? AnimeWitcherSignInMethod.google
-          : AnimeWitcherSignInMethod.email,
+      signInMethod: AnimeWitcherSignInMethod.email,
       email: _optionalString(json['email']),
       userName: _optionalString(json['userName']),
       photoUrl: _optionalString(json['photoUrl']),
