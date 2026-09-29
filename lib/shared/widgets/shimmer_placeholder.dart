@@ -32,16 +32,20 @@ class ShimmerPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final colors = Theme.of(context).colorScheme;
+    final baseColor = colors.surfaceContainerHighest;
+    final highlightColor = Color.alphaBlend(
+      colors.primary.withValues(alpha: 0.16),
+      baseColor,
+    );
 
     return Shimmer.fromColors(
-      baseColor: isDark ? Colors.grey[850]! : Colors.grey[300]!,
-      highlightColor: isDark ? Colors.grey[800]! : Colors.grey[100]!,
+      baseColor: baseColor,
+      highlightColor: highlightColor,
       child: Container(
         width: width,
         height: height,
-        decoration: ShapeDecoration(color: Colors.grey, shape: shapeBorder),
+        decoration: ShapeDecoration(color: baseColor, shape: shapeBorder),
       ),
     );
   }
