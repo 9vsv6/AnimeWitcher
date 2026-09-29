@@ -29,7 +29,7 @@ class _FakeAccountService extends AnimeWitcherAccountService {
         profile: AnimeWitcherProfile(
           documentId: 'me',
           uid: 'me',
-          signInMethod: AnimeWitcherSignInMethod.google,
+          signInMethod: AnimeWitcherSignInMethod.email,
           userName: 'Me',
         ),
       );
