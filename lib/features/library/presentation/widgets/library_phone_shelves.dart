@@ -10,6 +10,7 @@ import '../../../../core/storage/library_repository.dart';
 import '../../../../core/storage/storage_service.dart';
 import '../../../../shared/widgets/multimedia_card.dart';
 import '../../../../shared/widgets/app_side_menu.dart';
+import '../../../../shared/widgets/app_search_field.dart';
 import '../../../../shared/widgets/app_back_button.dart';
 import '../../../home/presentation/widgets/home_section_header.dart';
 import '../../../../shared/widgets/underline_segment_tabs.dart';
@@ -179,51 +180,35 @@ class _LibraryPhoneShelvesState extends ConsumerState<LibraryPhoneShelves>
         return Scaffold(
           appBar: AppBar(
             titleSpacing: 12,
-            title: SizedBox(
-              height: 42,
-              child: TextField(
-                key: const ValueKey<String>('library-search'),
-                controller: _search,
-                onChanged: (value) {
-                  _typing?.cancel();
-                  _typing = Timer(_typingPause, () {
-                    if (mounted) setState(() => _query = value);
-                  });
-                },
-                onSubmitted: (value) {
-                  _typing?.cancel();
-                  setState(() => _query = value);
-                },
-                textInputAction: TextInputAction.search,
-                decoration: InputDecoration(
-                  hintText: _t(
-                    context,
-                    'Search your library',
-                    'ابحث في مكتبتك',
-                  ),
-                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                  suffixIcon: searching
-                      ? IconButton(
-                          tooltip: _t(context, 'Clear', 'مسح'),
-                          icon: const Icon(Icons.close_rounded, size: 18),
-                          onPressed: () {
-                            _search.clear();
-                            _typing?.cancel();
-                            setState(() => _query = '');
-                          },
-                        )
-                      : null,
-                  filled: true,
-                  fillColor: colors.surfaceContainerHighest.withValues(
-                    alpha: 0.6,
-                  ),
-                  contentPadding: EdgeInsets.zero,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(99),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
+            title: AppSearchField(
+              fieldKey: const ValueKey<String>('library-search'),
+              controller: _search,
+              hintText: _t(
+                context,
+                'Search your library',
+                'ابحث في مكتبتك',
               ),
+              onChanged: (value) {
+                _typing?.cancel();
+                _typing = Timer(_typingPause, () {
+                  if (mounted) setState(() => _query = value);
+                });
+              },
+              onSubmitted: (value) {
+                _typing?.cancel();
+                setState(() => _query = value);
+              },
+              suffixIcon: searching
+                  ? IconButton(
+                      tooltip: _t(context, 'Clear', 'مسح'),
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      onPressed: () {
+                        _search.clear();
+                        _typing?.cancel();
+                        setState(() => _query = '');
+                      },
+                    )
+                  : null,
             ),
             // In RTL AppBar geometry, leading is the physical right edge.
             // Put the library filter there to match Search, while the side
