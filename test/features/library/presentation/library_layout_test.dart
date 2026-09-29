@@ -445,6 +445,19 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
   });
 
+  testWidgets('phone: swiping the library pager changes lists', (tester) async {
+    final storage = await _pump(tester, size: const Size(400, 860));
+
+    expect(find.byType(TabBarView), findsOneWidget);
+    expect(find.text('Berserk'), findsWidgets);
+
+    await tester.drag(find.byType(TabBarView), const Offset(300, 0));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Berserk'), findsNothing);
+    expect(storage.selectedCategory, isNot('watching'));
+  });
+
   testWidgets('PC: favourite characters sit under the anime lists', (
     tester,
   ) async {
