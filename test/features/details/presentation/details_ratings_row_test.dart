@@ -48,7 +48,7 @@ class _FakeAccountService extends AnimeWitcherAccountService {
         ? const AnimeWitcherProfile(
             documentId: 'user-doc',
             uid: 'uid-1',
-            signInMethod: AnimeWitcherSignInMethod.google,
+            signInMethod: AnimeWitcherSignInMethod.email,
             userName: 'Me',
           )
         : null,
