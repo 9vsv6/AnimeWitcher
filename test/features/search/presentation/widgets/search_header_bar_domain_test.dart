@@ -1,6 +1,6 @@
+import 'package:animewitcher/features/search/presentation/search_domain.dart';
 import 'package:animewitcher/features/search/presentation/search_provider.dart';
 import 'package:animewitcher/features/search/presentation/widgets/search_header_bar.dart';
-import 'package:animewitcher/features/search/presentation/widgets/search_glass_surface.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter/material.dart';
@@ -151,6 +151,134 @@ void main() {
     },
   );
 
+  testWidgets('search field matches the library pill geometry in Arabic', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    final searchFocus = FocusNode();
+    final clearFocus = FocusNode();
+    addTearDown(controller.dispose);
+    addTearDown(searchFocus.dispose);
+    addTearDown(clearFocus.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          searchPagedResultsProvider.overrideWith(_IdleSearchNotifier.new),
+        ],
+        child: MaterialApp(
+          locale: const Locale('ar'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: SearchHeaderBar(
+              textController: controller,
+              searchFocusNode: searchFocus,
+              clearButtonFocusNode: clearFocus,
+              onSubmitted: (_) {},
+              onChanged: (_) {},
+              onShowFilters: () {},
+              onSortSelected: (_) {},
+              sortValue: 'favorites',
+              sortItems: const <AppleNativeMenuItem>[
+                AppleNativeMenuItem(value: 'favorites', label: 'Favorites'),
+              ],
+              sortIcon: Icons.star_rounded,
+              sortSystemImage: 'star.fill',
+              sortTooltip: 'Sort',
+              activeFilterCount: 0,
+              isFilterLoading: false,
+              showSort: false,
+              showFilter: true,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final fieldFinder = find.byType(TextField);
+    final field = tester.widget<TextField>(fieldFinder);
+    expect(field.textDirection, TextDirection.rtl);
+    expect(Directionality.of(tester.element(fieldFinder)), TextDirection.rtl);
+    expect(tester.getSize(fieldFinder).height, 42);
+    expect(field.style, isNull);
+
+    final decoration = field.decoration!;
+    expect(decoration.filled, isTrue);
+    expect(decoration.contentPadding, EdgeInsets.zero);
+    expect(decoration.hintStyle, isNull);
+    expect((decoration.prefixIcon! as Icon).size, 20);
+    final border = decoration.border! as OutlineInputBorder;
+    expect(border.borderRadius.topLeft.x, 99);
+    expect(border.borderSide, BorderSide.none);
+  });
+
+  testWidgets('Arabic search hint follows the selected search domain', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    final searchFocus = FocusNode();
+    final clearFocus = FocusNode();
+    addTearDown(controller.dispose);
+    addTearDown(searchFocus.dispose);
+    addTearDown(clearFocus.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          searchPagedResultsProvider.overrideWith(_IdleSearchNotifier.new),
+        ],
+        child: MaterialApp(
+          locale: const Locale('ar'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: SearchHeaderBar(
+              textController: controller,
+              searchFocusNode: searchFocus,
+              clearButtonFocusNode: clearFocus,
+              onSubmitted: (_) {},
+              onChanged: (_) {},
+              onShowFilters: () {},
+              onSortSelected: (_) {},
+              sortValue: 'favorites',
+              sortItems: const <AppleNativeMenuItem>[
+                AppleNativeMenuItem(value: 'favorites', label: 'Favorites'),
+              ],
+              sortIcon: Icons.star_rounded,
+              sortSystemImage: 'star.fill',
+              sortTooltip: 'Sort',
+              activeFilterCount: 0,
+              isFilterLoading: false,
+              showSort: true,
+              showFilter: true,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(SearchHeaderBar)),
+    );
+    for (final entry in <(SearchDomain, String)>[
+      (SearchDomain.anime, 'ابحث عن انمي'),
+      (SearchDomain.manga, 'ابحث عن مانجا'),
+      (SearchDomain.all, 'ابحث عن الكل'),
+      (SearchDomain.animation, 'ابحث عن انميشن'),
+      (SearchDomain.characters, 'ابحث عن شخصيات'),
+    ]) {
+      container.read(searchDomainProvider.notifier).set(entry.$1);
+      await tester.pump();
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).decoration?.hintText,
+        entry.$2,
+      );
+    }
+  });
+
   testWidgets('character search expands into the missing sort space', (
     tester,
   ) async {
@@ -197,7 +325,7 @@ void main() {
         ),
       );
       await tester.pump();
-      return tester.getRect(find.byType(SearchGlassSurface)).width;
+      return tester.getRect(find.byType(TextField)).width;
     }
 
     final regular = await searchWidth(showSort: true);

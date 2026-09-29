@@ -2,6 +2,7 @@ import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../core/domain/stream_source_preferences.dart';
 import '../../../core/navigation/taskbar_destination.dart';
 import '../../../core/services/download_concurrency.dart';
 import '../../../core/services/download_continued_processing_service.dart';
@@ -20,6 +21,9 @@ class GeneralSettings {
   final int downloadConcurrency;
   final int downloadParallelParts;
   final DownloadNotificationPrefs downloadNotifications;
+  final bool autoSelectStreamSource;
+  final List<String> streamServerPriority;
+  final List<String> streamQualityPriority;
 
   const GeneralSettings({
     this.downloadDiagnosticLog = false,
@@ -30,6 +34,9 @@ class GeneralSettings {
     this.downloadConcurrency = kDownloadConcurrencyDefault,
     this.downloadParallelParts = kDownloadPartsAuto,
     this.downloadNotifications = const DownloadNotificationPrefs(),
+    this.autoSelectStreamSource = false,
+    this.streamServerPriority = defaultStreamServerPriority,
+    this.streamQualityPriority = defaultStreamQualityPriority,
   });
 
   GeneralSettings copyWith({
@@ -41,6 +48,9 @@ class GeneralSettings {
     int? downloadConcurrency,
     int? downloadParallelParts,
     DownloadNotificationPrefs? downloadNotifications,
+    bool? autoSelectStreamSource,
+    List<String>? streamServerPriority,
+    List<String>? streamQualityPriority,
   }) {
     return GeneralSettings(
       downloadDiagnosticLog:
@@ -54,6 +64,12 @@ class GeneralSettings {
           downloadParallelParts ?? this.downloadParallelParts,
       downloadNotifications:
           downloadNotifications ?? this.downloadNotifications,
+      autoSelectStreamSource:
+          autoSelectStreamSource ?? this.autoSelectStreamSource,
+      streamServerPriority:
+          streamServerPriority ?? this.streamServerPriority,
+      streamQualityPriority:
+          streamQualityPriority ?? this.streamQualityPriority,
     );
   }
 }
@@ -70,6 +86,13 @@ class GeneralSettingsNotifier extends _$GeneralSettingsNotifier {
       repository.getHiddenTaskbarItems(),
     );
 
+    final storedServers = repository.getPlayerSetting<dynamic>(
+      'stream_source_server_priority',
+    );
+    final storedQualities = repository.getPlayerSetting<dynamic>(
+      'stream_source_quality_priority',
+    );
+
     return GeneralSettings(
       downloadDiagnosticLog: repository.getDownloadDiagnosticLog(),
       defaultHomeScreen: resolveInitialTaskbarRoute(
@@ -83,6 +106,20 @@ class GeneralSettingsNotifier extends _$GeneralSettingsNotifier {
       downloadConcurrency: repository.getDownloadConcurrency(),
       downloadParallelParts: repository.getDownloadParallelParts(),
       downloadNotifications: repository.getDownloadNotificationPrefs(),
+      autoSelectStreamSource:
+          repository.getPlayerSetting<bool>(
+            'stream_source_auto_select',
+            defaultValue: false,
+          ) ??
+          false,
+      streamServerPriority: normalizeStreamPriority(
+        storedServers is Iterable ? storedServers : null,
+        defaultStreamServerPriority,
+      ),
+      streamQualityPriority: normalizeStreamPriority(
+        storedQualities is Iterable ? storedQualities : null,
+        defaultStreamQualityPriority,
+      ),
     );
   }
 
@@ -161,6 +198,35 @@ class GeneralSettingsNotifier extends _$GeneralSettingsNotifier {
       hidden.add(TaskbarDestination.manga.id);
     }
     return setTaskbarPreferences(order, hidden);
+  }
+
+  Future<void> setAutoSelectStreamSource(bool enabled) async {
+    await ref
+        .read(settingsRepositoryProvider)
+        .setPlayerSetting('stream_source_auto_select', enabled);
+    state = state.copyWith(autoSelectStreamSource: enabled);
+  }
+
+  Future<void> setStreamServerPriority(List<String> order) async {
+    final normalized = normalizeStreamPriority(
+      order,
+      defaultStreamServerPriority,
+    );
+    await ref
+        .read(settingsRepositoryProvider)
+        .setPlayerSetting('stream_source_server_priority', normalized);
+    state = state.copyWith(streamServerPriority: normalized);
+  }
+
+  Future<void> setStreamQualityPriority(List<String> order) async {
+    final normalized = normalizeStreamPriority(
+      order,
+      defaultStreamQualityPriority,
+    );
+    await ref
+        .read(settingsRepositoryProvider)
+        .setPlayerSetting('stream_source_quality_priority', normalized);
+    state = state.copyWith(streamQualityPriority: normalized);
   }
 
   Future<void> setAlwaysOnTop(bool enabled) async {

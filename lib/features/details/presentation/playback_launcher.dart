@@ -5,11 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/domain/entity/multimedia_item.dart';
+import '../../../core/domain/stream_source_preferences.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/external_player_service.dart';
 import '../../../core/extensions/extension_manager.dart';
 import '../../../core/extensions/base_provider.dart';
 import '../../settings/presentation/player_settings_provider.dart';
+import '../../settings/presentation/general_settings_provider.dart';
 import 'package:collection/collection.dart';
 import 'details_controller.dart';
 import 'source_picker.dart';
@@ -122,6 +124,59 @@ class PlaybackLauncher {
         : _ref
               .read(streamSourcePrefetchProvider)
               .sources(provider, episodeDataUrl);
+    final preferences = _ref.read(generalSettingsProvider);
+    if (preferences.autoSelectStreamSource) {
+      var canceled = false;
+      var dialogDismissed = false;
+      unawaited(
+        LoadingDialog.show(
+          context,
+          message: AppLocalizations.of(context)!.loading,
+          onCancel: () {
+            canceled = true;
+            dialogDismissed = true;
+          },
+        ),
+      );
+
+      void dismissLoading() {
+        if (dialogDismissed || !context.mounted) return;
+        Navigator.of(context, rootNavigator: true).pop();
+        dialogDismissed = true;
+      }
+
+      try {
+        final sources = await future;
+        if (canceled || !context.mounted) return null;
+        final selected = await resolvePreferredStreamSource(
+          sources,
+          qualityPriority: preferences.streamQualityPriority,
+          serverPriority: preferences.streamServerPriority,
+          resolveCandidate: (StreamResult candidate) =>
+              provider.loadStreams(candidate.url),
+        );
+        if (canceled || !context.mounted) return null;
+        dismissLoading();
+        if (selected == null) {
+          _ref
+              .read(notificationServiceProvider)
+              .showError('لم يتم العثور على مصادر تشغيل.');
+        }
+        return selected;
+      } catch (error) {
+        dismissLoading();
+        if (context.mounted && !canceled) {
+          _ref
+              .read(notificationServiceProvider)
+              .showError(
+                AppLocalizations.of(
+                  context,
+                )!.usingInternalPlayerError(error.toString()),
+              );
+        }
+        return null;
+      }
+    }
     return showStreamSourcePicker(
       context,
       const <StreamResult>[],

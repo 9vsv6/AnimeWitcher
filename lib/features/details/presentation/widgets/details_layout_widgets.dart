@@ -483,11 +483,12 @@ class SliverDetailsEpisodeList extends ConsumerWidget {
     this.transitionOffset = Offset.zero,
   });
 
-  Widget _withTransition(Widget child) {
+  Widget _withTransition(Widget child, {Key? key}) {
     final animation = transition;
     if (animation == null) return child;
 
     return FadeTransition(
+      key: key,
       opacity: animation,
       child: SlideTransition(
         position: Tween<Offset>(
@@ -558,26 +559,36 @@ class SliverDetailsEpisodeList extends ConsumerWidget {
     return SliverMainAxisGroup(
       slivers: [
         SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: LayoutConstants.spacingMd),
-            child: EpisodeBrowseBar(
-              episodes: allEpisodes,
-              leading: DetailsEpisodeFilterBar(itemUrl: itemUrl),
-              trailing: DetailsEpisodeSortButton(itemUrl: itemUrl),
+          child: _withTransition(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(
+                    bottom: LayoutConstants.spacingMd,
+                  ),
+                  child: EpisodeBrowseBar(
+                    episodes: allEpisodes,
+                    leading: DetailsEpisodeFilterBar(itemUrl: itemUrl),
+                    trailing: DetailsEpisodeSortButton(itemUrl: itemUrl),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(
+                    bottom: LayoutConstants.spacingMd,
+                  ),
+                  child: Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: DetailsHeroPlayPill(
+                      item: parentItem,
+                      details: details,
+                      itemUrl: itemUrl,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ),
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: LayoutConstants.spacingMd),
-            child: Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: DetailsHeroPlayPill(
-                item: parentItem,
-                details: details,
-                itemUrl: itemUrl,
-              ),
-            ),
+            key: const ValueKey<String>('details-episode-controls-reveal'),
           ),
         ),
         if (displayedEpisodes.isEmpty)

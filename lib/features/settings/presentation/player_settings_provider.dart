@@ -1,9 +1,33 @@
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/storage/settings_repository.dart';
 import '../../player/data/anime4k.dart';
 
 part 'player_settings_provider.g.dart';
+
+const String _anime4kManagedFolderName = 'anime4k_shaders';
+
+bool _isManagedAnime4kShaderDirectory(String value) {
+  final normalized = p.normalize(value.trim());
+  if (p.basename(normalized) != _anime4kManagedFolderName) return false;
+
+  final support = p.dirname(normalized);
+  if (p.basename(support) != 'Application Support') return false;
+
+  return p.basename(p.dirname(support)) == 'Library';
+}
+
+Future<String> _currentAnime4kShaderDirectory(String stored) async {
+  final trimmed = stored.trim();
+  if (trimmed.isEmpty || !_isManagedAnime4kShaderDirectory(trimmed)) {
+    return trimmed;
+  }
+
+  final support = await getApplicationSupportDirectory();
+  return p.join(support.path, _anime4kManagedFolderName);
+}
 
 enum PlayerGesture { brightness, volume, none }
 
@@ -549,12 +573,21 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
         defaultValue: Anime4kQuality.m.name,
       ),
     );
-    final anime4kShaderDirectory =
+    final storedAnime4kShaderDirectory =
         storage.getPlayerSetting<String>(
           'player_anime4k_shader_dir',
           defaultValue: '',
         ) ??
         '';
+    final anime4kShaderDirectory = await _currentAnime4kShaderDirectory(
+      storedAnime4kShaderDirectory,
+    );
+    if (anime4kShaderDirectory != storedAnime4kShaderDirectory) {
+      await storage.setPlayerSetting(
+        'player_anime4k_shader_dir',
+        anime4kShaderDirectory,
+      );
+    }
     final autoSkipCredits =
         storage.getPlayerSetting<bool>(
           'player_auto_skip_credits',

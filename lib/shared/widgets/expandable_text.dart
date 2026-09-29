@@ -83,14 +83,22 @@ class _ExpandableTextState extends State<ExpandableText> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              widget.text,
-              maxLines: _isExpanded ? null : widget.maxLines,
-              overflow: _isExpanded
-                  ? TextOverflow.visible
-                  : TextOverflow.ellipsis,
-              style: widget.style,
-              textAlign: widget.textAlign,
+            AnimatedSize(
+              key: const ValueKey<String>('expandable-text-size-transition'),
+              duration: const Duration(milliseconds: 240),
+              reverseDuration: const Duration(milliseconds: 190),
+              curve: Curves.easeOutCubic,
+              alignment: AlignmentDirectional.topStart,
+              clipBehavior: Clip.hardEdge,
+              child: Text(
+                widget.text,
+                maxLines: _isExpanded ? null : widget.maxLines,
+                overflow: _isExpanded
+                    ? TextOverflow.visible
+                    : TextOverflow.ellipsis,
+                style: widget.style,
+                textAlign: widget.textAlign,
+              ),
             ),
             if (isTruncated || _isExpanded) ...[
               const SizedBox(height: 4),

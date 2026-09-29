@@ -9,6 +9,7 @@ import 'package:animewitcher/core/utils/episode_label.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/domain/entity/multimedia_item.dart';
+import '../../../core/domain/stream_source_preferences.dart';
 import '../../../core/extensions/extension_manager.dart';
 import '../../../core/extensions/base_provider.dart';
 import '../../../core/network/dio_client_provider.dart';
@@ -24,6 +25,7 @@ import '../../../core/storage/storage_service.dart';
 import '../../../shared/widgets/loading_dialog.dart';
 import '../../../shared/widgets/custom_widgets.dart';
 import '../../../shared/widgets/loading_indicator.dart';
+import '../../settings/presentation/general_settings_provider.dart';
 
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 
@@ -80,13 +82,30 @@ class DownloadLauncher {
     bool dialogDismissed = false;
 
     try {
-      final selected = await showStreamSourcePicker(
-        context,
-        const <StreamResult>[],
-        sourcesFuture: provider.loadStreamSources(resolveUrl),
-        forDownload: true,
-        episodeLabel: episodePickerTitle(resolvedEpisode),
-      );
+      final sourceFuture = provider.loadStreamSources(resolveUrl);
+      final preferences = _ref.read(generalSettingsProvider);
+      final StreamResult? selected;
+      if (preferences.autoSelectStreamSource) {
+        final sources = await sourceFuture;
+        selected = await resolvePreferredStreamSource(
+          sources,
+          qualityPriority: preferences.streamQualityPriority,
+          serverPriority: preferences.streamServerPriority,
+          resolveCandidate: (StreamResult candidate) =>
+              provider!.loadStreams(candidate.url),
+        );
+        if (selected == null) {
+          throw Exception('لم يتم العثور على مصادر تشغيل.');
+        }
+      } else {
+        selected = await showStreamSourcePicker(
+          context,
+          const <StreamResult>[],
+          sourcesFuture: sourceFuture,
+          forDownload: true,
+          episodeLabel: episodePickerTitle(resolvedEpisode),
+        );
+      }
       if (selected == null || !context.mounted) return;
       dialogDismissed = true;
 

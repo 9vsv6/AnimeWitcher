@@ -62,13 +62,12 @@ class _SearchActionButtonsState extends State<SearchActionButtons> {
       visibleControls: visibleControls,
     );
 
-    // AppBar leading slots can impose their own 56pt constraints. Align
-    // loosens those for the keyed control so its intended 48pt height is kept;
-    // Expanded only compresses the icons when a caller gives the pair less
-    // horizontal room than their normal two 48pt tap targets.
-    return Align(
-      widthFactor: 1,
-      heightFactor: 1,
+    // AppBar leading slots impose a 48/56pt minimum height. Keep the slot's
+    // horizontal constraint, but loosen only its vertical minimum so the
+    // visible controls exactly match the library's 42pt search row.
+    return UnconstrainedBox(
+      constrainedAxis: Axis.horizontal,
+      alignment: Alignment.center,
       child: SizedBox(
         key: const ValueKey('search-action-capsule'),
         width: width,

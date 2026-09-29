@@ -415,11 +415,10 @@ class DetailsController extends _$DetailsController {
       }
 
       unawaited(_loadBasicDetails(provider, item, generation));
-      // Series episodes are intentionally lazy: the collapsed Episodes
-      // section owns the first request. Movies/livestreams still need their
-      // single playable unit immediately, and an explicit autoplay request is
-      // itself user intent to resolve playback now.
-      if (state.isMovie || autoPlay) {
+      // The collapsed Episodes section owns the first catalog request for
+      // series and movies alike. Explicit autoplay is already playback intent,
+      // so it remains the only eager path.
+      if (autoPlay) {
         unawaited(loadEpisodesOnDemand());
       }
 
@@ -480,7 +479,7 @@ class DetailsController extends _$DetailsController {
     provider.prepareForNetworkRetry();
     provider.invalidateDetailCaches(item.url);
 
-    final reloadEpisodes = _episodesRequested || state.isMovie;
+    final reloadEpisodes = _episodesRequested;
     _episodesLoadFuture = null;
     _episodesFetched = false;
 

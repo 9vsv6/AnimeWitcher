@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
 import 'package:animewitcher/core/extensions/base_provider.dart';
 import 'package:animewitcher/core/extensions/extension_manager.dart';
+import 'package:animewitcher/core/storage/storage_service.dart';
 import 'package:animewitcher/features/details/presentation/download_launcher.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:animewitcher/shared/widgets/loading_dialog.dart';
@@ -15,6 +16,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../../support/memory_storage_service.dart';
 import '../../../support/test_fonts.dart';
 import '../../../support/debug_shots.dart';
 
@@ -109,6 +111,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          storageServiceProvider.overrideWithValue(MemoryStorageService()),
           extensionManagerProvider.overrideWith(
             () => _StubExtensions(<AnimeWitcherProvider>[source]),
           ),

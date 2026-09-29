@@ -176,6 +176,9 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     with TickerProviderStateMixin {
   bool _didTriggerAutoPlay = false;
   bool _episodesExpanded = false;
+  bool _episodesVisible = false;
+  late final AnimationController _episodesRevealController;
+  late final Animation<double> _episodesReveal;
   final GlobalKey _extraTabsKey = GlobalKey();
   int? _userRating;
   bool _loadingUserRating = false;
@@ -274,22 +277,11 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   }) {
     final LibraryCategory? category =
         libraryNotifier.itemCategory(item.url) as LibraryCategory?;
-    final detailsState = ref.watch(
-      detailsControllerProvider(widget.item.url),
-    );
-    final details = detailsState.details.value;
-
     return Wrap(
       spacing: 12,
       runSpacing: 12,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        if (detailsState.isMovie)
-          DetailsHeroPlayPill(
-            item: item,
-            details: details,
-            itemUrl: widget.item.url,
-          ),
         PopupMenuButton<String>(
           tooltip: appText(
             context,
@@ -351,18 +343,18 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
           ratingCaption: _userRating == null ? null : '${_userRating!}/10',
           onPressed: () async => _rateAnimeFromHero(item),
         ),
-        DetailsHeroIconButton(
-          icon: Icons.rate_review_outlined,
-          tooltip: appText(context, english: 'Reviews', arabic: 'المراجعات'),
-          foregroundColor: foregroundColor,
-          fallbackColor: fallbackColor,
-          onPressed: () => openAnimeReviews(
-            context,
-            ref,
-            item: item,
-            ratings: AnimeDetailsRatings.fromItem(item),
+        if (animeWitcherAnimeCommentTarget(item) case final target?)
+          DetailsHeroIconButton(
+            icon: Icons.chat_bubble_outline_rounded,
+            tooltip: appText(
+              context,
+              english: 'Comments',
+              arabic: 'التعليقات',
+            ),
+            foregroundColor: foregroundColor,
+            fallbackColor: fallbackColor,
+            onPressed: () => _openAnimeComments(context, target),
           ),
-        ),
         if (_firstTrailerUrl(item) != null)
           DetailsHeroIconButton(
             icon: Icons.movie_outlined,
@@ -623,6 +615,16 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   @override
   void initState() {
     super.initState();
+    _episodesRevealController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 240),
+      reverseDuration: const Duration(milliseconds: 190),
+    );
+    _episodesReveal = CurvedAnimation(
+      parent: _episodesRevealController,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
     // A number typed on one series means nothing on the next: arriving at an
     // anime already filtered down to four episodes reads as a broken list.
     episodeSearchQuery.value = '';
@@ -734,6 +736,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   @override
   void dispose() {
     applePersistentGlassHeaderController.hide(this);
+    _episodesRevealController.dispose();
     super.dispose();
   }
 
@@ -989,19 +992,42 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   }
 
   void _toggleEpisodes() {
-    final expanded = !_episodesExpanded;
     final controller = ref.read(
       detailsControllerProvider(widget.item.url).notifier,
     );
-    if (!expanded) {
-      // Collapsing the section hides every episode-owned control, including
-      // the pinned multi-selection surface.
-      controller.clearEpisodeSelection();
-    }
-    setState(() => _episodesExpanded = expanded);
-    if (expanded) {
+    if (!_episodesExpanded) {
+      setState(() {
+        _episodesExpanded = true;
+        _episodesVisible = true;
+      });
       unawaited(controller.loadEpisodesOnDemand());
+      unawaited(_episodesRevealController.forward());
+      return;
     }
+
+    // Selection controls belong to the episode section and disappear with it.
+    controller.clearEpisodeSelection();
+    setState(() => _episodesExpanded = false);
+    unawaited(
+      _episodesRevealController.reverse().then((_) {
+        if (!mounted || _episodesExpanded) return;
+        setState(() => _episodesVisible = false);
+      }),
+    );
+  }
+
+  Widget _episodeReveal(Widget child) {
+    return FadeTransition(
+      key: const ValueKey<String>('details-episodes-reveal'),
+      opacity: _episodesReveal,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, -0.045),
+          end: Offset.zero,
+        ).animate(_episodesReveal),
+        child: child,
+      ),
+    );
   }
 
   Widget _episodesSectionHeader(BuildContext context) {
@@ -1059,7 +1085,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         ],
       ),
     );
-    if (!_episodesExpanded) return <Widget>[header];
+    if (!_episodesVisible) return <Widget>[header];
 
     final ready =
         episodesState.hasValue && (episodesState.value?.isNotEmpty ?? false);
@@ -1067,9 +1093,11 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       return <Widget>[
         header,
         SliverToBoxAdapter(
-          child: SizedBox(
-            height: 200,
-            child: Center(child: _episodeLoadStatus(context, episodesState)),
+          child: _episodeReveal(
+            SizedBox(
+              height: 200,
+              child: Center(child: _episodeLoadStatus(context, episodesState)),
+            ),
           ),
         ),
       ];
@@ -1078,18 +1106,22 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     return <Widget>[
       header,
       SliverToBoxAdapter(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            DetailsSeasonListWrapper(itemUrl: widget.item.url),
-            const SizedBox(height: 12),
-          ],
+        child: _episodeReveal(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              DetailsSeasonListWrapper(itemUrl: widget.item.url),
+              const SizedBox(height: 12),
+            ],
+          ),
         ),
       ),
       SliverDetailsEpisodeList(
         parentItem: item,
         itemUrl: widget.item.url,
         isMovie: false,
+        transition: _episodesReveal,
+        transitionOffset: const Offset(0, -0.045),
       ),
     ];
   }
@@ -1758,23 +1790,30 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         ),
         const SizedBox(height: 12),
         _episodesSectionHeader(context),
-        if (_episodesExpanded) ...<Widget>[
+        if (_episodesVisible) ...<Widget>[
           const SizedBox(height: 12),
-          if (!ready)
-            SizedBox(
-              height: 280,
-              width: double.infinity,
-              child: Center(child: _episodeLoadStatus(context, episodesState)),
-            )
-          else ...<Widget>[
-            DetailsSeasonListWrapper(itemUrl: widget.item.url),
-            const SizedBox(height: 16),
-            DetailsDesktopEpisodeColumn(
-              parentItem: item,
-              itemUrl: widget.item.url,
-              isMovie: false,
-            ),
-          ],
+          _episodeReveal(
+            !ready
+                ? SizedBox(
+                    height: 280,
+                    width: double.infinity,
+                    child: Center(
+                      child: _episodeLoadStatus(context, episodesState),
+                    ),
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      DetailsSeasonListWrapper(itemUrl: widget.item.url),
+                      const SizedBox(height: 16),
+                      DetailsDesktopEpisodeColumn(
+                        parentItem: item,
+                        itemUrl: widget.item.url,
+                        isMovie: false,
+                      ),
+                    ],
+                  ),
+          ),
         ],
       ],
     );

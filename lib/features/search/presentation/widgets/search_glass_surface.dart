@@ -8,7 +8,7 @@ class SearchGlassSurface extends StatelessWidget {
     this.focusNode,
   });
 
-  static const double height = 48;
+  static const double height = 42;
   final Widget child;
   final FocusNode? focusNode;
 
@@ -22,7 +22,7 @@ class SearchGlassSurface extends StatelessWidget {
         height: height,
         decoration: BoxDecoration(
           color: colors.surfaceContainerHighest.withValues(alpha: 0.6),
-          borderRadius: BorderRadius.circular(height / 2),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: focused ? colors.primary : Colors.transparent,
             width: 2,

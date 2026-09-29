@@ -129,11 +129,11 @@ void main() {
       find.byKey(const ValueKey('search-action-capsule')),
     );
 
-    expect(group.height, SearchGlassSurface.height);
+    expect(group.height, 42);
     expect(field.height, group.height);
     // On one line, centred against each other rather than one standing taller.
     expect(field.center.dy, closeTo(group.center.dy, 0.5));
-    // 48 is the smallest a thumb should be asked to hit.
-    expect(group.height, greaterThanOrEqualTo(48));
+    // Match the library's visible search/filter row exactly.
+    expect(group.height, 42);
   });
 }
