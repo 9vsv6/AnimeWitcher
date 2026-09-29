@@ -152,7 +152,7 @@ class LibraryShelfPrefs extends ChangeNotifier {
   LibraryShelfPrefs(this._storage) {
     final hidden = _storage.getString(_hiddenKey);
     _hidden = hidden == null
-        ? <String>{LibraryCategory.notInterested.storageKey}
+        ? <String>{}
         : hidden.split(',').where((key) => key.isNotEmpty).toSet();
     _sort = LibrarySort.values.firstWhere(
       (value) => value.name == _storage.getString(_sortKey),
