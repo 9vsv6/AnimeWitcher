@@ -101,14 +101,14 @@ String searchDomainHint(BuildContext context, SearchDomain domain) {
   final isArabic =
       Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
   return switch (domain) {
-    SearchDomain.all => isArabic ? 'ابحث في كل شيء' : 'Search everything',
-    SearchDomain.anime =>
-      AppLocalizations.of(context)?.searchHint ??
-          (isArabic ? 'ابحث عن الانمي' : 'Search anime'),
+    SearchDomain.all => isArabic ? 'ابحث عن الكل' : 'Search everything',
+    SearchDomain.anime => isArabic
+        ? 'ابحث عن انمي'
+        : (AppLocalizations.of(context)?.searchHint ?? 'Search anime'),
     SearchDomain.animation =>
       isArabic ? 'ابحث عن انميشن' : 'Search animation',
     SearchDomain.manga => isArabic ? 'ابحث عن مانجا' : 'Search manga',
     SearchDomain.characters =>
-      isArabic ? 'ابحث عن شخصية' : 'Search characters',
+      isArabic ? 'ابحث عن شخصيات' : 'Search characters',
   };
 }
