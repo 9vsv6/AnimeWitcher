@@ -1,9 +1,8 @@
-/// The start of the conversation about an anime, at the foot of its page.
+/// A preview of anime reviews at the foot of the details page.
 ///
-/// Comments used to be a button in the row of actions, which said only that
-/// they existed. A few of them on the page says what people made of the
-/// thing a viewer is deciding whether to watch, and the way in is reading
-/// one rather than pressing an icon to find out whether there are any.
+/// Comments now live in the hero action row. Reviews take the lower section
+/// that comments used to occupy, so both social actions stay easy to reach
+/// without competing for the same top-row button.
 library;
 
 import 'package:flutter/material.dart';
@@ -48,7 +47,7 @@ class _DetailsCommentsPreviewState
   ScrollPosition? _watchedPosition;
 
   AnimeWitcherCommentTarget? get _target =>
-      animeWitcherAnimeCommentTarget(widget.item);
+      animeWitcherAnimeReviewTarget(widget.item);
 
   @override
   void initState() {
@@ -179,7 +178,7 @@ class _DetailsCommentsPreviewState
     if (_target == null) return const SizedBox.shrink();
 
     final theme = Theme.of(context);
-    final title = appText(context, english: 'Comments', arabic: 'التعليقات');
+    final title = appText(context, english: 'Reviews', arabic: 'المراجعات');
 
     return KeyedSubtree(
       key: kDetailsCommentsPreviewKey,
@@ -209,8 +208,8 @@ class _DetailsCommentsPreviewState
             _PreviewNotice(
               text: appText(
                 context,
-                english: 'Comments could not be loaded',
-                arabic: 'تعذر تحميل التعليقات',
+                english: 'Reviews could not be loaded',
+                arabic: 'تعذر تحميل المراجعات',
               ),
               onTap: _load,
             )
@@ -218,8 +217,8 @@ class _DetailsCommentsPreviewState
             _PreviewNotice(
               text: appText(
                 context,
-                english: 'No comments yet — be the first',
-                arabic: 'لا توجد تعليقات بعد — كن أول من يكتب',
+                english: 'No published reviews yet.',
+                arabic: 'لا توجد مراجعات منشورة بعد.',
               ),
               onTap: _openAll,
             )
