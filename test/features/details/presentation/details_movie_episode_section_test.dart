@@ -122,16 +122,21 @@ void main() {
     );
     await tester.pump();
 
-    final commentsAction = find.byTooltip('Comments');
-    expect(commentsAction, findsOneWidget);
-    expect(
-      find.descendant(
-        of: commentsAction,
-        matching: find.byIcon(Icons.chat_bubble_outline_rounded),
-      ),
-      findsOneWidget,
+    final heroButtons = tester.widgetList<DetailsHeroIconButton>(
+      find.byType(DetailsHeroIconButton),
     );
-    expect(find.byTooltip('Reviews'), findsNothing);
+    expect(
+      heroButtons.any(
+        (button) =>
+            button.icon == Icons.chat_bubble_outline_rounded &&
+            button.tooltip == 'Comments',
+      ),
+      isTrue,
+    );
+    expect(
+      heroButtons.any((button) => button.icon == Icons.rate_review_outlined),
+      isFalse,
+    );
 
     expect(find.byType(DetailsHeroPlayPill), findsNothing);
 
@@ -189,7 +194,7 @@ void main() {
                   itemUrl: movie.url,
                   isMovie: false,
                   transition: reveal,
-                  transitionOffset: Offset(0, -0.045),
+                  transitionOffset: const Offset(0, -0.045),
                 ),
               ],
             ),
