@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 /// Build-time client configuration for AnimeWitcher account synchronization.
 ///
 /// Firebase client keys are identifiers rather than authorization secrets, but
@@ -43,17 +41,6 @@ class AnimeWitcherAccountConfig {
     defaultValue: 'us-central1',
   );
 
-  /// OAuth web/server client used to request a Google ID token which Firebase
-  /// can exchange for an AnimeWitcher session.
-  static const String googleServerClientId = String.fromEnvironment(
-    'ANIMEWITCHER_GOOGLE_SERVER_CLIENT_ID',
-  );
-
-  /// iOS requires an OAuth client registered for AnimeWitcher's bundle ID.
-  static const String googleIosClientId = String.fromEnvironment(
-    'ANIMEWITCHER_GOOGLE_IOS_CLIENT_ID',
-  );
-
   /// Credentials sufficient for the proven Firebase REST endpoints.
   static bool get firebaseConfigured =>
       projectId.trim().isNotEmpty && apiKey.trim().isNotEmpty;
@@ -76,17 +63,4 @@ class AnimeWitcherAccountConfig {
     );
   }
 
-  static bool get googleConfigured {
-    if (!firebaseConfigured) return false;
-    if (kIsWeb) return googleServerClientId.trim().isNotEmpty;
-    return switch (defaultTargetPlatform) {
-      TargetPlatform.iOS || TargetPlatform.macOS =>
-        googleIosClientId.trim().isNotEmpty &&
-            googleServerClientId.trim().isNotEmpty,
-      TargetPlatform.android => googleServerClientId.trim().isNotEmpty,
-      TargetPlatform.linux ||
-      TargetPlatform.windows ||
-      TargetPlatform.fuchsia => false,
-    };
-  }
 }

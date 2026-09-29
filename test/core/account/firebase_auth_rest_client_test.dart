@@ -37,51 +37,6 @@ void main() {
     });
   });
 
-  test('Google reauthentication disables accidental account creation', () async {
-    final dio = Dio();
-    final requests = <RequestOptions>[];
-    dio.interceptors.add(
-      InterceptorsWrapper(
-        onRequest: (options, handler) {
-          requests.add(options);
-          handler.resolve(
-            Response<dynamic>(
-              requestOptions: options,
-              statusCode: 200,
-              data: options.path.endsWith('/accounts:signInWithIdp')
-                  ? const <String, dynamic>{
-                      'localId': 'uid-1',
-                      'idToken': 'fresh-token',
-                      'refreshToken': 'fresh-refresh',
-                      'expiresIn': '3600',
-                    }
-                  : const <String, dynamic>{
-                      'users': <Map<String, dynamic>>[
-                        <String, dynamic>{
-                          'localId': 'uid-1',
-                          'email': 'user@example.com',
-                          'providerUserInfo': <Map<String, dynamic>>[
-                            <String, dynamic>{'providerId': 'google.com'},
-                          ],
-                        },
-                      ],
-                    },
-            ),
-          );
-        },
-      ),
-    );
-    final client = FirebaseAuthRestClient(dio: dio, apiKey: 'test-key');
-
-    final session = await client.reauthenticateWithGoogleIdToken('google-id');
-
-    expect(requests.first.path, endsWith('/accounts:signInWithIdp'));
-    expect(requests.first.data, containsPair('autoCreate', false));
-    expect(requests.first.data, containsPair('returnSecureToken', true));
-    expect(session.uid, 'uid-1');
-    expect(session.providerIds, <String>['google.com']);
-  });
-
   test('password update rotates tokens and refreshes providers', () async {
     final dio = Dio();
     final requests = <RequestOptions>[];
@@ -103,7 +58,6 @@ void main() {
                       'localId': 'uid-1',
                       'email': 'user@example.com',
                       'providerUserInfo': <Map<String, dynamic>>[
-                        <String, dynamic>{'providerId': 'google.com'},
                         <String, dynamic>{'providerId': 'password'},
                       ],
                     },
@@ -125,9 +79,9 @@ void main() {
       idToken: 'old-token',
       refreshToken: 'old-refresh',
       expiresAt: DateTime.utc(2026, 8, 17),
-      signInMethod: AnimeWitcherSignInMethod.google,
+      signInMethod: AnimeWitcherSignInMethod.email,
       email: 'user@example.com',
-      providerIds: const <String>['google.com'],
+      providerIds: const <String>['password'],
     );
 
     final updated = await client.updatePassword(
@@ -148,70 +102,7 @@ void main() {
     });
     expect(updated.idToken, 'rotated-token');
     expect(updated.refreshToken, 'rotated-refresh');
-    expect(updated.providerIds, containsAll(<String>['google.com', 'password']));
+    expect(updated.providerIds, contains('password'));
   });
 
-  test('Google-only account links its first password through sign-up', () async {
-    final dio = Dio();
-    final requests = <RequestOptions>[];
-    dio.interceptors.add(
-      InterceptorsWrapper(
-        onRequest: (options, handler) {
-          requests.add(options);
-          handler.resolve(
-            Response<dynamic>(
-              requestOptions: options,
-              statusCode: 200,
-              data: options.path.endsWith('/accounts:signUp')
-                  ? const <String, dynamic>{
-                      'localId': 'uid-1',
-                      'idToken': 'linked-token',
-                      'refreshToken': 'linked-refresh',
-                      'expiresIn': '3600',
-                      'email': 'user@example.com',
-                    }
-                  : const <String, dynamic>{
-                      'users': <Map<String, dynamic>>[
-                        <String, dynamic>{
-                          'localId': 'uid-1',
-                          'email': 'user@example.com',
-                          'providerUserInfo': <Map<String, dynamic>>[
-                            <String, dynamic>{'providerId': 'google.com'},
-                            <String, dynamic>{'providerId': 'password'},
-                          ],
-                        },
-                      ],
-                    },
-            ),
-          );
-        },
-      ),
-    );
-    final client = FirebaseAuthRestClient(dio: dio, apiKey: 'test-key');
-    final previous = AnimeWitcherSession(
-      uid: 'uid-1',
-      idToken: 'fresh-token',
-      refreshToken: 'fresh-refresh',
-      expiresAt: DateTime.utc(2026, 8, 17),
-      signInMethod: AnimeWitcherSignInMethod.google,
-      email: 'user@example.com',
-      providerIds: const <String>['google.com'],
-    );
-
-    final linked = await client.linkEmailPassword(
-      previous: previous,
-      email: 'user@example.com',
-      newPassword: 'new-secret',
-    );
-
-    expect(requests.first.path, endsWith('/accounts:signUp'));
-    expect(requests.first.data, <String, dynamic>{
-      'idToken': 'fresh-token',
-      'email': 'user@example.com',
-      'password': 'new-secret',
-      'returnSecureToken': true,
-    });
-    expect(linked.idToken, 'linked-token');
-    expect(linked.providerIds, containsAll(<String>['google.com', 'password']));
-  });
 }

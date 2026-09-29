@@ -301,65 +301,6 @@ class _AnimeWitcherAccountScreenState
                         ),
                       ),
                     ),
-                  if (!isCreate) ...[
-                    const SizedBox(height: LayoutConstants.spacingSm),
-                    Row(
-                      children: [
-                        Expanded(child: Divider(color: colors.outlineVariant)),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          child: Text(
-                            appText(context, english: 'or', arabic: 'أو'),
-                            style: TextStyle(color: colors.onSurfaceVariant),
-                          ),
-                        ),
-                        Expanded(child: Divider(color: colors.outlineVariant)),
-                      ],
-                    ),
-                    const SizedBox(height: LayoutConstants.spacingMd),
-                    OutlinedButton.icon(
-                      onPressed:
-                          busy || !AnimeWitcherAccountConfig.googleConfigured
-                          ? null
-                          : _submitGoogle,
-                      icon: Container(
-                        width: 22,
-                        height: 22,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: colors.outline),
-                        ),
-                        child: const Text(
-                          'G',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      label: Text(
-                        appText(
-                          context,
-                          english: 'Continue with Google',
-                          arabic: 'المتابعة باستخدام Google',
-                        ),
-                      ),
-                    ),
-                    if (!AnimeWitcherAccountConfig.googleConfigured) ...[
-                      const SizedBox(height: LayoutConstants.spacingSm),
-                      Text(
-                        appText(
-                          context,
-                          english:
-                              'Google sign-in needs the iOS OAuth client in this build. Email sign-in is ready.',
-                          arabic:
-                              'دخول Google يحتاج إعداد OAuth الخاص بـ iOS في نسخة البناء. الدخول بالبريد جاهز.',
-                        ),
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colors.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ],
                 ],
               ),
             ),
@@ -632,38 +573,36 @@ class _AnimeWitcherAccountScreenState
           ),
           onTap: busy ? null : _openMyReviews,
         ),
-        SettingsTile(
-          icon: Icons.alternate_email_rounded,
-          title: appText(
-            context,
-            english: 'Change email',
-            arabic: 'تغيير البريد الإلكتروني',
+        if (hasPassword) ...[
+          SettingsTile(
+            icon: Icons.alternate_email_rounded,
+            title: appText(
+              context,
+              english: 'Change email',
+              arabic: 'تغيير البريد الإلكتروني',
+            ),
+            subtitle: appText(
+              context,
+              english: 'The new address must be verified',
+              arabic: 'يجب التحقق من البريد الجديد',
+            ),
+            onTap: busy ? null : () => _openEmailEditor(profile),
           ),
-          subtitle: appText(
-            context,
-            english: 'The new address must be verified',
-            arabic: 'يجب التحقق من البريد الجديد',
+          SettingsTile(
+            icon: Icons.password_rounded,
+            title: appText(
+              context,
+              english: 'Change password',
+              arabic: 'تغيير كلمة المرور',
+            ),
+            subtitle: appText(
+              context,
+              english: 'Confirm your current password first',
+              arabic: 'أكد كلمة المرور الحالية أولًا',
+            ),
+            onTap: busy ? null : () => _openPasswordEditor(profile),
           ),
-          onTap: busy ? null : () => _openEmailEditor(profile),
-        ),
-        SettingsTile(
-          icon: Icons.password_rounded,
-          title: appText(
-            context,
-            english: hasPassword ? 'Change password' : 'Add password',
-            arabic: hasPassword ? 'تغيير كلمة المرور' : 'إضافة كلمة مرور',
-          ),
-          subtitle: appText(
-            context,
-            english: hasPassword
-                ? 'Confirm your current password first'
-                : 'Also sign in with email after Google verification',
-            arabic: hasPassword
-                ? 'أكد كلمة المرور الحالية أولًا'
-                : 'استخدم الدخول بالبريد بعد تأكيد Google',
-          ),
-          onTap: busy ? null : () => _openPasswordEditor(profile),
-        ),
+        ],
         SettingsTile(
           icon: Icons.logout_rounded,
           title: appText(context, english: 'Sign out', arabic: 'تسجيل الخروج'),
@@ -783,12 +722,8 @@ class _AnimeWitcherAccountScreenState
       _showMessage(
         appText(
           context,
-          english: profile.hasPasswordProvider
-              ? 'Your password was changed.'
-              : 'A password was added to your account.',
-          arabic: profile.hasPasswordProvider
-              ? 'تم تغيير كلمة المرور.'
-              : 'تمت إضافة كلمة مرور إلى حسابك.',
+          english: 'Your password was changed.',
+          arabic: 'تم تغيير كلمة المرور.',
         ),
       );
     }
@@ -974,19 +909,6 @@ class _AnimeWitcherAccountScreenState
           error.code == 'email-not-verified') {
         _offerVerificationResend(email, password);
       }
-    } finally {
-      if (mounted) setState(() => _submitting = false);
-    }
-  }
-
-  Future<void> _submitGoogle() async {
-    setState(() => _submitting = true);
-    try {
-      await ref
-          .read(animeWitcherAccountControllerProvider.notifier)
-          .signInWithGoogle();
-    } catch (error) {
-      if (mounted) _showMessage(_localizedError(error), isError: true);
     } finally {
       if (mounted) setState(() => _submitting = false);
     }

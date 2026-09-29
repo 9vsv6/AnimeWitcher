@@ -8,11 +8,11 @@ void main() {
       idToken: 'id-token',
       refreshToken: 'refresh-token',
       expiresAt: DateTime.utc(2026, 8, 9, 12),
-      signInMethod: AnimeWitcherSignInMethod.google,
+      signInMethod: AnimeWitcherSignInMethod.email,
       email: 'user@example.com',
       displayName: 'Test User',
       photoUrl: 'https://example.com/photo.jpg',
-      providerIds: const <String>['google.com', 'password'],
+      providerIds: const <String>['password'],
     );
 
     final restored = AnimeWitcherSession.fromJson(original.toJson());
@@ -21,18 +21,39 @@ void main() {
     expect(restored.idToken, original.idToken);
     expect(restored.refreshToken, original.refreshToken);
     expect(restored.expiresAt, original.expiresAt);
-    expect(restored.signInMethod, AnimeWitcherSignInMethod.google);
+    expect(restored.signInMethod, AnimeWitcherSignInMethod.email);
     expect(restored.email, original.email);
     expect(restored.displayName, original.displayName);
     expect(restored.photoUrl, original.photoUrl);
     expect(restored.providerIds, original.providerIds);
   });
 
+  test('account cache rejects unsupported sign-in methods', () {
+    expect(
+      () => AnimeWitcherSession.fromJson(<String, dynamic>{
+        'uid': 'uid-unsupported',
+        'idToken': 'token',
+        'refreshToken': 'refresh',
+        'expiresAt': DateTime.utc(2026, 8, 9, 12).toIso8601String(),
+        'signInMethod': 'unsupported',
+      }),
+      throwsFormatException,
+    );
+    expect(
+      () => AnimeWitcherProfile.fromJson(<String, dynamic>{
+        'documentId': 'profile-unsupported',
+        'uid': 'uid-unsupported',
+        'signInMethod': 'unsupported',
+      }),
+      throwsFormatException,
+    );
+  });
+
   test('account profile preserves AnimeWitcher editable fields', () {
     const original = AnimeWitcherProfile(
       documentId: 'profile-1',
       uid: 'uid-1',
-      signInMethod: AnimeWitcherSignInMethod.google,
+      signInMethod: AnimeWitcherSignInMethod.email,
       email: 'user@example.com',
       userName: 'Sky User',
       photoUrl: 'https://example.com/avatar.jpg',
@@ -40,7 +61,7 @@ void main() {
       bio: 'Anime fan',
       country: 'Palestine',
       birthYear: '1999',
-      providerIds: <String>['google.com', 'password'],
+      providerIds: <String>['password'],
     );
 
     final restored = AnimeWitcherProfile.fromJson(original.toJson());
@@ -53,7 +74,6 @@ void main() {
     expect(restored.country, original.country);
     expect(restored.birthYear, original.birthYear);
     expect(restored.providerIds, original.providerIds);
-    expect(restored.hasGoogleProvider, isTrue);
     expect(restored.hasPasswordProvider, isTrue);
   });
 

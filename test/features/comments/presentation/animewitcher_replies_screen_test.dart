@@ -50,7 +50,7 @@ class _FakeAccountService extends AnimeWitcherAccountService {
         ? AnimeWitcherProfile(
             documentId: myUserId,
             uid: myUserId,
-            signInMethod: AnimeWitcherSignInMethod.google,
+            signInMethod: AnimeWitcherSignInMethod.email,
             userName: 'Me',
           )
         : null,

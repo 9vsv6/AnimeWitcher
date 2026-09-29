@@ -1,4 +1,4 @@
-enum AnimeWitcherSignInMethod { email, google }
+enum AnimeWitcherSignInMethod { email }
 
 enum AnimeWitcherProfileImageKind { avatar, cover }
 
@@ -132,10 +132,7 @@ class AnimeWitcherSession {
       expiresAt:
           DateTime.tryParse((json['expiresAt'] ?? '').toString()) ??
           DateTime.fromMillisecondsSinceEpoch(0),
-      signInMethod:
-          (json['signInMethod'] ?? '').toString().toLowerCase() == 'google'
-          ? AnimeWitcherSignInMethod.google
-          : AnimeWitcherSignInMethod.email,
+      signInMethod: _signInMethodFromJson(json['signInMethod']),
       email: _optionalString(json['email']),
       displayName: _optionalString(json['displayName']),
       photoUrl: _optionalString(json['photoUrl']),
@@ -174,7 +171,6 @@ class AnimeWitcherProfile {
   final AnimeWitcherPrivacySettings privacySettings;
 
   bool get hasPasswordProvider => providerIds.contains('password');
-  bool get hasGoogleProvider => providerIds.contains('google.com');
 
   AnimeWitcherProfile copyWith({
     String? documentId,
@@ -230,10 +226,7 @@ class AnimeWitcherProfile {
     return AnimeWitcherProfile(
       documentId: (json['documentId'] ?? '').toString(),
       uid: (json['uid'] ?? '').toString(),
-      signInMethod:
-          (json['signInMethod'] ?? '').toString().toLowerCase() == 'google'
-          ? AnimeWitcherSignInMethod.google
-          : AnimeWitcherSignInMethod.email,
+      signInMethod: _signInMethodFromJson(json['signInMethod']),
       email: _optionalString(json['email']),
       userName: _optionalString(json['userName']),
       photoUrl: _optionalString(json['photoUrl']),
@@ -280,6 +273,13 @@ class AnimeWitcherAccountException implements Exception {
 
   @override
   String toString() => message;
+}
+
+AnimeWitcherSignInMethod _signInMethodFromJson(dynamic raw) {
+  if (raw?.toString() == AnimeWitcherSignInMethod.email.name) {
+    return AnimeWitcherSignInMethod.email;
+  }
+  throw FormatException('Unsupported account sign-in method: $raw');
 }
 
 String? _optionalString(dynamic raw) {

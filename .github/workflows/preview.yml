@@ -89,9 +89,7 @@ jobs:
             "MAL_CLIENT_SECRET": "${{ secrets.MAL_CLIENT_SECRET }}",
             "ANILIST_CLIENT_ID": "${{ secrets.ANILIST_CLIENT_ID }}",
             "ANIMEWITCHER_FIREBASE_PROJECT_ID": "${{ secrets.ANIMEWITCHER_FIREBASE_PROJECT_ID }}",
-            "ANIMEWITCHER_FIREBASE_API_KEY": "${{ secrets.ANIMEWITCHER_FIREBASE_API_KEY }}",
-            "ANIMEWITCHER_GOOGLE_SERVER_CLIENT_ID": "${{ secrets.ANIMEWITCHER_GOOGLE_SERVER_CLIENT_ID }}",
-            "ANIMEWITCHER_GOOGLE_IOS_CLIENT_ID": "${{ secrets.ANIMEWITCHER_GOOGLE_IOS_CLIENT_ID || '296971789988-0ksnaln8k2epsuejesllrr497jnd5if5.apps.googleusercontent.com' }}"
+            "ANIMEWITCHER_FIREBASE_API_KEY": "${{ secrets.ANIMEWITCHER_FIREBASE_API_KEY }}"
           }
           JSON_EOF
 
@@ -136,17 +134,9 @@ jobs:
             "MAL_CLIENT_SECRET": "${{ secrets.MAL_CLIENT_SECRET }}",
             "ANILIST_CLIENT_ID": "${{ secrets.ANILIST_CLIENT_ID }}",
             "ANIMEWITCHER_FIREBASE_PROJECT_ID": "${{ secrets.ANIMEWITCHER_FIREBASE_PROJECT_ID }}",
-            "ANIMEWITCHER_FIREBASE_API_KEY": "${{ secrets.ANIMEWITCHER_FIREBASE_API_KEY }}",
-            "ANIMEWITCHER_GOOGLE_SERVER_CLIENT_ID": "${{ secrets.ANIMEWITCHER_GOOGLE_SERVER_CLIENT_ID }}",
-            "ANIMEWITCHER_GOOGLE_IOS_CLIENT_ID": "${{ secrets.ANIMEWITCHER_GOOGLE_IOS_CLIENT_ID || '296971789988-0ksnaln8k2epsuejesllrr497jnd5if5.apps.googleusercontent.com' }}"
+            "ANIMEWITCHER_FIREBASE_API_KEY": "${{ secrets.ANIMEWITCHER_FIREBASE_API_KEY }}"
           }
           JSON_EOF
-
-      - name: Configure Google Sign-In for iOS
-        env:
-          ANIMEWITCHER_GOOGLE_IOS_CLIENT_ID: ${{ secrets.ANIMEWITCHER_GOOGLE_IOS_CLIENT_ID || '296971789988-0ksnaln8k2epsuejesllrr497jnd5if5.apps.googleusercontent.com' }}
-          ANIMEWITCHER_GOOGLE_SERVER_CLIENT_ID: ${{ secrets.ANIMEWITCHER_GOOGLE_SERVER_CLIENT_ID }}
-        run: bash scripts/configure_ios_google_sign_in.sh
 
       - name: Build iOS (No Codesign)
         run: |
@@ -201,9 +191,7 @@ jobs:
             "MAL_CLIENT_SECRET": "${{ secrets.MAL_CLIENT_SECRET }}",
             "ANILIST_CLIENT_ID": "${{ secrets.ANILIST_CLIENT_ID }}",
             "ANIMEWITCHER_FIREBASE_PROJECT_ID": "${{ secrets.ANIMEWITCHER_FIREBASE_PROJECT_ID }}",
-            "ANIMEWITCHER_FIREBASE_API_KEY": "${{ secrets.ANIMEWITCHER_FIREBASE_API_KEY }}",
-            "ANIMEWITCHER_GOOGLE_SERVER_CLIENT_ID": "${{ secrets.ANIMEWITCHER_GOOGLE_SERVER_CLIENT_ID }}",
-            "ANIMEWITCHER_GOOGLE_IOS_CLIENT_ID": "${{ secrets.ANIMEWITCHER_GOOGLE_IOS_CLIENT_ID || '296971789988-0ksnaln8k2epsuejesllrr497jnd5if5.apps.googleusercontent.com' }}"
+            "ANIMEWITCHER_FIREBASE_API_KEY": "${{ secrets.ANIMEWITCHER_FIREBASE_API_KEY }}"
           }
           JSON_EOF
 
@@ -323,9 +311,7 @@ jobs:
             "MAL_CLIENT_SECRET": "${{ secrets.MAL_CLIENT_SECRET }}",
             "ANILIST_CLIENT_ID": "${{ secrets.ANILIST_CLIENT_ID }}",
             "ANIMEWITCHER_FIREBASE_PROJECT_ID": "${{ secrets.ANIMEWITCHER_FIREBASE_PROJECT_ID }}",
-            "ANIMEWITCHER_FIREBASE_API_KEY": "${{ secrets.ANIMEWITCHER_FIREBASE_API_KEY }}",
-            "ANIMEWITCHER_GOOGLE_SERVER_CLIENT_ID": "${{ secrets.ANIMEWITCHER_GOOGLE_SERVER_CLIENT_ID }}",
-            "ANIMEWITCHER_GOOGLE_IOS_CLIENT_ID": "${{ secrets.ANIMEWITCHER_GOOGLE_IOS_CLIENT_ID || '296971789988-0ksnaln8k2epsuejesllrr497jnd5if5.apps.googleusercontent.com' }}"
+            "ANIMEWITCHER_FIREBASE_API_KEY": "${{ secrets.ANIMEWITCHER_FIREBASE_API_KEY }}"
           }
           JSON_EOF
 
