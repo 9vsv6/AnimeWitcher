@@ -379,53 +379,62 @@ class _LibraryListBar extends StatelessWidget implements PreferredSizeWidget {
     if (tabs.isEmpty) return const SizedBox(height: 46);
     return SizedBox(
       height: 46,
-      child: ListView.separated(
+      child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12),
-        itemCount: tabs.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final tab = tabs[index];
-          final selected = tab.key == selectedKey;
-          return InkWell(
-            key: ValueKey<String>('library-list-tab-${tab.key}'),
-            borderRadius: BorderRadius.circular(10),
-            onTap: () => onTap(tab),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: Center(
-                      child: Text(
-                        tab.count == null
-                            ? tab.label
-                            : '${tab.label} ${tab.count}',
-                        maxLines: 1,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: selected
-                              ? colors.primary
-                              : colors.onSurfaceVariant,
-                        ),
+        child: Row(
+          children: [
+            for (var index = 0; index < tabs.length; index++) ...[
+              if (index > 0) const SizedBox(width: 8),
+              Builder(
+                builder: (context) {
+                  final tab = tabs[index];
+                  final selected = tab.key == selectedKey;
+                  return InkWell(
+                    key: ValueKey<String>('library-list-tab-${tab.key}'),
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () => onTap(tab),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Expanded(
+                            child: Center(
+                              child: Text(
+                                tab.count == null
+                                    ? tab.label
+                                    : '${tab.label} ${tab.count}',
+                                maxLines: 1,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: selected
+                                      ? colors.primary
+                                      : colors.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                          ),
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 160),
+                            width: 34,
+                            height: 3,
+                            decoration: BoxDecoration(
+                              color: selected
+                                  ? colors.primary
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 160),
-                    width: 34,
-                    height: 3,
-                    decoration: BoxDecoration(
-                      color: selected ? colors.primary : Colors.transparent,
-                      borderRadius: BorderRadius.circular(99),
-                    ),
-                  ),
-                ],
+                  );
+                },
               ),
-            ),
-          );
-        },
+            ],
+          ],
+        ),
       ),
     );
   }
