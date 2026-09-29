@@ -428,7 +428,7 @@ void main() {
     await tester.ensureVisible(pinnedTab);
     await tester.pumpAndSettle();
     await tester.tap(pinnedTab);
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(
       find.byKey(const ValueKey('library-grid-manga-pinned')),
