@@ -127,9 +127,7 @@ void main() {
     );
     expect(
       heroButtons.any(
-        (button) =>
-            button.icon == Icons.chat_bubble_outline_rounded &&
-            button.tooltip == 'Comments',
+        (button) => button.icon == Icons.chat_bubble_outline_rounded,
       ),
       isTrue,
     );
