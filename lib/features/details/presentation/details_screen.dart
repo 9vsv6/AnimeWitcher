@@ -343,18 +343,18 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
           ratingCaption: _userRating == null ? null : '${_userRating!}/10',
           onPressed: () async => _rateAnimeFromHero(item),
         ),
-        DetailsHeroIconButton(
-          icon: Icons.rate_review_outlined,
-          tooltip: appText(context, english: 'Reviews', arabic: 'المراجعات'),
-          foregroundColor: foregroundColor,
-          fallbackColor: fallbackColor,
-          onPressed: () => openAnimeReviews(
-            context,
-            ref,
-            item: item,
-            ratings: AnimeDetailsRatings.fromItem(item),
+        if (animeWitcherAnimeCommentTarget(item) case final target?)
+          DetailsHeroIconButton(
+            icon: Icons.chat_bubble_outline_rounded,
+            tooltip: appText(
+              context,
+              english: 'Comments',
+              arabic: 'التعليقات',
+            ),
+            foregroundColor: foregroundColor,
+            fallbackColor: fallbackColor,
+            onPressed: () => _openAnimeComments(context, target),
           ),
-        ),
         if (_firstTrailerUrl(item) != null)
           DetailsHeroIconButton(
             icon: Icons.movie_outlined,
