@@ -1,5 +1,5 @@
-/// What the library's lists are called, what they hold and how the phone's
-/// shelves are set up, shared by the PC side list and the phone shelves.
+/// What the library's lists are called, what they hold and how the library
+/// navigation is configured, shared by desktop and phone.
 library;
 
 import 'package:flutter/material.dart';
@@ -96,9 +96,6 @@ List<HistoryItem> libraryRecentFor(
 /// How a shelf orders its titles.
 enum LibrarySort { added, name, year }
 
-/// Shelves, one row per list, or every list in one grid.
-enum LibraryView { shelves, grid }
-
 /// [items] in [sort] order. [items] come from the library newest-added
 /// first already, so that order costs nothing; looking each title's date
 /// up again scanned the whole library per comparison, and a few hundred
@@ -161,27 +158,20 @@ class LibraryShelfPrefs extends ChangeNotifier {
       (value) => value.name == _storage.getString(_sortKey),
       orElse: () => LibrarySort.added,
     );
-    _view = LibraryView.values.firstWhere(
-      (value) => value.name == _storage.getString(_viewKey),
-      orElse: () => LibraryView.shelves,
-    );
     _hideEmpty = _storage.getString(_hideEmptyKey) == 'true';
   }
 
   static const String recentKey = 'recent';
   static const String _hiddenKey = 'library_shelves_hidden';
   static const String _sortKey = 'library_shelves_sort';
-  static const String _viewKey = 'library_shelves_view';
   static const String _hideEmptyKey = 'library_shelves_hide_empty';
 
   final StorageService _storage;
   late Set<String> _hidden;
   late LibrarySort _sort;
-  late LibraryView _view;
   late bool _hideEmpty;
 
   LibrarySort get sort => _sort;
-  LibraryView get view => _view;
   bool get hideEmpty => _hideEmpty;
 
   bool showsRecent() => !_hidden.contains(recentKey);
@@ -197,12 +187,6 @@ class LibraryShelfPrefs extends ChangeNotifier {
   set sort(LibrarySort value) {
     _sort = value;
     _storage.setString(_sortKey, value.name);
-    notifyListeners();
-  }
-
-  set view(LibraryView value) {
-    _view = value;
-    _storage.setString(_viewKey, value.name);
     notifyListeners();
   }
 
