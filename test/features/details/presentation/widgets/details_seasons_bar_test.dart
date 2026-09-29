@@ -97,7 +97,7 @@ void main() {
     );
   });
 
-  test('movies and OVAs that only link upwards are found by name', () async {
+  test('graph walk never searches the AnimeWitcher catalog by title', () async {
     MultimediaItem t(String url, String title, String type, {String? rel}) =>
         MultimediaItem(
           title: title,
@@ -107,6 +107,7 @@ void main() {
           relationType: rel,
         );
     final s1 = t('s1', 'Tensei shitara Slime Datta Ken', 'مسلسل');
+    var catalogSearches = 0;
     final entries = await walkSeasonsBar(
       current: s1,
       related: [
@@ -116,26 +117,28 @@ void main() {
           'مسلسل',
           rel: 'SEQUEL',
         ),
-      ],
-      fetchRelated: (_) async => const [],
-      searchFranchise: (_) async => [
         t(
           'movie',
           'Tensei shitara Slime Datta Ken Movie: Guren no Kizuna-hen',
           'فيلم',
+          rel: 'SIDE_STORY',
         ),
-        t('ova', 'Tensei shitara Slime Datta Ken OVA', 'اوفا'),
-        t('s2', 'Tensei shitara Slime Datta Ken 2nd Season', 'مسلسل'),
-        t('other', 'Some Other Show', 'فيلم'),
+        t(
+          'ova',
+          'Tensei shitara Slime Datta Ken OVA',
+          'اوفا',
+          rel: 'SIDE_STORY',
+        ),
       ],
+      fetchRelated: (_) async => const [],
+      searchFranchise: (_) async {
+        catalogSearches++;
+        return const <MultimediaItem>[];
+      },
     );
+
+    expect(catalogSearches, 0);
     expect(entries.map((e) => e.item.url), ['s1', 's2', 'movie', 'ova']);
-    expect(entries.map((e) => e.label), [
-      'الموسم 1',
-      'الموسم 2',
-      'Movie: Guren no Kizuna-hen',
-      'OVA',
-    ]);
   });
 
   test('entries carry their short name', () {
