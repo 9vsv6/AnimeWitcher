@@ -250,10 +250,10 @@ class _LibraryPhoneShelvesState extends ConsumerState<LibraryPhoneShelves> {
                 )
               : LibraryItemsGrid(
                   key: ValueKey<String>(
-                    'library-grid-${kind.storageKey}-search',
+                    'library-grid-${kind!.storageKey}-search',
                   ),
                   items: shown,
-                  heroPrefix: 'lib_search_${kind.storageKey}',
+                  heroPrefix: 'lib_search_${kind!.storageKey}',
                 );
         } else if (selected == null) {
           body = LibraryEmptyState(mediaKind: kind!);
@@ -266,14 +266,14 @@ class _LibraryPhoneShelvesState extends ConsumerState<LibraryPhoneShelves> {
           final category = selected.category!;
           final items = _list(repository, kind!, category);
           body = items.isEmpty
-              ? LibraryEmptyState(mediaKind: kind)
+              ? LibraryEmptyState(mediaKind: kind!)
               : LibraryItemsGrid(
                   key: ValueKey<String>(
-                    'library-grid-${kind.storageKey}-${category.storageKey}',
+                    'library-grid-${kind!.storageKey}-${category.storageKey}',
                   ),
                   items: items,
                   heroPrefix:
-                      'lib_${kind.storageKey}_${category.storageKey}',
+                      'lib_${kind!.storageKey}_${category.storageKey}',
                 );
         }
 
