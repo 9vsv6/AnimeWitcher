@@ -104,12 +104,12 @@ void main() {
       idToken: 'stale',
       refreshToken: 'also-stale',
       expiresAt: DateTime.now().subtract(const Duration(hours: 1)),
-      signInMethod: AnimeWitcherSignInMethod.google,
+      signInMethod: AnimeWitcherSignInMethod.email,
     );
     const profile = AnimeWitcherProfile(
       documentId: 'user-doc',
       uid: 'uid-1',
-      signInMethod: AnimeWitcherSignInMethod.google,
+      signInMethod: AnimeWitcherSignInMethod.email,
       userName: 'Me',
     );
     secure.values['animewitcher_account_session_v1'] = jsonEncode(
