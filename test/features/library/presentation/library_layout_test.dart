@@ -387,7 +387,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
   });
 
-  testWidgets('phone: a row shows ten titles, عرض الكل shows every one', (
+  testWidgets('phone: selecting a list tab shows its full grid', (
     tester,
   ) async {
     final storage = _LibraryStorage({
@@ -422,26 +422,23 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    final row = find.byKey(const ValueKey('library-shelf-manga-pinned'));
-    expect(find.text('أرغب بقراءتها · 12'), findsOneWidget);
-    final list = tester.widget<ListView>(
-      find.descendant(of: row, matching: find.byType(ListView)),
+    await tester.tap(
+      find.byKey(const ValueKey('library-list-tab-pinned')),
     );
-    // Ten posters and the nine gaps between them.
-    expect(list.childrenDelegate.estimatedChildCount, 10 + 9);
+    await tester.pump();
 
-    await tester.tap(find.descendant(of: row, matching: find.text('عرض الكل')));
-    await tester.pumpAndSettle();
-    expect(find.byType(LibraryListPage), findsOneWidget);
-    final back = find.byIcon(Icons.arrow_back_ios_new_rounded);
-    expect(back, findsOneWidget);
     expect(
-      tester.getCenter(back).dx,
-      lessThan(tester.view.physicalSize.width / 2),
-      reason: 'library list Back must live on the physical left even in Arabic',
+      find.byKey(const ValueKey('library-grid-manga-pinned')),
+      findsOneWidget,
     );
-    final grid = tester.widget<GridView>(find.byType(GridView));
+    final grid = tester.widget<GridView>(
+      find.descendant(
+        of: find.byKey(const ValueKey('library-grid-manga-pinned')),
+        matching: find.byType(GridView),
+      ),
+    );
     expect(grid.childrenDelegate.estimatedChildCount, 12);
+    expect(find.text('عرض الكل'), findsNothing);
     await tester.pump(const Duration(milliseconds: 100));
   });
 
@@ -464,16 +461,18 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
   });
 
-  testWidgets('phone: the anime tab ends with the favourite characters', (
+  testWidgets('phone: manga bar has the six reading lists and no recent', (
     tester,
   ) async {
-    await _pump(tester, size: const Size(400, 860), kind: 'anime');
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('library-characters')),
-      200,
-      scrollable: find.byType(Scrollable).last,
-    );
-    expect(find.text('الشخصيات المفضلة'), findsOneWidget);
+    await _pump(tester, size: const Size(400, 860), kind: 'manga');
+
+    expect(find.byKey(const ValueKey('library-list-tab-recent')), findsNothing);
+    expect(find.text('المفضلة 0'), findsOneWidget);
+    expect(find.text('أقرأها حاليًا 2'), findsOneWidget);
+    expect(find.text('أكملها لاحقًا 0'), findsOneWidget);
+    expect(find.text('أرغب بقراءتها 1'), findsOneWidget);
+    expect(find.text('تمت قراءتها 0'), findsOneWidget);
+    expect(find.text('لا أرغب بقراءتها 0'), findsOneWidget);
     await tester.pump(const Duration(milliseconds: 100));
   });
 
