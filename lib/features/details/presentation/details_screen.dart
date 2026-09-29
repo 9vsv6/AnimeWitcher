@@ -1369,6 +1369,8 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     switch (index) {
       case detailsExtraCharactersTabIndex:
         controller.loadCastIfNeeded();
+      case detailsExtraRelatedTabIndex:
+        controller.loadRelatedIfNeeded();
       default:
         controller.loadRecommendationsIfNeeded();
     }
@@ -1390,9 +1392,15 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     final similarState = recommendationsState.whenData(
       (value) => _recommendationsWithoutRelatedLists(value, related),
     );
+    final relatedHasMore = ref.watch(
+      detailsControllerProvider(
+        widget.item.url,
+      ).select((state) => state.relatedHasMore),
+    );
     final similarHasMore = ref.watch(
-      detailsControllerProvider(widget.item.url)
-          .select((state) => state.similarHasMore),
+      detailsControllerProvider(
+        widget.item.url,
+      ).select((state) => state.similarHasMore),
     );
     final controller = ref.read(
       detailsControllerProvider(widget.item.url).notifier,
@@ -1400,6 +1408,10 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     return DetailsExtraTabs(
       key: _extraTabsKey,
       similar: similarState,
+      related: relatedState.hasValue
+          ? AsyncData<List<MultimediaItem>>(related)
+          : relatedState,
+      relatedHasMore: relatedHasMore,
       similarHasMore: similarHasMore,
       cast: castState,
       contentPadding: contentPadding,
@@ -1413,10 +1425,18 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
           ),
         );
       },
+      onShowMoreRelated: () {
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => RelatedAnimeScreen(source: item),
+          ),
+        );
+      },
       onShowMoreCharacters: (role) {
         _openAnimeCharacters(item, characterType: role);
       },
       onRetrySimilar: controller.loadRecommendationsIfNeeded,
+      onRetryRelated: controller.loadRelatedIfNeeded,
       onRetryCast: controller.loadCastIfNeeded,
     );
   }
