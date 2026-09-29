@@ -58,36 +58,6 @@ class FirebaseAuthRestClient {
     return _createEmailAccountRest(email: email, password: password);
   }
 
-  Future<AnimeWitcherSession> signInWithGoogleIdToken(String idToken) async {
-    if (!_configured) {
-      throw const AnimeWitcherAccountException(
-        'not-configured',
-        'AnimeWitcher account services are not configured.',
-      );
-    }
-    final session = await _signInWithGoogleIdTokenRest(idToken);
-    return _mergeUser(session, await lookup(session.idToken));
-  }
-
-  /// Reauthenticates an existing Google account without allowing Identity
-  /// Platform to create an accidental account when the wrong Google identity
-  /// is selected.
-  Future<AnimeWitcherSession> reauthenticateWithGoogleIdToken(
-    String idToken,
-  ) async {
-    if (!_configured) {
-      throw const AnimeWitcherAccountException(
-        'not-configured',
-        'AnimeWitcher account services are not configured.',
-      );
-    }
-    final session = await _signInWithGoogleIdTokenRest(
-      idToken,
-      autoCreate: false,
-    );
-    return _mergeUser(session, await lookup(session.idToken));
-  }
-
   Future<void> sendEmailVerification(String idToken) async {
     await _identityPost('/accounts:sendOobCode', <String, dynamic>{
       'requestType': 'VERIFY_EMAIL',
@@ -122,9 +92,8 @@ class FirebaseAuthRestClient {
     });
   }
 
-  /// Changes or adds an email/password credential and returns the rotated
-  /// Firebase session. Google-only AnimeWitcher accounts use this same REST
-  /// endpoint after Google reauthentication to add their first password.
+  /// Changes the email/password credential and returns the rotated Firebase
+  /// session.
   Future<AnimeWitcherSession> updatePassword({
     required AnimeWitcherSession previous,
     required String newPassword,
@@ -151,25 +120,6 @@ class FirebaseAuthRestClient {
     );
     updated = _mergeUser(updated, await lookup(updated.idToken));
     return updated;
-  }
-
-  /// Mirrors linkWithCredential(EmailAuthProvider.credential(...)) for a
-  /// Google-only account. Firebase uses accounts:signUp with the current ID
-  /// token to attach the email/password provider to that same user.
-  Future<AnimeWitcherSession> linkEmailPassword({
-    required AnimeWitcherSession previous,
-    required String email,
-    required String newPassword,
-  }) async {
-    final payload = await _identityPost('/accounts:signUp', <String, dynamic>{
-      'idToken': previous.idToken,
-      'email': email.trim(),
-      'password': newPassword,
-      'returnSecureToken': true,
-    });
-    var linked = _sessionFromIdentityPayload(payload, previous.signInMethod);
-    linked = _mergeUser(linked, await lookup(linked.idToken));
-    return linked;
   }
 
   Future<void> deleteAccount(String idToken) async {
@@ -272,32 +222,6 @@ class FirebaseAuthRestClient {
     return _sessionFromIdentityPayload(payload, AnimeWitcherSignInMethod.email);
   }
 
-  Future<AnimeWitcherSession> _signInWithGoogleIdTokenRest(
-    String idToken, {
-    bool autoCreate = true,
-  }) async {
-    final postBody = Uri(
-      queryParameters: <String, String>{
-        'id_token': idToken,
-        'providerId': 'google.com',
-      },
-    ).query;
-    final payload = await _identityPost(
-      '/accounts:signInWithIdp',
-      <String, dynamic>{
-        'postBody': postBody,
-        'requestUri': 'http://localhost',
-        'autoCreate': autoCreate,
-        'returnIdpCredential': true,
-        'returnSecureToken': true,
-      },
-    );
-    return _sessionFromIdentityPayload(
-      payload,
-      AnimeWitcherSignInMethod.google,
-    );
-  }
-
   Future<Map<String, dynamic>> _identityPost(
     String path,
     Map<String, dynamic> data,
@@ -337,13 +261,7 @@ class FirebaseAuthRestClient {
       email: _optionalString(payload['email']),
       displayName: _optionalString(payload['displayName']),
       photoUrl: _optionalString(payload['photoUrl']),
-      providerIds: providerIds.isEmpty
-          ? <String>[
-              method == AnimeWitcherSignInMethod.google
-                  ? 'google.com'
-                  : 'password',
-            ]
-          : providerIds,
+      providerIds: providerIds.isEmpty ? const <String>['password'] : providerIds,
     );
     if (session.uid.isEmpty ||
         session.idToken.isEmpty ||
