@@ -25,10 +25,10 @@ void main() {
           ),
         ],
         child: const MaterialApp(
-          locale: const Locale('ar'),
+          locale: Locale('ar'),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          home: const AnimeWitcherAccountScreen(),
+          home: AnimeWitcherAccountScreen(),
         ),
       ),
     );
@@ -36,7 +36,7 @@ void main() {
 
     expect(find.text('البريد الإلكتروني'), findsOneWidget);
     expect(find.text('كلمة المرور'), findsOneWidget);
-    expect(find.text('تسجيل الدخول'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'تسجيل الدخول'), findsOneWidget);
     expect(find.textContaining('Google'), findsNothing);
   });
 }
