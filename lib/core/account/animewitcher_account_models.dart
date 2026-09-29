@@ -132,9 +132,7 @@ class AnimeWitcherSession {
       expiresAt:
           DateTime.tryParse((json['expiresAt'] ?? '').toString()) ??
           DateTime.fromMillisecondsSinceEpoch(0),
-      // Legacy sessions may still contain "google"; all current auth is
-      // email/password, so normalize cached sessions to the supported method.
-      signInMethod: AnimeWitcherSignInMethod.email,
+      signInMethod: _signInMethodFromJson(json['signInMethod']),
       email: _optionalString(json['email']),
       displayName: _optionalString(json['displayName']),
       photoUrl: _optionalString(json['photoUrl']),
@@ -228,7 +226,7 @@ class AnimeWitcherProfile {
     return AnimeWitcherProfile(
       documentId: (json['documentId'] ?? '').toString(),
       uid: (json['uid'] ?? '').toString(),
-      signInMethod: AnimeWitcherSignInMethod.email,
+      signInMethod: _signInMethodFromJson(json['signInMethod']),
       email: _optionalString(json['email']),
       userName: _optionalString(json['userName']),
       photoUrl: _optionalString(json['photoUrl']),
@@ -275,6 +273,13 @@ class AnimeWitcherAccountException implements Exception {
 
   @override
   String toString() => message;
+}
+
+AnimeWitcherSignInMethod _signInMethodFromJson(dynamic raw) {
+  if (raw?.toString() == AnimeWitcherSignInMethod.email.name) {
+    return AnimeWitcherSignInMethod.email;
+  }
+  throw FormatException('Unsupported account sign-in method: $raw');
 }
 
 String? _optionalString(dynamic raw) {
