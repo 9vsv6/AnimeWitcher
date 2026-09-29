@@ -641,8 +641,8 @@ class AnimeWitcherAccountService {
   ) {
     if (session.uid != profile.uid) {
       throw const AnimeWitcherAccountException(
-        'wrong-google-account',
-        'Choose the same Google account to confirm your identity.',
+        'invalid-credentials',
+        'The credentials do not match the active account.',
       );
     }
   }
@@ -699,8 +699,7 @@ class AnimeWitcherAccountService {
     try {
       _profile = await _resolveProfile(
         session,
-        createIfMissing:
-            session.signInMethod == AnimeWitcherSignInMethod.google,
+        createIfMissing: false,
       );
       await _persistSession();
       _syncNewAuthEmailBestEffort(session);
@@ -1845,11 +1844,7 @@ class AnimeWitcherAccountService {
       birthYear: _optionalString(fields['birth_date']),
       privacySettings: AnimeWitcherPrivacySettings.fromJson(fields['settings']),
       providerIds: session.providerIds.isEmpty
-          ? <String>[
-              session.signInMethod == AnimeWitcherSignInMethod.google
-                  ? 'google.com'
-                  : 'password',
-            ]
+          ? const <String>['password']
           : session.providerIds,
     );
   }
@@ -1923,9 +1918,7 @@ class AnimeWitcherAccountService {
       'email': session.email ?? '',
       'user_name': userName,
       'pic_uri': session.photoUrl ?? '',
-      'sign_in_method': session.signInMethod == AnimeWitcherSignInMethod.google
-          ? 'google.com'
-          : 'password',
+      'sign_in_method': 'password',
       'banned': false,
       'settings': <String, dynamic>{
         'show_ads': true,
