@@ -1,3 +1,4 @@
+import 'package:animewitcher/features/search/presentation/search_domain.dart';
 import 'package:animewitcher/features/search/presentation/search_provider.dart';
 import 'package:animewitcher/features/search/presentation/widgets/search_header_bar.dart';
 import 'package:animewitcher/features/search/presentation/widgets/search_glass_surface.dart';
@@ -151,7 +152,7 @@ void main() {
     },
   );
 
-  testWidgets('Arabic search field is RTL and uses a softer rectangle', (
+  testWidgets('search field matches the library pill geometry in Arabic', (
     tester,
   ) async {
     final controller = TextEditingController();
@@ -208,7 +209,74 @@ void main() {
     );
     final decoration = container.decoration! as BoxDecoration;
     final radius = decoration.borderRadius! as BorderRadius;
-    expect(radius.topLeft.x, lessThan(SearchGlassSurface.height / 2));
+    expect(container.constraints?.maxHeight ?? SearchGlassSurface.height, 42);
+    expect(radius.topLeft.x, 99);
+    expect(decoration.border, isNull);
+  });
+
+  testWidgets('Arabic search hint follows the selected search domain', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    final searchFocus = FocusNode();
+    final clearFocus = FocusNode();
+    addTearDown(controller.dispose);
+    addTearDown(searchFocus.dispose);
+    addTearDown(clearFocus.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          searchPagedResultsProvider.overrideWith(_IdleSearchNotifier.new),
+        ],
+        child: MaterialApp(
+          locale: const Locale('ar'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: SearchHeaderBar(
+              textController: controller,
+              searchFocusNode: searchFocus,
+              clearButtonFocusNode: clearFocus,
+              onSubmitted: (_) {},
+              onChanged: (_) {},
+              onShowFilters: () {},
+              onSortSelected: (_) {},
+              sortValue: 'favorites',
+              sortItems: const <AppleNativeMenuItem>[
+                AppleNativeMenuItem(value: 'favorites', label: 'Favorites'),
+              ],
+              sortIcon: Icons.star_rounded,
+              sortSystemImage: 'star.fill',
+              sortTooltip: 'Sort',
+              activeFilterCount: 0,
+              isFilterLoading: false,
+              showSort: true,
+              showFilter: true,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(SearchHeaderBar)),
+    );
+    for (final entry in <(SearchDomain, String)>[
+      (SearchDomain.anime, 'ابحث عن انمي'),
+      (SearchDomain.manga, 'ابحث عن مانجا'),
+      (SearchDomain.all, 'ابحث عن الكل'),
+      (SearchDomain.animation, 'ابحث عن انميشن'),
+      (SearchDomain.characters, 'ابحث عن شخصيات'),
+    ]) {
+      container.read(searchDomainProvider.notifier).set(entry.$1);
+      await tester.pump();
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).decoration?.hintText,
+        entry.$2,
+      );
+    }
   });
 
   testWidgets('character search expands into the missing sort space', (
