@@ -1,4 +1,5 @@
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
+import 'package:animewitcher/core/services/anilist_franchise_service.dart';
 import 'package:animewitcher/features/details/presentation/widgets/details_seasons_bar.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -107,7 +108,6 @@ void main() {
           relationType: rel,
         );
     final s1 = t('s1', 'Tensei shitara Slime Datta Ken', 'مسلسل');
-    var catalogSearches = 0;
     final entries = await walkSeasonsBar(
       current: s1,
       related: [
@@ -131,14 +131,63 @@ void main() {
         ),
       ],
       fetchRelated: (_) async => const [],
-      searchFranchise: (_) async {
-        catalogSearches++;
-        return const <MultimediaItem>[];
-      },
     );
 
-    expect(catalogSearches, 0);
     expect(entries.map((e) => e.item.url), ['s1', 's2', 'movie', 'ova']);
+  });
+
+  test('AniList relations preserve MAL ids, formats, and part titles', () {
+    final parsed = aniListFranchiseNodeFromJson(<String, dynamic>{
+      'id': 100,
+      'idMal': 10,
+      'format': 'TV',
+      'title': <String, dynamic>{
+        'english': 'Example',
+        'romaji': 'Example',
+        'native': 'مثال',
+      },
+      'synonyms': <String>['Example Season 1'],
+      'startDate': <String, dynamic>{'year': 2024},
+      'relations': <String, dynamic>{
+        'edges': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'relationType': 'SEQUEL',
+            'node': <String, dynamic>{
+              'id': 101,
+              'idMal': 11,
+              'format': 'TV',
+              'title': <String, dynamic>{
+                'english': 'Example Part Two',
+                'romaji': 'Example Part Two',
+              },
+              'synonyms': <String>['Example Season 1 Part 2'],
+              'startDate': <String, dynamic>{'year': 2024},
+              'coverImage': <String, dynamic>{'large': 'https://img/11.jpg'},
+            },
+          },
+          <String, dynamic>{
+            'relationType': 'SIDE_STORY',
+            'node': <String, dynamic>{
+              'id': 102,
+              'idMal': 12,
+              'format': 'OVA',
+              'title': <String, dynamic>{'romaji': 'Example OVA'},
+              'synonyms': const <String>[],
+              'startDate': <String, dynamic>{'year': 2025},
+            },
+          },
+        ],
+      },
+    });
+
+    expect(parsed, isNotNull);
+    expect(parsed!.item.artworkLookupMalId, 10);
+    expect(parsed.item.title, 'Example Season 1');
+    expect(parsed.related.map((item) => item.artworkLookupMalId), [11, 12]);
+    expect(parsed.related.first.title, 'Example Season 1 Part 2');
+    expect(parsed.related.first.catalogType, 'مسلسل');
+    expect(parsed.related.last.catalogType, 'اوفا');
+    expect(parsed.related.last.relationType, 'SIDE_STORY');
   });
 
   test('entries carry their short name', () {
