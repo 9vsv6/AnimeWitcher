@@ -306,7 +306,7 @@ void main() {
     await tester.tap(find.text(animeWitcherRelatedTabLabel));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 350));
-    expect(visited, contains(detailsExtraRelatedTabIndex));
+    expect(visited, contains(1));
 
     await tester.tap(find.text(animeWitcherCharactersTabLabel));
     await tester.pump();
