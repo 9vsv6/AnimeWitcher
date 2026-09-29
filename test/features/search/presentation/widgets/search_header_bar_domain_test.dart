@@ -1,7 +1,6 @@
 import 'package:animewitcher/features/search/presentation/search_domain.dart';
 import 'package:animewitcher/features/search/presentation/search_provider.dart';
 import 'package:animewitcher/features/search/presentation/widgets/search_header_bar.dart';
-import 'package:animewitcher/features/search/presentation/widgets/search_glass_surface.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter/material.dart';
@@ -202,16 +201,17 @@ void main() {
     final field = tester.widget<TextField>(fieldFinder);
     expect(field.textDirection, TextDirection.rtl);
     expect(Directionality.of(tester.element(fieldFinder)), TextDirection.rtl);
+    expect(tester.getSize(fieldFinder).height, 42);
+    expect(field.style, isNull);
 
-    final surface = find.byType(SearchGlassSurface);
-    final container = tester.widget<AnimatedContainer>(
-      find.descendant(of: surface, matching: find.byType(AnimatedContainer)),
-    );
-    final decoration = container.decoration! as BoxDecoration;
-    final radius = decoration.borderRadius! as BorderRadius;
-    expect(container.constraints?.maxHeight ?? SearchGlassSurface.height, 42);
-    expect(radius.topLeft.x, 99);
-    expect(decoration.border, isNull);
+    final decoration = field.decoration!;
+    expect(decoration.filled, isTrue);
+    expect(decoration.contentPadding, EdgeInsets.zero);
+    expect(decoration.hintStyle, isNull);
+    expect((decoration.prefixIcon! as Icon).size, 20);
+    final border = decoration.border! as OutlineInputBorder;
+    expect(border.borderRadius.topLeft.x, 99);
+    expect(border.borderSide, BorderSide.none);
   });
 
   testWidgets('Arabic search hint follows the selected search domain', (
@@ -325,7 +325,7 @@ void main() {
         ),
       );
       await tester.pump();
-      return tester.getRect(find.byType(SearchGlassSurface)).width;
+      return tester.getRect(find.byType(TextField)).width;
     }
 
     final regular = await searchWidth(showSort: true);
