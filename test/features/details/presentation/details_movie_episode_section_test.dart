@@ -122,6 +122,17 @@ void main() {
     );
     await tester.pump();
 
+    final commentsAction = find.byTooltip('Comments');
+    expect(commentsAction, findsOneWidget);
+    expect(
+      find.descendant(
+        of: commentsAction,
+        matching: find.byIcon(Icons.chat_bubble_outline_rounded),
+      ),
+      findsOneWidget,
+    );
+    expect(find.byTooltip('Reviews'), findsNothing);
+
     expect(find.byType(DetailsHeroPlayPill), findsNothing);
 
     await tester.tap(
