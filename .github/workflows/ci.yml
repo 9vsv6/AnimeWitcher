@@ -142,7 +142,12 @@ jobs:
                   status=r.status
               return json.loads(payload), (time.perf_counter()-started)*1000, status, len(payload)
 
+          _last_anilist_request = [0.0]
+
           def gql(query, variables):
+              wait = 2.1 - (time.monotonic() - _last_anilist_request[0])
+              if wait > 0:
+                  time.sleep(wait)
               last=None
               for attempt in range(3):
                   req=urllib.request.Request(
@@ -152,6 +157,7 @@ jobs:
                       headers={"Content-Type":"application/json","Accept":"application/json","User-Agent":UA},
                   )
                   try:
+                      _last_anilist_request[0] = time.monotonic()
                       data,ms,status,n=http_json(req)
                       if status == 200 and not data.get("errors"):
                           return data["data"], ms, n
@@ -242,7 +248,6 @@ jobs:
                       for rel in node["relations"]:
                           if rel["type"] in FOLLOW and rel["id"] not in nodes and rel["id"] not in queue:
                               queue.append(rel["id"])
-                  time.sleep(0.15)
               return nodes,reqs,total_ms,bytes_
 
           def anizip_one(anilist_id):
