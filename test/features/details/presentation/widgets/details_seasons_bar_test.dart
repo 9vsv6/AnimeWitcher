@@ -98,6 +98,77 @@ void main() {
     );
   });
 
+  test('AniZip season numbers win for AOT, Re:Zero, Mushoku and JoJo', () {
+    MultimediaItem s(String url, String title) => MultimediaItem(
+      title: title,
+      url: url,
+      posterUrl: '',
+      catalogType: 'مسلسل',
+    );
+
+    expect(
+      seasonsBarLabels(
+        [
+          s('aot-final', 'Attack on Titan: The Final Season'),
+          s('aot-final-p2', 'Attack on Titan: The Final Season Part 2'),
+        ],
+        aniZipSeasonNumbers: const {
+          'aot-final': 4,
+          'aot-final-p2': 4,
+        },
+      ),
+      ['الموسم 4', 'الموسم 4 - الجزء 2'],
+    );
+
+    expect(
+      seasonsBarLabels(
+        [
+          s('rezero-s2', 'Re:ZERO -Starting Life in Another World- Season 2'),
+          s(
+            'rezero-s2-p2',
+            'Re:ZERO -Starting Life in Another World- Season 2 Part 2',
+          ),
+        ],
+        aniZipSeasonNumbers: const {
+          'rezero-s2': 2,
+          'rezero-s2-p2': 2,
+        },
+      ),
+      ['الموسم 2', 'الموسم 2 - الجزء 2'],
+    );
+
+    expect(
+      seasonsBarLabels(
+        [
+          s('mushoku', 'Mushoku Tensei: Jobless Reincarnation'),
+          s('mushoku-c2', 'Mushoku Tensei: Jobless Reincarnation Cour 2'),
+        ],
+        aniZipSeasonNumbers: const {
+          'mushoku': 1,
+          'mushoku-c2': 1,
+        },
+      ),
+      ['الموسم 1', 'الموسم 1 - الجزء 2'],
+    );
+
+    expect(
+      seasonsBarLabels(
+        [
+          s('jojo-sc', "JoJo's Bizarre Adventure: Stardust Crusaders"),
+          s(
+            'jojo-egypt',
+            "JoJo's Bizarre Adventure: Stardust Crusaders - Battle in Egypt",
+          ),
+        ],
+        aniZipSeasonNumbers: const {
+          'jojo-sc': 2,
+          'jojo-egypt': 2,
+        },
+      ),
+      ['الموسم 2', 'الموسم 2 - الجزء 2'],
+    );
+  });
+
   test('graph walk never searches the AnimeWitcher catalog by title', () async {
     MultimediaItem t(String url, String title, String type, {String? rel}) =>
         MultimediaItem(
