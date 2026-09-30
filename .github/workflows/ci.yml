@@ -103,13 +103,14 @@ jobs:
           swiftc -typecheck /tmp/download-log.swift
 
 
+
   api-lookup-benchmark:
     name: API lookup benchmark
     runs-on: ubuntu-latest
     env:
       SIMKL_API_KEY: ${{ secrets.SIMKL_API_KEY }}
     steps:
-      - name: Compare AniList and Simkl ID lookup latency
+      - name: Compare AniList and Simkl external-ID latency
         shell: bash
         run: |
           set -euo pipefail
@@ -120,8 +121,10 @@ jobs:
           python3 - <<'PYCODE'
           import json
           import os
+          import re
           import statistics
           import time
+          import urllib.error
           import urllib.parse
           import urllib.request
 
@@ -163,12 +166,26 @@ jobs:
           }
           """
 
-          def request(req):
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  return None
+
+          no_redirect = urllib.request.build_opener(NoRedirect)
+
+          def request(req, opener=urllib.request.urlopen):
               t0 = time.perf_counter()
-              with urllib.request.urlopen(req, timeout=20) as r:
-                  payload = r.read()
-                  status = r.status
-              return (time.perf_counter() - t0) * 1000, status, payload
+              try:
+                  with opener(req, timeout=20) as r:
+                      payload = r.read()
+                      status = r.status
+                      headers = r.headers
+              except urllib.error.HTTPError as exc:
+                  if exc.code not in (301, 302, 303, 307, 308):
+                      raise
+                  payload = exc.read()
+                  status = exc.code
+                  headers = exc.headers
+              return (time.perf_counter() - t0) * 1000, status, payload, headers
 
           def anilist(mal_id):
               req = urllib.request.Request(
@@ -184,45 +201,50 @@ jobs:
                       "User-Agent": "animewitcher-benchmark/1.0",
                   },
               )
-              ms, status, payload = request(req)
+              ms, status, payload, _ = request(req)
               if status != 200:
                   raise RuntimeError(f"AniList HTTP {status}")
-              data = json.loads(payload)["data"]["Media"]
-              return ms, int(data["id"]), len(payload)
+              media = json.loads(payload)["data"]["Media"]
+              return ms, int(media["id"]), len(payload)
 
-          def simkl_search(param, value):
-              qs = urllib.parse.urlencode({param: value, "client_id": KEY})
+          def simkl_redirect(param, value):
+              qs = urllib.parse.urlencode({
+                  "to": "simkl",
+                  param: value,
+                  "client_id": KEY,
+                  "app-name": "animewitcher-benchmark",
+                  "app-version": "1.0",
+              })
               req = urllib.request.Request(
-                  "https://api.simkl.com/search/id?" + qs,
+                  "https://api.simkl.com/redirect?" + qs,
                   headers={
-                      "Accept": "application/json",
                       "User-Agent": "animewitcher-benchmark/1.0",
-                      "simkl-api-key": KEY,
+                      "Accept": "*/*",
                   },
               )
-              ms, status, payload = request(req)
-              if status != 200:
-                  raise RuntimeError(f"Simkl search HTTP {status}")
-              results = json.loads(payload)
-              if not isinstance(results, list) or not results:
-                  raise RuntimeError(f"Simkl search returned no results for {param}={value}")
-              anime = next(
-                  (x for x in results if str(x.get("type", "")).lower() == "anime"),
-                  results[0],
-              )
-              simkl_id = int(anime["ids"]["simkl"])
-              return ms, simkl_id, len(payload)
+              ms, status, payload, headers = request(req, no_redirect.open)
+              if status not in (301, 302):
+                  raise RuntimeError(f"Simkl redirect HTTP {status} for {param}")
+              location = headers.get("Location", "")
+              match = re.search(r"/(?:anime|tv|movies)/(\d+)(?:/|$)", location)
+              if not match:
+                  raise RuntimeError(f"No Simkl id in redirect for {param}={value}: {location}")
+              return ms, int(match.group(1)), len(payload)
 
           def simkl_detail(simkl_id):
+              qs = urllib.parse.urlencode({
+                  "client_id": KEY,
+                  "app-name": "animewitcher-benchmark",
+                  "app-version": "1.0",
+              })
               req = urllib.request.Request(
-                  f"https://api.simkl.com/anime/{simkl_id}?client_id={urllib.parse.quote(KEY)}",
+                  f"https://api.simkl.com/anime/{simkl_id}?" + qs,
                   headers={
                       "Accept": "application/json",
                       "User-Agent": "animewitcher-benchmark/1.0",
-                      "simkl-api-key": KEY,
                   },
               )
-              ms, status, payload = request(req)
+              ms, status, payload, _ = request(req)
               if status != 200:
                   raise RuntimeError(f"Simkl detail HTTP {status}")
               data = json.loads(payload)
@@ -236,9 +258,9 @@ jobs:
                   ani_ms, anilist_id, ani_bytes = anilist(mal_id)
                   time.sleep(2.1)
 
-                  mal_lookup_ms, simkl_mal, mal_lookup_bytes = simkl_search("mal", mal_id)
+                  mal_redirect_ms, simkl_mal, _ = simkl_redirect("mal", mal_id)
                   time.sleep(0.12)
-                  ani_lookup_ms, simkl_anilist, ani_lookup_bytes = simkl_search("anilist", anilist_id)
+                  anilist_redirect_ms, simkl_anilist, _ = simkl_redirect("anilist", anilist_id)
                   time.sleep(0.12)
 
                   if simkl_mal != simkl_anilist:
@@ -256,15 +278,13 @@ jobs:
                       "anilist_id": anilist_id,
                       "simkl_id": simkl_mal,
                       "anilist_ms": round(ani_ms, 2),
-                      "simkl_search_mal_ms": round(mal_lookup_ms, 2),
-                      "simkl_search_anilist_ms": round(ani_lookup_ms, 2),
+                      "simkl_mal_redirect_ms": round(mal_redirect_ms, 2),
+                      "simkl_anilist_redirect_ms": round(anilist_redirect_ms, 2),
                       "simkl_detail_ms": round(detail_ms, 2),
-                      "simkl_mal_to_detail_ms": round(mal_lookup_ms + detail_ms, 2),
-                      "simkl_anilist_to_detail_ms": round(ani_lookup_ms + detail_ms, 2),
+                      "simkl_mal_to_detail_ms": round(mal_redirect_ms + detail_ms, 2),
+                      "simkl_anilist_to_detail_ms": round(anilist_redirect_ms + detail_ms, 2),
                       "anilist_bytes": ani_bytes,
                       "simkl_detail_bytes": detail_bytes,
-                      "search_mal_bytes": mal_lookup_bytes,
-                      "search_anilist_bytes": ani_lookup_bytes,
                   }
                   rows.append(row)
                   print("SAMPLE " + json.dumps(row, ensure_ascii=False), flush=True)
@@ -283,8 +303,8 @@ jobs:
 
           result = {
               "anilist_one_request": summary("anilist_ms"),
-              "simkl_search_by_mal_only": summary("simkl_search_mal_ms"),
-              "simkl_search_by_anilist_only": summary("simkl_search_anilist_ms"),
+              "simkl_redirect_by_mal_only": summary("simkl_mal_redirect_ms"),
+              "simkl_redirect_by_anilist_only": summary("simkl_anilist_redirect_ms"),
               "simkl_detail_with_cached_simkl_id": summary("simkl_detail_ms"),
               "simkl_mal_to_detail_two_requests": summary("simkl_mal_to_detail_ms"),
               "simkl_anilist_to_detail_two_requests": summary("simkl_anilist_to_detail_ms"),
