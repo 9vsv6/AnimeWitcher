@@ -288,6 +288,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
             english: 'Choose list',
             arabic: 'اختر قائمة',
           ),
+          borderRadius: BorderRadius.circular(kDetailsHeroActionHeight / 2),
           padding: EdgeInsets.zero,
           offset: const Offset(0, 8),
           color: Colors.transparent,
@@ -329,44 +330,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
             ),
           ),
         ),
-        // Each on its own rather than sharing a capsule: they do unrelated
-        // things, and a viewer reaching for one is not choosing from a set.
-        DetailsHeroIconButton(
-          icon: (_userRating ?? 0) > 0
-              ? Icons.star_rounded
-              : Icons.star_outline_rounded,
-          tooltip: appText(context, english: 'Rate this', arabic: 'قيّم'),
-          foregroundColor: (_userRating ?? 0) > 0
-              ? AppTheme.animeWitcherAccent
-              : foregroundColor,
-          fallbackColor: fallbackColor,
-          ratingCaption: _userRating == null ? null : '${_userRating!}/10',
-          onPressed: () async => _rateAnimeFromHero(item),
-        ),
-        if (animeWitcherAnimeCommentTarget(item) case final target?)
-          DetailsHeroIconButton(
-            icon: Icons.chat_bubble_outline_rounded,
-            tooltip: appText(
-              context,
-              english: 'Comments',
-              arabic: 'التعليقات',
-            ),
-            foregroundColor: foregroundColor,
-            fallbackColor: fallbackColor,
-            onPressed: () => _openAnimeComments(context, target),
-          ),
-        if (_firstTrailerUrl(item) != null)
-          DetailsHeroIconButton(
-            icon: Icons.movie_outlined,
-            tooltip: appText(
-              context,
-              english: 'Watch trailer',
-              arabic: 'العرض الدعائي',
-            ),
-            foregroundColor: foregroundColor,
-            fallbackColor: fallbackColor,
-            onPressed: () => _openTrailer(context, item),
-          ),
         for (final button in _buildDetailsHeaderButtons(
           context,
           item,
@@ -382,6 +345,42 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
             foregroundColor: button.color ?? foregroundColor,
             fallbackColor: fallbackColor,
             onPressed: button.onPressed ?? () {},
+          ),
+        if (animeWitcherAnimeCommentTarget(item) case final target?)
+          DetailsHeroIconButton(
+            icon: Icons.chat_bubble_outline_rounded,
+            tooltip: appText(
+              context,
+              english: 'Comments',
+              arabic: 'التعليقات',
+            ),
+            foregroundColor: foregroundColor,
+            fallbackColor: fallbackColor,
+            onPressed: () => _openAnimeComments(context, target),
+          ),
+        DetailsHeroIconButton(
+          icon: (_userRating ?? 0) > 0
+              ? Icons.star_rounded
+              : Icons.star_outline_rounded,
+          tooltip: appText(context, english: 'Rate this', arabic: 'قيّم'),
+          foregroundColor: (_userRating ?? 0) > 0
+              ? AppTheme.animeWitcherAccent
+              : foregroundColor,
+          fallbackColor: fallbackColor,
+          ratingCaption: _userRating == null ? null : '${_userRating!}/10',
+          onPressed: () async => _rateAnimeFromHero(item),
+        ),
+        if (_firstTrailerUrl(item) != null)
+          DetailsHeroIconButton(
+            icon: Icons.movie_outlined,
+            tooltip: appText(
+              context,
+              english: 'Watch trailer',
+              arabic: 'العرض الدعائي',
+            ),
+            foregroundColor: foregroundColor,
+            fallbackColor: fallbackColor,
+            onPressed: () => _openTrailer(context, item),
           ),
       ],
     );

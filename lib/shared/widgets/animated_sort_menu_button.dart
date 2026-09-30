@@ -107,6 +107,7 @@ class _AnimatedSortMenuButtonState extends State<AnimatedSortMenuButton> {
 
     return PopupMenuButton<String>(
       tooltip: widget.tooltip,
+      borderRadius: BorderRadius.circular(widget.size / 2),
       padding: EdgeInsets.zero,
       offset: const Offset(0, 8),
       color: Colors.transparent,
