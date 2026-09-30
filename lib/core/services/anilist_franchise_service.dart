@@ -155,6 +155,7 @@ MultimediaItem? _aniListItem(
       'mal_id': '$malId',
       if (aniListId != null) 'anilistId': '$aniListId',
       if (aniListId != null) 'anilist_id': '$aniListId',
+      'anilistFormat': format,
     },
   );
 }
