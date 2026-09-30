@@ -569,7 +569,7 @@ class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen>
   }
 
   /// The row under the title, in the anime page's order: read, the list it
-  /// is in, then rating and favourite as round glass buttons.
+  /// is in, then favourite and rating as round glass buttons.
   Widget _heroActions(
     BuildContext context,
     MultimediaItem item, {
@@ -591,6 +591,7 @@ class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen>
             english: 'Choose list',
             arabic: 'اختر قائمة',
           ),
+          borderRadius: BorderRadius.circular(kDetailsHeroActionHeight / 2),
           padding: EdgeInsets.zero,
           offset: const Offset(0, 8),
           color: Colors.transparent,
@@ -634,18 +635,6 @@ class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen>
           ),
         ),
         DetailsHeroIconButton(
-          icon: (_userRating ?? 0) > 0
-              ? Icons.star_rounded
-              : Icons.star_outline_rounded,
-          tooltip: appText(context, english: 'Rate this', arabic: 'قيّم'),
-          foregroundColor: (_userRating ?? 0) > 0
-              ? AppTheme.animeWitcherAccent
-              : colors.onSurface,
-          fallbackColor: fallback,
-          ratingCaption: _userRating == null ? null : '${_userRating!}/10',
-          onPressed: () => _rateManga(item),
-        ),
-        DetailsHeroIconButton(
           icon: isFavorite
               ? Icons.favorite_rounded
               : Icons.favorite_border_rounded,
@@ -669,6 +658,18 @@ class _MangaDetailsScreenState extends ConsumerState<MangaDetailsScreen>
             if (!await _ensureSignedInForLibrary(context)) return;
             await libraryNotifier.setFavorite(item, !isFavorite);
           },
+        ),
+        DetailsHeroIconButton(
+          icon: (_userRating ?? 0) > 0
+              ? Icons.star_rounded
+              : Icons.star_outline_rounded,
+          tooltip: appText(context, english: 'Rate this', arabic: 'قيّم'),
+          foregroundColor: (_userRating ?? 0) > 0
+              ? AppTheme.animeWitcherAccent
+              : colors.onSurface,
+          fallbackColor: fallback,
+          ratingCaption: _userRating == null ? null : '${_userRating!}/10',
+          onPressed: () => _rateManga(item),
         ),
       ],
     );

@@ -5,11 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
 import 'package:animewitcher/core/extensions/extension_manager.dart';
+import 'package:animewitcher/core/extensions/providers/animewitcher_native_provider.dart';
+import 'package:animewitcher/core/services/anilist_franchise_service.dart';
+import 'package:animewitcher/core/services/anizip_service.dart';
 import 'package:animewitcher/core/storage/storage_service.dart';
 import 'package:animewitcher/core/utils/catalog_label.dart';
 import 'package:animewitcher/shared/widgets/fallback_poster_image.dart';
 
-import '../details_controller.dart';
 
 /// Relations that are part of the same story: the seasons before and after,
 /// the work they branch from, and its side stories. Spin-offs, alternative
@@ -76,10 +78,15 @@ int? _firstNumber(RegExpMatch? match) {
 /// is season two, part two, not a season of its own — and otherwise counts
 /// on from the season before. Movies and OVAs in the chain are named as
 /// extras and do not move the count.
-List<String> seasonsBarLabels(List<MultimediaItem> items, {String? rootTitle}) {
+List<String> seasonsBarLabels(
+  List<MultimediaItem> items, {
+  String? rootTitle,
+  Map<String, int> aniZipSeasonNumbers = const <String, int>{},
+}) {
   final root =
       rootTitle ?? items.firstWhere(_isSeries, orElse: () => items.first).title;
   int? lastSeason;
+  final seenPerSeason = <int, int>{};
   final labels = <String>[];
   for (final item in items) {
     if (!_isSeries(item)) {
@@ -87,16 +94,57 @@ List<String> seasonsBarLabels(List<MultimediaItem> items, {String? rootTitle}) {
       continue;
     }
     final title = item.title;
-    final part = _firstNumber(_partInTitle.firstMatch(title));
+    var part = _firstNumber(_partInTitle.firstMatch(title));
+    final aniZipSeason = aniZipSeasonNumbers[item.url];
     final season =
+        aniZipSeason ??
         _firstNumber(_seasonInTitle.firstMatch(title)) ??
         (part != null ? (lastSeason ?? 1) : (lastSeason ?? 0) + 1);
+
+    final seen = seenPerSeason[season] ?? 0;
+    if (aniZipSeason != null && part == null && seen > 0) {
+      part = seen + 1;
+    }
+    seenPerSeason[season] = seen + 1;
     lastSeason = season;
     labels.add(
       part != null ? 'الموسم $season - الجزء $part' : 'الموسم $season',
     );
   }
   return _numberRepeats(labels);
+}
+
+List<SeasonsBarEntry> applyAniZipSeasonNumbers(
+  List<SeasonsBarEntry> entries,
+  Map<String, int> seasonNumbers,
+) {
+  if (seasonNumbers.isEmpty || entries.isEmpty) return entries;
+
+  final mainIndexes = <int>[];
+  final mainItems = <MultimediaItem>[];
+  for (var i = 0; i < entries.length; i++) {
+    if (!entries[i].label.startsWith('الموسم ')) continue;
+    mainIndexes.add(i);
+    mainItems.add(entries[i].item);
+  }
+  if (mainItems.isEmpty) return entries;
+
+  final labels = seasonsBarLabels(
+    mainItems,
+    rootTitle: mainItems.first.title,
+    aniZipSeasonNumbers: seasonNumbers,
+  );
+  final relabeled = entries.toList(growable: false);
+  for (var i = 0; i < mainIndexes.length; i++) {
+    final index = mainIndexes[i];
+    final entry = entries[index];
+    relabeled[index] = SeasonsBarEntry(
+      item: entry.item,
+      isCurrent: entry.isCurrent,
+      label: labels[i],
+    );
+  }
+  return relabeled;
 }
 
 /// A movie's or an OVA's name: what its title adds to the franchise name
@@ -182,7 +230,6 @@ Future<List<SeasonsBarEntry>> walkSeasonsBar({
   required MultimediaItem current,
   required List<MultimediaItem> related,
   required Future<List<MultimediaItem>> Function(String url) fetchRelated,
-  Future<List<MultimediaItem>> Function(String query)? searchFranchise,
   int maxFetches = 12,
 }) async {
   final budget = _FetchBudget(maxFetches);
@@ -249,27 +296,6 @@ Future<List<SeasonsBarEntry>> walkSeasonsBar({
 
   final rootTitle = mainItems.isEmpty ? '' : mainItems.first.title;
 
-  // Movies and OVAs often link only upwards — the movie names the series as
-  // its parent, the series does not name the movie — so walking down from
-  // the seasons never meets them. The catalog is searched for the
-  // franchise's name to find them.
-  if (searchFranchise != null && rootTitle.trim().isNotEmpty) {
-    try {
-      final found = await searchFranchise(rootTitle.trim());
-      final root = rootTitle.trim().toLowerCase();
-      for (final item in found) {
-        if (!item.title.trim().toLowerCase().startsWith(root)) continue;
-        if (!seen.add(item.url)) continue;
-        if (_isSeries(item)) {
-          spinItems.add(pick(item));
-        } else {
-          sideItems.add(pick(item));
-        }
-      }
-    } catch (_) {
-      // The bar without the extras is still the bar.
-    }
-  }
   sideItems.sort((a, b) => (a.year ?? 0).compareTo(b.year ?? 0));
 
   final items = [...mainItems, ...spinItems, ...sideItems];
@@ -405,6 +431,15 @@ _walkChain({
   );
 }
 
+
+int? _aniListMalIdFromUrl(String url) {
+  const prefix = 'anilist-mal:';
+  if (!url.startsWith(prefix)) return null;
+  final id = int.tryParse(url.substring(prefix.length));
+  return id != null && id > 0 ? id : null;
+}
+
+
 /// How the bar is drawn; chosen in settings.
 enum SeasonsBarStyle {
   /// Wide cards with each season's banner art.
@@ -486,106 +521,136 @@ class DetailsSeasonsBar extends ConsumerStatefulWidget {
 }
 
 class _DetailsSeasonsBarState extends ConsumerState<DetailsSeasonsBar> {
-  /// Related lists already fetched this session, by season URL, so moving
-  /// between seasons of one show does not ask for the same lists again.
-  static final Map<String, List<MultimediaItem>> _relatedCache =
-      <String, List<MultimediaItem>>{};
-  static const int _relatedCacheMax = 200;
-
   List<SeasonsBarEntry>? _walked;
-  List<MultimediaItem>? _walkedFrom;
-
-  Future<List<MultimediaItem>> _fetchRelated(String url) async {
-    final cached = _relatedCache[url];
-    if (cached != null) return cached;
-    final provider = ref.read(activeProviderProvider);
-    if (provider == null) return const <MultimediaItem>[];
-    // The whole list, not the related tab's preview: with more than six
-    // relations the preview keeps five, and the movies and OVAs at the end
-    // of it were the ones cut.
-    final page = await provider.getRelatedPage(url, includeAll: true);
-    if (_relatedCache.length >= _relatedCacheMax) {
-      _relatedCache.remove(_relatedCache.keys.first);
-    }
-    return _relatedCache[url] = page.items;
-  }
-
-  static final Map<String, List<MultimediaItem>> _searchCache =
-      <String, List<MultimediaItem>>{};
+  int _loadGeneration = 0;
 
   final ScrollController _scroll = ScrollController();
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  @override
+  void didUpdateWidget(covariant DetailsSeasonsBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.current.url != widget.current.url ||
+        oldWidget.current.artworkLookupMalId !=
+            widget.current.artworkLookupMalId) {
+      _walked = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    }
+  }
+
+  @override
   void dispose() {
+    _loadGeneration++;
     _scroll.dispose();
     super.dispose();
   }
 
-  Future<List<MultimediaItem>> _searchFranchise(String query) async {
-    final key = query.toLowerCase();
-    final cached = _searchCache[key];
-    if (cached != null) return cached;
-    final provider = ref.read(activeProviderProvider);
-    if (provider == null) return const <MultimediaItem>[];
-    final found = await provider.search(query);
-    if (_searchCache.length >= 50) _searchCache.remove(_searchCache.keys.first);
-    return _searchCache[key] = found;
-  }
+  Future<void> _load() async {
+    final generation = ++_loadGeneration;
+    final malId = widget.current.artworkLookupMalId;
+    if (malId == null) {
+      if (mounted && generation == _loadGeneration) {
+        setState(() => _walked = const <SeasonsBarEntry>[]);
+      }
+      return;
+    }
 
-  void _walk(List<MultimediaItem> related) {
-    if (identical(_walkedFrom, related)) return;
-    _walkedFrom = related;
-    // The page's own list may be that same preview; the walk starts from the
-    // full one, falling back to the preview if it cannot be had.
-    _fetchRelated(widget.current.url)
-        .then(
-          (full) => full.isEmpty ? related : full,
-          onError: (Object _) => related,
-        )
-        .then(
-          (start) => walkSeasonsBar(
-            current: widget.current,
-            related: start,
-            fetchRelated: _fetchRelated,
-            searchFranchise: _searchFranchise,
+    try {
+      final aniList = ref.read(aniListFranchiseServiceProvider);
+      final root = await aniList.fetchByMalId(malId);
+      if (root == null) {
+        if (mounted && generation == _loadGeneration) {
+          setState(() => _walked = const <SeasonsBarEntry>[]);
+        }
+        return;
+      }
+
+      var graphEntries = await walkSeasonsBar(
+        current: root.item,
+        related: root.related,
+        fetchRelated: (url) async {
+          final relatedMalId = _aniListMalIdFromUrl(url);
+          if (relatedMalId == null) return const <MultimediaItem>[];
+          return (await aniList.fetchByMalId(relatedMalId))?.related ??
+              const <MultimediaItem>[];
+        },
+      );
+
+      final aniZip = AniZipService();
+      final seasonPairs = await Future.wait(
+        graphEntries.map((entry) async {
+          final sync = entry.item.syncData;
+          if (sync?['anilistFormat'] != 'TV') return null;
+          final aniListId = int.tryParse(
+            sync?['anilistId'] ?? sync?['anilist_id'] ?? '',
+          );
+          if (aniListId == null || aniListId <= 0) return null;
+          final mapping = await aniZip.fetchSeasonMapping(aniListId).timeout(
+            const Duration(seconds: 2),
+            onTimeout: () => null,
+          );
+          return mapping == null
+              ? null
+              : (url: entry.item.url, season: mapping.seasonNumber);
+        }),
+      );
+      final seasonNumbers = <String, int>{
+        for (final pair in seasonPairs)
+          if (pair != null) pair.url: pair.season,
+      };
+      graphEntries = applyAniZipSeasonNumbers(graphEntries, seasonNumbers);
+
+      final provider = ref.read(activeProviderProvider);
+      if (provider is! AnimeWitcherNativeProvider) {
+        if (mounted && generation == _loadGeneration) {
+          setState(() => _walked = const <SeasonsBarEntry>[]);
+        }
+        return;
+      }
+
+      final ids = graphEntries
+          .map((entry) => entry.item.artworkLookupMalId)
+          .whereType<int>()
+          .toSet();
+      final resolved = await provider.resolveCatalogAnimeByMalIds(ids);
+      final matched = <SeasonsBarEntry>[];
+      for (final entry in graphEntries) {
+        final id = entry.item.artworkLookupMalId;
+        final item = entry.isCurrent
+            ? widget.current
+            : (id == null ? null : resolved[id]);
+        if (item == null) continue;
+        matched.add(
+          SeasonsBarEntry(
+            item: item,
+            isCurrent: entry.isCurrent,
+            label: entry.label,
           ),
-        )
-        .then((entries) {
-          if (!mounted || !identical(_walkedFrom, related)) return;
-          setState(() => _walked = entries);
-        });
+        );
+      }
+
+      if (!mounted || generation != _loadGeneration) return;
+      setState(
+        () => _walked = matched.length < 2
+            ? const <SeasonsBarEntry>[]
+            : matched,
+      );
+    } catch (_) {
+      if (!mounted || generation != _loadGeneration) return;
+      setState(() => _walked = const <SeasonsBarEntry>[]);
+    }
   }
 
-  @override
-  void initState() {
-    super.initState();
-    // The related list used to wait for its tab to be opened. The seasons
-    // bar is independent from episode availability, so ask as soon as the
-    // details page mounts it (including upcoming anime with zero episodes).
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      ref
-          .read(detailsControllerProvider(widget.itemUrl).notifier)
-          .loadRelatedIfNeeded();
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
-    final related = ref.watch(
-      detailsControllerProvider(widget.itemUrl).select((s) => s.related),
-    );
     final style = ref.watch(seasonsBarStyleProvider);
-    final relatedItems = related.asData?.value;
-    if (relatedItems != null) _walk(relatedItems);
-    // The neighbours draw at once; the rest of the franchise fills in when
-    // the walk comes back.
-    final entries =
-        _walked ??
-        seasonsBarEntries(
-          widget.current,
-          relatedItems ?? const <MultimediaItem>[],
-        );
+    final entries = _walked ?? const <SeasonsBarEntry>[];
     if (entries.isEmpty) return const SizedBox.shrink();
 
     final pageBanner = widget.current.bannerUrl?.trim() ?? '';

@@ -1,4 +1,6 @@
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
+import 'package:animewitcher/core/services/anilist_franchise_service.dart';
+import 'package:animewitcher/core/services/anizip_service.dart';
 import 'package:animewitcher/features/details/presentation/widgets/details_seasons_bar.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -97,7 +99,111 @@ void main() {
     );
   });
 
-  test('movies and OVAs that only link upwards are found by name', () async {
+  test('AniZip parses TVDB season and episode mapping', () {
+    final parsed = aniZipMappingFromJson(<String, dynamic>{
+      'mappings': <String, dynamic>{'thetvdb_id': 267440},
+      'episodes': <String, dynamic>{
+        '1': <String, dynamic>{
+          'tvdbShowId': 267440,
+          'tvdbId': 7954365,
+          'seasonNumber': 4,
+          'episodeNumber': 1,
+          'absoluteEpisodeNumber': 60,
+        },
+      },
+    });
+
+    expect(parsed, isNotNull);
+    expect(parsed!.seasonNumber, 4);
+    expect(parsed.episodeNumber, 1);
+    expect(parsed.absoluteEpisodeNumber, 60);
+    expect(parsed.tvdbShowId, 267440);
+    expect(parsed.tvdbEpisodeId, 7954365);
+    expect(parsed.tvdbMappingId, 267440);
+  });
+
+  test('AniZip missing episode mapping falls back to no enrichment', () {
+    expect(
+      aniZipMappingFromJson(<String, dynamic>{
+        'mappings': <String, dynamic>{'thetvdb_id': 267440},
+        'episodes': const <String, dynamic>{},
+      }),
+      isNull,
+    );
+  });
+
+  test('AniZip season numbers win for AOT, Re:Zero, Mushoku and JoJo', () {
+    MultimediaItem s(String url, String title) => MultimediaItem(
+      title: title,
+      url: url,
+      posterUrl: '',
+      catalogType: 'مسلسل',
+    );
+
+    expect(
+      seasonsBarLabels(
+        [
+          s('aot-final', 'Attack on Titan: The Final Season'),
+          s('aot-final-p2', 'Attack on Titan: The Final Season Part 2'),
+        ],
+        aniZipSeasonNumbers: const {
+          'aot-final': 4,
+          'aot-final-p2': 4,
+        },
+      ),
+      ['الموسم 4', 'الموسم 4 - الجزء 2'],
+    );
+
+    expect(
+      seasonsBarLabels(
+        [
+          s('rezero-s2', 'Re:ZERO -Starting Life in Another World- Season 2'),
+          s(
+            'rezero-s2-p2',
+            'Re:ZERO -Starting Life in Another World- Season 2 Part 2',
+          ),
+        ],
+        aniZipSeasonNumbers: const {
+          'rezero-s2': 2,
+          'rezero-s2-p2': 2,
+        },
+      ),
+      ['الموسم 2', 'الموسم 2 - الجزء 2'],
+    );
+
+    expect(
+      seasonsBarLabels(
+        [
+          s('mushoku', 'Mushoku Tensei: Jobless Reincarnation'),
+          s('mushoku-c2', 'Mushoku Tensei: Jobless Reincarnation Cour 2'),
+        ],
+        aniZipSeasonNumbers: const {
+          'mushoku': 1,
+          'mushoku-c2': 1,
+        },
+      ),
+      ['الموسم 1', 'الموسم 1 - الجزء 2'],
+    );
+
+    expect(
+      seasonsBarLabels(
+        [
+          s('jojo-sc', "JoJo's Bizarre Adventure: Stardust Crusaders"),
+          s(
+            'jojo-egypt',
+            "JoJo's Bizarre Adventure: Stardust Crusaders - Battle in Egypt",
+          ),
+        ],
+        aniZipSeasonNumbers: const {
+          'jojo-sc': 2,
+          'jojo-egypt': 2,
+        },
+      ),
+      ['الموسم 2', 'الموسم 2 - الجزء 2'],
+    );
+  });
+
+  test('graph walk never searches the AnimeWitcher catalog by title', () async {
     MultimediaItem t(String url, String title, String type, {String? rel}) =>
         MultimediaItem(
           title: title,
@@ -116,26 +222,77 @@ void main() {
           'مسلسل',
           rel: 'SEQUEL',
         ),
-      ],
-      fetchRelated: (_) async => const [],
-      searchFranchise: (_) async => [
         t(
           'movie',
           'Tensei shitara Slime Datta Ken Movie: Guren no Kizuna-hen',
           'فيلم',
+          rel: 'SIDE_STORY',
         ),
-        t('ova', 'Tensei shitara Slime Datta Ken OVA', 'اوفا'),
-        t('s2', 'Tensei shitara Slime Datta Ken 2nd Season', 'مسلسل'),
-        t('other', 'Some Other Show', 'فيلم'),
+        t(
+          'ova',
+          'Tensei shitara Slime Datta Ken OVA',
+          'اوفا',
+          rel: 'SIDE_STORY',
+        ),
       ],
+      fetchRelated: (_) async => const [],
     );
+
     expect(entries.map((e) => e.item.url), ['s1', 's2', 'movie', 'ova']);
-    expect(entries.map((e) => e.label), [
-      'الموسم 1',
-      'الموسم 2',
-      'Movie: Guren no Kizuna-hen',
-      'OVA',
-    ]);
+  });
+
+  test('AniList relations preserve MAL ids, formats, and part titles', () {
+    final parsed = aniListFranchiseNodeFromJson(<String, dynamic>{
+      'id': 100,
+      'idMal': 10,
+      'format': 'TV',
+      'title': <String, dynamic>{
+        'english': 'Example',
+        'romaji': 'Example',
+        'native': 'مثال',
+      },
+      'synonyms': <String>['Example Season 1'],
+      'startDate': <String, dynamic>{'year': 2024},
+      'relations': <String, dynamic>{
+        'edges': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'relationType': 'SEQUEL',
+            'node': <String, dynamic>{
+              'id': 101,
+              'idMal': 11,
+              'format': 'TV',
+              'title': <String, dynamic>{
+                'english': 'Example Part Two',
+                'romaji': 'Example Part Two',
+              },
+              'synonyms': <String>['Example Season 1 Part 2'],
+              'startDate': <String, dynamic>{'year': 2024},
+              'coverImage': <String, dynamic>{'large': 'https://img/11.jpg'},
+            },
+          },
+          <String, dynamic>{
+            'relationType': 'SIDE_STORY',
+            'node': <String, dynamic>{
+              'id': 102,
+              'idMal': 12,
+              'format': 'OVA',
+              'title': <String, dynamic>{'romaji': 'Example OVA'},
+              'synonyms': const <String>[],
+              'startDate': <String, dynamic>{'year': 2025},
+            },
+          },
+        ],
+      },
+    });
+
+    expect(parsed, isNotNull);
+    expect(parsed!.item.artworkLookupMalId, 10);
+    expect(parsed.item.title, 'Example Season 1');
+    expect(parsed.related.map((item) => item.artworkLookupMalId), [11, 12]);
+    expect(parsed.related.first.title, 'Example Season 1 Part 2');
+    expect(parsed.related.first.catalogType, 'مسلسل');
+    expect(parsed.related.last.catalogType, 'اوفا');
+    expect(parsed.related.last.relationType, 'SIDE_STORY');
   });
 
   test('entries carry their short name', () {

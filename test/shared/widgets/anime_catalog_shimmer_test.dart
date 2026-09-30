@@ -4,6 +4,7 @@ import 'package:animewitcher/shared/widgets/shimmer_placeholder.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shimmer/shimmer.dart';
 
 Future<void> _pumpCatalog(
   WidgetTester tester, {
@@ -50,6 +51,34 @@ void main() {
       MultimediaCardLayout.characterGridAspectRatio,
       greaterThan(MultimediaCardLayout.portraitGridAspectRatio),
     );
+  });
+
+  testWidgets('catalog skeleton uses the active theme surface color', (
+    tester,
+  ) async {
+    const skeletonSurface = Color(0xFF345678);
+    final scheme = ColorScheme.fromSeed(
+      seedColor: const Color(0xFF7A4DFF),
+      brightness: Brightness.dark,
+    ).copyWith(surfaceContainerHighest: skeletonSurface);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(colorScheme: scheme),
+        home: const Scaffold(
+          body: SizedBox(
+            width: 120,
+            height: 240,
+            child: AnimePosterShimmer(),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final shimmer = tester.widget<Shimmer>(find.byType(Shimmer).first);
+    final gradient = shimmer.gradient as LinearGradient;
+    expect(gradient.colors.first, skeletonSurface);
   });
 
   testWidgets('anime skeleton renders poster, name and metadata lines', (

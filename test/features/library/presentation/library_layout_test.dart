@@ -135,24 +135,49 @@ Future<_LibraryStorage> _pump(
 }
 
 void main() {
-  testWidgets('phone: manga lists are rows, empty ones one line', (
+  testWidgets('phone: the selected library list is always a grid', (
     tester,
   ) async {
     await _pump(tester, size: const Size(400, 860));
 
     expect(find.byKey(const ValueKey('library-search')), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('library-shelf-manga-watching')),
+      find.byKey(const ValueKey('library-grid-manga-watching')),
       findsOneWidget,
     );
-    expect(find.text('أقرأها حاليًا · 2'), findsOneWidget);
-    expect(find.text('أرغب بقراءتها · 1'), findsOneWidget);
-    expect(find.text('المفضلة · 0'), findsOneWidget);
-    // Anime titles stay on the other tab.
-    expect(find.text('Frieren'), findsNothing);
+    expect(find.text('Berserk'), findsWidgets);
+    expect(find.text('Vagabond'), findsWidgets);
+    expect(find.text('Dandadan'), findsNothing);
+    expect(find.byKey(const ValueKey('library-shelf-manga-watching')), findsNothing);
     expect(tester.takeException(), isNull);
-    // The poster fallback batches its artwork lookups on a short timer.
     await tester.pump(const Duration(milliseconds: 100));
+  });
+
+  testWidgets('phone: anime category bar shows recent plus six lists with counts', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      size: const Size(400, 860),
+      kind: 'anime',
+      history: [
+        HistoryItem(
+          item: _item('One Piece'),
+          position: 10,
+          duration: 20,
+          timestamp: 1,
+        ),
+      ],
+    );
+
+    expect(find.byKey(const ValueKey('library-list-tab-recent')), findsOneWidget);
+    expect(find.text('آخر المشاهدات 1'), findsOneWidget);
+    expect(find.text('المفضلة 0'), findsOneWidget);
+    expect(find.text('أشاهده حاليًا 1'), findsOneWidget);
+    expect(find.text('أكملها لاحقًا 0'), findsOneWidget);
+    expect(find.text('أرغب بمشاهدته 0'), findsOneWidget);
+    expect(find.text('تمت مشاهدته 0'), findsOneWidget);
+    expect(find.text('لا أرغب بمشاهدته 0'), findsOneWidget);
   });
 
   testWidgets('phone: library filter sits on the physical right of search', (
@@ -175,57 +200,87 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
   });
 
-  testWidgets('phone: search folds the rows into one tagged grid', (
+  testWidgets('phone: search stays a plain grid without list badges', (
     tester,
   ) async {
     await _pump(tester, size: const Size(400, 860));
 
     await tester.enterText(find.byKey(const ValueKey('library-search')), 'vag');
-    await tester.pump(const Duration(milliseconds: 200));
-    // Still typing: the rows stay until the pause.
-    expect(find.byKey(const ValueKey('library-grid-manga')), findsNothing);
-    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 600));
 
-    expect(find.byKey(const ValueKey('library-grid-manga')), findsOneWidget);
+    expect(find.byKey(const ValueKey('library-grid-manga-search')), findsOneWidget);
     expect(find.text('Vagabond'), findsWidgets);
     expect(find.text('Berserk'), findsNothing);
-    expect(find.text('مانجا 1'), findsOneWidget);
-    expect(find.text('أنمي 0'), findsOneWidget);
-    // The poster fallback batches its artwork lookups on a short timer.
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('library-grid-manga-search')),
+        matching: find.text('أقرأها حاليًا'),
+      ),
+      findsNothing,
+    );
     await tester.pump(const Duration(milliseconds: 100));
   });
 
-  testWidgets('phone: the filter sheet hides empty lists and keeps it', (
+  testWidgets('phone: filter picks anime manga or characters and hides empty tabs', (
     tester,
   ) async {
     final storage = await _pump(tester, size: const Size(400, 860));
 
     await tester.tap(find.byKey(const ValueKey('library-filter')));
     await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('library-section-anime')), findsOneWidget);
+    expect(find.byKey(const ValueKey('library-section-manga')), findsOneWidget);
+    expect(find.byKey(const ValueKey('library-section-characters')), findsOneWidget);
+    expect(find.text('العرض'), findsNothing);
+
     await tester.tap(find.byKey(const ValueKey('library-filter-hide-empty')));
     await tester.pumpAndSettle();
     await tester.tapAt(const Offset(200, 40));
     await tester.pumpAndSettle();
 
-    expect(find.text('المفضلة · 0'), findsNothing);
-    expect(find.text('أقرأها حاليًا · 2'), findsOneWidget);
+    expect(find.text('المفضلة 0'), findsNothing);
+    expect(find.text('أقرأها حاليًا 2'), findsOneWidget);
+    expect(find.text('أرغب بقراءتها 1'), findsOneWidget);
     expect(storage.strings['library_shelves_hide_empty'], 'true');
-    // The poster fallback batches its artwork lookups on a short timer.
     await tester.pump(const Duration(milliseconds: 100));
   });
 
-  testWidgets('phone: the grid view sorts by year', (tester) async {
+  testWidgets('phone: characters section contains only favorite characters', (
+    tester,
+  ) async {
+    await _pump(tester, size: const Size(400, 860), kind: 'anime');
+
+    await tester.tap(find.byKey(const ValueKey('library-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('library-section-characters')));
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(200, 40));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('library-list-tab-characters')),
+      findsOneWidget,
+    );
+    expect(find.text('الشخصيات المفضلة'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('library-characters')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('أشاهده حاليًا'), findsNothing);
+    expect(find.textContaining('أقرأها حاليًا'), findsNothing);
+  });
+
+  testWidgets('phone: the always-grid view sorts by year', (tester) async {
     await _pump(
       tester,
       size: const Size(400, 860),
-      strings: {'library_shelves_view': 'grid', 'library_shelves_sort': 'year'},
+      strings: {'library_shelves_sort': 'year'},
     );
 
     final vagabond = tester.getTopRight(find.text('Vagabond').first);
     final berserk = tester.getTopRight(find.text('Berserk').first);
-    // Right to left: the newer one comes first, on the right.
     expect(vagabond.dx, greaterThan(berserk.dx));
-    // The poster fallback batches its artwork lookups on a short timer.
     await tester.pump(const Duration(milliseconds: 100));
   });
 
@@ -332,7 +387,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
   });
 
-  testWidgets('phone: a row shows ten titles, عرض الكل shows every one', (
+  testWidgets('phone: selecting a list tab shows its full grid', (
     tester,
   ) async {
     final storage = _LibraryStorage({
@@ -367,27 +422,40 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    final row = find.byKey(const ValueKey('library-shelf-manga-pinned'));
-    expect(find.text('أرغب بقراءتها · 12'), findsOneWidget);
-    final list = tester.widget<ListView>(
-      find.descendant(of: row, matching: find.byType(ListView)),
+    final pinnedTab = find.byKey(
+      const ValueKey('library-list-tab-pinned'),
     );
-    // Ten posters and the nine gaps between them.
-    expect(list.childrenDelegate.estimatedChildCount, 10 + 9);
-
-    await tester.tap(find.descendant(of: row, matching: find.text('عرض الكل')));
+    await tester.ensureVisible(pinnedTab);
     await tester.pumpAndSettle();
-    expect(find.byType(LibraryListPage), findsOneWidget);
-    final back = find.byIcon(Icons.arrow_back_ios_new_rounded);
-    expect(back, findsOneWidget);
+    await tester.tap(pinnedTab);
+    await tester.pumpAndSettle();
+
     expect(
-      tester.getCenter(back).dx,
-      lessThan(tester.view.physicalSize.width / 2),
-      reason: 'library list Back must live on the physical left even in Arabic',
+      find.byKey(const ValueKey('library-grid-manga-pinned')),
+      findsOneWidget,
     );
-    final grid = tester.widget<GridView>(find.byType(GridView));
+    final grid = tester.widget<GridView>(
+      find.descendant(
+        of: find.byKey(const ValueKey('library-grid-manga-pinned')),
+        matching: find.byType(GridView),
+      ),
+    );
     expect(grid.childrenDelegate.estimatedChildCount, 12);
+    expect(find.text('عرض الكل'), findsNothing);
     await tester.pump(const Duration(milliseconds: 100));
+  });
+
+  testWidgets('phone: swiping the library pager changes lists', (tester) async {
+    final storage = await _pump(tester, size: const Size(400, 860));
+
+    expect(find.byType(TabBarView), findsOneWidget);
+    expect(find.text('Berserk'), findsWidgets);
+
+    await tester.drag(find.byType(TabBarView), const Offset(300, 0));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Berserk'), findsNothing);
+    expect(storage.selectedCategory, isNot('watching'));
   });
 
   testWidgets('PC: favourite characters sit under the anime lists', (
@@ -409,16 +477,18 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
   });
 
-  testWidgets('phone: the anime tab ends with the favourite characters', (
+  testWidgets('phone: manga bar has the six reading lists and no recent', (
     tester,
   ) async {
-    await _pump(tester, size: const Size(400, 860), kind: 'anime');
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('library-characters')),
-      200,
-      scrollable: find.byType(Scrollable).last,
-    );
-    expect(find.text('الشخصيات المفضلة'), findsOneWidget);
+    await _pump(tester, size: const Size(400, 860), kind: 'manga');
+
+    expect(find.byKey(const ValueKey('library-list-tab-recent')), findsNothing);
+    expect(find.text('المفضلة 0'), findsOneWidget);
+    expect(find.text('أقرأها حاليًا 2'), findsOneWidget);
+    expect(find.text('أكملها لاحقًا 0'), findsOneWidget);
+    expect(find.text('أرغب بقراءتها 1'), findsOneWidget);
+    expect(find.text('تمت قراءتها 0'), findsOneWidget);
+    expect(find.text('لا أرغب بقراءتها 0'), findsOneWidget);
     await tester.pump(const Duration(milliseconds: 100));
   });
 

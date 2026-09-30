@@ -4641,6 +4641,19 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     return output;
   }
 
+  /// Resolves AniList/MAL franchise ids to actual AnimeWitcher catalog items.
+  /// Missing ids are omitted, so callers only expose titles this app can open.
+  Future<Map<int, MultimediaItem>> resolveCatalogAnimeByMalIds(
+    Iterable<int> rawIds,
+  ) async {
+    final hits = await _resolveMalIds(rawIds);
+    return <int, MultimediaItem>{
+      for (final entry in hits.entries)
+        entry.key: _relatedItem(entry.value),
+    };
+  }
+
+
   String _relationType(dynamic raw) {
     final value = _text(raw).replaceAll(RegExp(r'[\s-]+'), '_').toUpperCase();
     return value.isEmpty ? 'OTHER' : value;
