@@ -191,7 +191,7 @@ jobs:
               return ms, int(data["id"]), len(payload)
 
           def simkl_search(param, value):
-              qs = urllib.parse.urlencode({param: value})
+              qs = urllib.parse.urlencode({param: value, "client_id": KEY})
               req = urllib.request.Request(
                   "https://api.simkl.com/search/id?" + qs,
                   headers={
@@ -215,7 +215,7 @@ jobs:
 
           def simkl_detail(simkl_id):
               req = urllib.request.Request(
-                  f"https://api.simkl.com/anime/{simkl_id}",
+                  f"https://api.simkl.com/anime/{simkl_id}?client_id={urllib.parse.quote(KEY)}",
                   headers={
                       "Accept": "application/json",
                       "User-Agent": "animewitcher-benchmark/1.0",
