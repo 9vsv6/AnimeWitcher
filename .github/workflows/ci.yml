@@ -238,10 +238,25 @@ jobs:
                   aliases=" ".join(f"m{k}:Media(id:$i{k},type:ANIME){{ {FIELDS} }}" for k in range(len(batch)))
                   q=f"query({var_defs}){{ {aliases} }}"
                   vars={f"i{k}":v for k,v in enumerate(batch)}
-                  data,ms,n=gql(q,vars)
-                  reqs+=1; bytes_+=n; total_ms+=ms
-                  for k in range(len(batch)):
-                      raw=data.get(f"m{k}")
+                  try:
+                      data,ms,n=gql(q,vars)
+                      reqs+=1; bytes_+=n; total_ms+=ms
+                      fetched=[data.get(f"m{k}") for k in range(len(batch))]
+                  except urllib.error.HTTPError as exc:
+                      if exc.code != 404:
+                          raise
+                      fetched=[]
+                      for media_id in batch:
+                          one_q=f"query($id:Int!){{ Media(id:$id,type:ANIME){{ {FIELDS} }} }}"
+                          try:
+                              one_data,one_ms,one_n=gql(one_q,{"id":media_id})
+                              reqs+=1; bytes_+=one_n; total_ms+=one_ms
+                              fetched.append(one_data.get("Media"))
+                          except urllib.error.HTTPError as one_exc:
+                              if one_exc.code != 404:
+                                  raise
+                              fetched.append(None)
+                  for raw in fetched:
                       if not raw: continue
                       node=normalize(raw)
                       nodes[node["id"]]=node
