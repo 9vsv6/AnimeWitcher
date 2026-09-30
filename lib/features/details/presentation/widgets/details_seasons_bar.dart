@@ -7,6 +7,7 @@ import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
 import 'package:animewitcher/core/extensions/extension_manager.dart';
 import 'package:animewitcher/core/extensions/providers/animewitcher_native_provider.dart';
 import 'package:animewitcher/core/services/anilist_franchise_service.dart';
+import 'package:animewitcher/core/services/anizip_service.dart';
 import 'package:animewitcher/core/storage/storage_service.dart';
 import 'package:animewitcher/core/utils/catalog_label.dart';
 import 'package:animewitcher/shared/widgets/fallback_poster_image.dart';
@@ -77,10 +78,15 @@ int? _firstNumber(RegExpMatch? match) {
 /// is season two, part two, not a season of its own — and otherwise counts
 /// on from the season before. Movies and OVAs in the chain are named as
 /// extras and do not move the count.
-List<String> seasonsBarLabels(List<MultimediaItem> items, {String? rootTitle}) {
+List<String> seasonsBarLabels(
+  List<MultimediaItem> items, {
+  String? rootTitle,
+  Map<String, int> aniZipSeasonNumbers = const <String, int>{},
+}) {
   final root =
       rootTitle ?? items.firstWhere(_isSeries, orElse: () => items.first).title;
   int? lastSeason;
+  final seenPerSeason = <int, int>{};
   final labels = <String>[];
   for (final item in items) {
     if (!_isSeries(item)) {
@@ -88,16 +94,57 @@ List<String> seasonsBarLabels(List<MultimediaItem> items, {String? rootTitle}) {
       continue;
     }
     final title = item.title;
-    final part = _firstNumber(_partInTitle.firstMatch(title));
+    var part = _firstNumber(_partInTitle.firstMatch(title));
+    final aniZipSeason = aniZipSeasonNumbers[item.url];
     final season =
+        aniZipSeason ??
         _firstNumber(_seasonInTitle.firstMatch(title)) ??
         (part != null ? (lastSeason ?? 1) : (lastSeason ?? 0) + 1);
+
+    final seen = seenPerSeason[season] ?? 0;
+    if (aniZipSeason != null && part == null && seen > 0) {
+      part = seen + 1;
+    }
+    seenPerSeason[season] = seen + 1;
     lastSeason = season;
     labels.add(
       part != null ? 'الموسم $season - الجزء $part' : 'الموسم $season',
     );
   }
   return _numberRepeats(labels);
+}
+
+List<SeasonsBarEntry> applyAniZipSeasonNumbers(
+  List<SeasonsBarEntry> entries,
+  Map<String, int> seasonNumbers,
+) {
+  if (seasonNumbers.isEmpty || entries.isEmpty) return entries;
+
+  final mainIndexes = <int>[];
+  final mainItems = <MultimediaItem>[];
+  for (var i = 0; i < entries.length; i++) {
+    if (!entries[i].label.startsWith('الموسم ')) continue;
+    mainIndexes.add(i);
+    mainItems.add(entries[i].item);
+  }
+  if (mainItems.isEmpty) return entries;
+
+  final labels = seasonsBarLabels(
+    mainItems,
+    rootTitle: mainItems.first.title,
+    aniZipSeasonNumbers: seasonNumbers,
+  );
+  final relabeled = entries.toList(growable: false);
+  for (var i = 0; i < mainIndexes.length; i++) {
+    final index = mainIndexes[i];
+    final entry = entries[index];
+    relabeled[index] = SeasonsBarEntry(
+      item: entry.item,
+      isCurrent: entry.isCurrent,
+      label: labels[i],
+    );
+  }
+  return relabeled;
 }
 
 /// A movie's or an OVA's name: what its title adds to the franchise name
@@ -523,7 +570,7 @@ class _DetailsSeasonsBarState extends ConsumerState<DetailsSeasonsBar> {
         return;
       }
 
-      final graphEntries = await walkSeasonsBar(
+      var graphEntries = await walkSeasonsBar(
         current: root.item,
         related: root.related,
         fetchRelated: (url) async {
@@ -533,6 +580,27 @@ class _DetailsSeasonsBarState extends ConsumerState<DetailsSeasonsBar> {
               const <MultimediaItem>[];
         },
       );
+
+      final aniZip = AniZipService();
+      final seasonPairs = await Future.wait(
+        graphEntries.map((entry) async {
+          final sync = entry.item.syncData;
+          if (sync?['anilistFormat'] != 'TV') return null;
+          final aniListId = int.tryParse(
+            sync?['anilistId'] ?? sync?['anilist_id'] ?? '',
+          );
+          if (aniListId == null || aniListId <= 0) return null;
+          final mapping = await aniZip.fetchSeasonMapping(aniListId);
+          return mapping == null
+              ? null
+              : (url: entry.item.url, season: mapping.seasonNumber);
+        }),
+      );
+      final seasonNumbers = <String, int>{
+        for (final pair in seasonPairs)
+          if (pair != null) pair.url: pair.season,
+      };
+      graphEntries = applyAniZipSeasonNumbers(graphEntries, seasonNumbers);
 
       final provider = ref.read(activeProviderProvider);
       if (provider is! AnimeWitcherNativeProvider) {
