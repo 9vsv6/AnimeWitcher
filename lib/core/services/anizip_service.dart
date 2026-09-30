@@ -9,7 +9,29 @@ import '../domain/entity/multimedia_item.dart';
 ///
 /// Season identity is owned by the app and is always normalized to Season 1;
 /// AniZip seasonNumber is deliberately ignored and is never parsed.
+class AniZipMapping {
+  const AniZipMapping({
+    required this.seasonNumber,
+    this.episodeNumber,
+    this.absoluteEpisodeNumber,
+    this.tvdbShowId,
+    this.tvdbEpisodeId,
+    this.tvdbMappingId,
+  });
+
+  final int seasonNumber;
+  final int? episodeNumber;
+  final int? absoluteEpisodeNumber;
+  final int? tvdbShowId;
+  final int? tvdbEpisodeId;
+  final int? tvdbMappingId;
+}
+
 class AniZipService {
+  static const int _seasonCacheMax = 300;
+  static final Map<int, Future<AniZipMapping?>> _seasonCache =
+      <int, Future<AniZipMapping?>>{};
+
   final Dio _dio;
 
   AniZipService({Dio? dio})
@@ -21,6 +43,38 @@ class AniZipService {
                 receiveTimeout: const Duration(seconds: 8),
               ),
             );
+
+  Future<AniZipMapping?> fetchSeasonMapping(int aniListId) {
+    if (aniListId <= 0) return Future<AniZipMapping?>.value();
+    final cached = _seasonCache.remove(aniListId);
+    if (cached != null) {
+      _seasonCache[aniListId] = cached;
+      return cached;
+    }
+
+    final pending = _fetchSeasonMapping(aniListId);
+    _seasonCache[aniListId] = pending;
+    while (_seasonCache.length > _seasonCacheMax) {
+      _seasonCache.remove(_seasonCache.keys.first);
+    }
+    return pending;
+  }
+
+  Future<AniZipMapping?> _fetchSeasonMapping(int aniListId) async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/mappings',
+        queryParameters: <String, dynamic>{'anilist_id': aniListId},
+      );
+      final data = response.data;
+      if (response.statusCode != 200 || data == null) return null;
+      return aniZipMappingFromJson(data);
+    } on DioException {
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
 
   Future<List<Episode>?> enrichEpisodes(
     MultimediaItem item,
@@ -129,6 +183,48 @@ class AniZipService {
     }
     return result;
   }
+}
+
+AniZipMapping? aniZipMappingFromJson(Map<String, dynamic> data) {
+  final episodes = data['episodes'];
+  final candidates = <Map<String, dynamic>>[];
+
+  if (episodes is Map) {
+    final ordered = episodes.entries
+        .map((entry) => (key: int.tryParse('${entry.key}'), value: entry.value))
+        .where((entry) => entry.key != null && entry.key! > 0 && entry.value is Map)
+        .toList()
+      ..sort((a, b) => a.key!.compareTo(b.key!));
+    for (final entry in ordered) {
+      candidates.add(Map<String, dynamic>.from(entry.value as Map));
+    }
+  } else if (episodes is List) {
+    for (final value in episodes) {
+      if (value is Map) {
+        candidates.add(Map<String, dynamic>.from(value));
+      }
+    }
+  }
+
+  final mappings = data['mappings'];
+  final tvdbMappingId = mappings is Map
+      ? (mappings['thetvdb_id'] as num?)?.toInt()
+      : null;
+
+  for (final episode in candidates) {
+    final seasonNumber = (episode['seasonNumber'] as num?)?.toInt();
+    if (seasonNumber == null || seasonNumber <= 0) continue;
+    return AniZipMapping(
+      seasonNumber: seasonNumber,
+      episodeNumber: (episode['episodeNumber'] as num?)?.toInt(),
+      absoluteEpisodeNumber:
+          (episode['absoluteEpisodeNumber'] as num?)?.toInt(),
+      tvdbShowId: (episode['tvdbShowId'] as num?)?.toInt(),
+      tvdbEpisodeId: (episode['tvdbId'] as num?)?.toInt(),
+      tvdbMappingId: tvdbMappingId,
+    );
+  }
+  return null;
 }
 
 class _AniZipPayload {
