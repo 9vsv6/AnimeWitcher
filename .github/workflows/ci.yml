@@ -143,16 +143,23 @@ jobs:
               return json.loads(payload), (time.perf_counter()-started)*1000, status, len(payload)
 
           def gql(query, variables):
-              req=urllib.request.Request(
-                  "https://graphql.anilist.co",
-                  data=json.dumps({"query":query,"variables":variables}).encode(),
-                  method="POST",
-                  headers={"Content-Type":"application/json","Accept":"application/json","User-Agent":UA},
-              )
-              data,ms,status,n=http_json(req)
-              if status != 200 or data.get("errors"):
-                  raise RuntimeError(f"AniList error: {data.get('errors') or status}")
-              return data["data"], ms, n
+              last=None
+              for attempt in range(3):
+                  req=urllib.request.Request(
+                      "https://graphql.anilist.co",
+                      data=json.dumps({"query":query,"variables":variables}).encode(),
+                      method="POST",
+                      headers={"Content-Type":"application/json","Accept":"application/json","User-Agent":UA},
+                  )
+                  try:
+                      data,ms,status,n=http_json(req)
+                      if status == 200 and not data.get("errors"):
+                          return data["data"], ms, n
+                      last=RuntimeError(f"AniList error: {data.get('errors') or status}")
+                  except urllib.error.HTTPError as exc:
+                      last=exc
+                  time.sleep(1.0 + attempt)
+              raise last
 
           FIELDS = """
             id idMal format episodes
@@ -239,7 +246,7 @@ jobs:
               return nodes,reqs,total_ms,bytes_
 
           def anizip_one(anilist_id):
-              url="https://hayase.ani.zip/v1/episodes?"+urllib.parse.urlencode({"anilist_id":anilist_id})
+              url="https://api.ani.zip/mappings?"+urllib.parse.urlencode({"anilist_id":anilist_id})
               req=urllib.request.Request(url,headers={"Accept":"application/json","User-Agent":UA})
               started=time.perf_counter()
               try:
