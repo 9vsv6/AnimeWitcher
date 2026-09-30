@@ -1,5 +1,6 @@
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
 import 'package:animewitcher/core/services/anilist_franchise_service.dart';
+import 'package:animewitcher/core/services/anizip_service.dart';
 import 'package:animewitcher/features/details/presentation/widgets/details_seasons_bar.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -95,6 +96,39 @@ void main() {
         s('Shingeki no Kyojin: The Final Season Part 2'),
       ]),
       ['الموسم 1', 'الموسم 3', 'الموسم 4', 'الموسم 4 - الجزء 2'],
+    );
+  });
+
+  test('AniZip parses TVDB season and episode mapping', () {
+    final parsed = aniZipMappingFromJson(<String, dynamic>{
+      'mappings': <String, dynamic>{'thetvdb_id': 267440},
+      'episodes': <String, dynamic>{
+        '1': <String, dynamic>{
+          'tvdbShowId': 267440,
+          'tvdbId': 7954365,
+          'seasonNumber': 4,
+          'episodeNumber': 1,
+          'absoluteEpisodeNumber': 60,
+        },
+      },
+    });
+
+    expect(parsed, isNotNull);
+    expect(parsed!.seasonNumber, 4);
+    expect(parsed.episodeNumber, 1);
+    expect(parsed.absoluteEpisodeNumber, 60);
+    expect(parsed.tvdbShowId, 267440);
+    expect(parsed.tvdbEpisodeId, 7954365);
+    expect(parsed.tvdbMappingId, 267440);
+  });
+
+  test('AniZip missing episode mapping falls back to no enrichment', () {
+    expect(
+      aniZipMappingFromJson(<String, dynamic>{
+        'mappings': <String, dynamic>{'thetvdb_id': 267440},
+        'episodes': const <String, dynamic>{},
+      }),
+      isNull,
     );
   });
 
