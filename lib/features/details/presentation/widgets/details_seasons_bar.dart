@@ -590,7 +590,10 @@ class _DetailsSeasonsBarState extends ConsumerState<DetailsSeasonsBar> {
             sync?['anilistId'] ?? sync?['anilist_id'] ?? '',
           );
           if (aniListId == null || aniListId <= 0) return null;
-          final mapping = await aniZip.fetchSeasonMapping(aniListId);
+          final mapping = await aniZip.fetchSeasonMapping(aniListId).timeout(
+            const Duration(seconds: 2),
+            onTimeout: () => null,
+          );
           return mapping == null
               ? null
               : (url: entry.item.url, season: mapping.seasonNumber);
