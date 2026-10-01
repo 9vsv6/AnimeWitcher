@@ -209,18 +209,19 @@ class AppTopBar extends StatelessWidget {
             ? Colors.black.withValues(alpha: 0.35)
             : Theme.of(context).colorScheme.surfaceContainerLow,
       ),
-      child: Stack(
-        children: [
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
           // The name in the left corner, opposite the caption buttons, with
-          // the news beside it: this layout takes the news off home.
-          Positioned(
-            left: 24,
-            top: 0,
-            bottom: 0,
-            child: Directionality(
-              textDirection: TextDirection.ltr,
-              child: Row(
-                children: [
+          // the account and the news beside it: this layout takes the news
+          // off home. A narrow window — a tablet held upright — drops the
+          // name to leave its pages room.
+          final corner = Directionality(
+            textDirection: TextDirection.ltr,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (width >= 1000) ...[
                   Text(
                     'AnimeWitcher',
                     style: TextStyle(
@@ -230,50 +231,81 @@ class AppTopBar extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  // The account right after the name, then the news.
-                  AccountAvatarButton(onTap: onAccount, size: 32),
-                  const SizedBox(width: 4),
-                  IconButton(
-                    tooltip: l10n.localeName.toLowerCase().startsWith('ar')
-                        ? 'الأخبار'
-                        : 'News',
-                    onPressed: onNews,
-                    icon: Icon(
-                      Icons.newspaper_rounded,
-                      color: foreground.withValues(alpha: 0.8),
-                      size: 22,
-                    ),
-                  ),
                 ],
-              ),
-            ),
-          ),
-          // The pages centred on the window, clear of both corners.
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 260 + reserve / 2),
-            child: Center(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (final destination in destinations)
-                      _TopBarItem(
-                        label: destination.label(l10n),
-                        icon: destination.branchIndex == currentBranchIndex
-                            ? destination.selectedIcon
-                            : destination.icon,
-                        selected: destination.branchIndex == currentBranchIndex,
-                        accent: accent,
-                        foreground: foreground,
-                        onTap: () => onTap(destination),
-                      ),
-                  ],
+                AccountAvatarButton(onTap: onAccount, size: 32),
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: l10n.localeName.toLowerCase().startsWith('ar')
+                      ? 'الأخبار'
+                      : 'News',
+                  onPressed: onNews,
+                  icon: Icon(
+                    Icons.newspaper_rounded,
+                    color: foreground.withValues(alpha: 0.8),
+                    size: 22,
+                  ),
                 ),
-              ),
+              ],
             ),
-          ),
-        ],
+          );
+          final pages = SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final destination in destinations)
+                  _TopBarItem(
+                    label: destination.label(l10n),
+                    icon: destination.branchIndex == currentBranchIndex
+                        ? destination.selectedIcon
+                        : destination.icon,
+                    selected: destination.branchIndex == currentBranchIndex,
+                    accent: accent,
+                    foreground: foreground,
+                    // A narrow window names only the page showing; the rest
+                    // keep their icons, so every page fits on the bar.
+                    showLabel:
+                        width >= 1000 ||
+                        destination.branchIndex == currentBranchIndex,
+                    onTap: () => onTap(destination),
+                  ),
+              ],
+            ),
+          );
+          // Wide enough: the pages centred on the window, clear of both
+          // corners.
+          if (width >= 1100) {
+            return Stack(
+              children: [
+                Positioned(left: 24, top: 0, bottom: 0, child: corner),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 260 + reserve / 2),
+                  child: Center(child: pages),
+                ),
+              ],
+            );
+          }
+          // Narrower, the two kept a fixed 260 points clear of each edge and
+          // squeezed the pages into a sliver jammed against the corner. Here
+          // the corner takes what it needs and the pages the rest.
+          return Directionality(
+            textDirection: TextDirection.ltr,
+            child: Row(
+              children: [
+                const SizedBox(width: 16),
+                corner,
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Directionality(
+                    textDirection: Directionality.of(context),
+                    child: Center(child: pages),
+                  ),
+                ),
+                SizedBox(width: 16 + reserve),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -287,7 +319,12 @@ class _TopBarItem extends StatelessWidget {
     required this.accent,
     required this.onTap,
     required this.foreground,
+    this.showLabel = true,
   });
+
+  /// The page's name beside its icon; off, the icon alone with the name as
+  /// its tooltip.
+  final bool showLabel;
 
   final String label;
   final IconData icon;
@@ -301,9 +338,10 @@ class _TopBarItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = selected ? foreground : foreground.withValues(alpha: 0.65);
-    return Semantics(
+    final item = Semantics(
       button: true,
       selected: selected,
+      label: showLabel ? null : label,
       child: Padding(
         padding: const EdgeInsetsDirectional.only(end: 4),
         child: InkWell(
@@ -321,20 +359,23 @@ class _TopBarItem extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(icon, size: 18, color: selected ? accent : color),
-                const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 14,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                if (showLabel) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 14,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
         ),
       ),
     );
+    return showLabel ? item : Tooltip(message: label, child: item);
   }
 }
