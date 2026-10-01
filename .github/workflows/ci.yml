@@ -115,9 +115,10 @@ jobs:
       github.ref == 'refs/heads/main' &&
       github.event.head_commit.message == 'chore: purge obsolete workflow history'
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 360
     permissions:
       actions: write
+      contents: write
     steps:
       - uses: actions/github-script@v7
         with:
@@ -163,9 +164,10 @@ jobs:
             core.info('Keeping: ' + kept.map(w => w.name).join(', '));
             core.info('Cleaning ' + old.length + ' workflows and ' + targets.length + ' runs.');
             for (const workflow of old) {
+              if (workflow.state === 'disabled_manually') continue;
               await call(() => github.rest.actions.disableWorkflow({
                 owner, repo, workflow_id: workflow.id }));
-              await pause(350);
+              await pause(1000);
             }
             let deleted = 0;
             for (const run of targets) {
@@ -189,7 +191,7 @@ jobs:
                 owner, repo, run_id: run.id }));
               deleted++;
               if (deleted % 50 === 0) core.info('Deleted ' + deleted + '/' + targets.length);
-              await pause(350);
+              await pause(1000);
             }
             const remaining = await call(() => github.paginate(
               github.rest.actions.listWorkflowRunsForRepo, { owner, repo, per_page: 100 }));
@@ -200,3 +202,29 @@ jobs:
               .addRaw('Disabled ' + old.length + ' obsolete workflows and deleted ' + deleted + ' runs.')
               .addList(kept.map(w => w.name + ' (' + w.path + ')'))
               .write();
+
+      - name: Restore original CI configuration
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const path = '.github/workflows/ci.yml';
+            const original = await github.rest.repos.getContent({
+              owner, repo, path, ref: '1c1045d6c910cd57093c51aa7e6fc232acb9684a' });
+            if (original.data.sha !== 'a60a18cf615726409ca9bcfebfc47ba6877a6b0a')
+              throw new Error('Original CI does not match the verified baseline.');
+            const current = await github.rest.repos.getContent({ owner, repo, path, ref: 'main' });
+            if (current.data.sha === original.data.sha) {
+              core.info('CI has already been restored.');
+              return;
+            }
+            const installed = await github.rest.repos.getContent({
+              owner, repo, path, ref: context.sha });
+            if (current.data.sha !== installed.data.sha)
+              throw new Error('CI changed during cleanup; refusing to overwrite concurrent edits.');
+            await github.rest.repos.createOrUpdateFileContents({
+              owner, repo, path, branch: 'main', sha: current.data.sha,
+              content: original.data.content,
+              message: 'chore: restore CI after authorized workflow cleanup' });
+            core.info('Restored ci.yml exactly to its original content.');
