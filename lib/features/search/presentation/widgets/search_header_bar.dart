@@ -33,6 +33,10 @@ class SearchHeaderBar extends ConsumerStatefulWidget {
   final bool showFilter;
   final bool isCompact;
 
+  /// Opens a random well-rated anime, as an icon beside the filters.
+  final VoidCallback? onRandom;
+  final bool isRandomLoading;
+
   const SearchHeaderBar({
     super.key,
     required this.textController,
@@ -52,6 +56,8 @@ class SearchHeaderBar extends ConsumerStatefulWidget {
     required this.showSort,
     required this.showFilter,
     this.isCompact = false,
+    this.onRandom,
+    this.isRandomLoading = false,
   });
 
   @override
@@ -173,6 +179,13 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                       // Match the library filter's theme accent.
                       tintColor: theme.colorScheme.primary,
                       height: SearchGlassSurface.height,
+                      onRandom: widget.onRandom,
+                      isRandomLoading: widget.isRandomLoading,
+                      randomTooltip: appText(
+                        context,
+                        english: 'Surprise me',
+                        arabic: 'اقترح لي أنمي',
+                      ),
                     ),
                     SizedBox(
                       // Details pins its native toolbar 34pt inside the iOS

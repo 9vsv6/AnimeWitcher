@@ -24,6 +24,9 @@ class SearchActionButtons extends StatefulWidget {
     this.isFilterLoading = false,
     this.height = SearchGlassSurface.height,
     this.tintColor,
+    this.onRandom,
+    this.randomTooltip = '',
+    this.isRandomLoading = false,
   });
 
   final String sortValue;
@@ -41,6 +44,11 @@ class SearchActionButtons extends StatefulWidget {
   final double height;
   final Color? tintColor;
 
+  /// Opens a random well-rated anime; no button without it.
+  final VoidCallback? onRandom;
+  final String randomTooltip;
+  final bool isRandomLoading;
+
   /// Visible square tap targets. The search category is picked in the
   /// filter sheet, so hidden actions give their width back to search.
   static double groupWidthForHeight(double height, {int visibleControls = 2}) =>
@@ -56,7 +64,9 @@ class _SearchActionButtonsState extends State<SearchActionButtons> {
     final tint = widget.tintColor ?? Theme.of(context).colorScheme.primary;
     final height = widget.height;
     final visibleControls =
-        (widget.showSort ? 1 : 0) + (widget.showFilter ? 1 : 0);
+        (widget.showSort ? 1 : 0) +
+        (widget.showFilter ? 1 : 0) +
+        (widget.onRandom != null ? 1 : 0);
     final width = SearchActionButtons.groupWidthForHeight(
       height,
       visibleControls: visibleControls,
@@ -104,6 +114,18 @@ class _SearchActionButtonsState extends State<SearchActionButtons> {
                     badgeCount: widget.filterCount,
                   ),
                 ),
+              if (widget.onRandom != null)
+                Expanded(
+                  child: _ActionIcon(
+                    key: const ValueKey<String>('search-random'),
+                    tooltip: widget.randomTooltip,
+                    icon: Icons.casino_rounded,
+                    color: tint,
+                    size: height,
+                    onPressed: widget.isRandomLoading ? null : widget.onRandom,
+                    isLoading: widget.isRandomLoading,
+                  ),
+                ),
             ],
           ),
         ),
@@ -115,6 +137,7 @@ class _SearchActionButtonsState extends State<SearchActionButtons> {
 
 class _ActionIcon extends StatelessWidget {
   const _ActionIcon({
+    super.key,
     required this.tooltip,
     required this.icon,
     required this.color,

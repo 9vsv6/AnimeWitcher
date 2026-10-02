@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:animewitcher/shared/widgets/app_side_menu.dart';
@@ -44,6 +46,10 @@ import 'package:animewitcher/features/news/presentation/news_list_screen.dart';
 import 'package:animewitcher/features/news/presentation/news_utils.dart';
 import 'package:animewitcher/core/domain/entity/manga.dart';
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
+import 'package:animewitcher/features/search/data/mal_rankings.dart';
+import 'package:animewitcher/features/manga/presentation/manga_home_prefetch.dart';
+import 'package:animewitcher/core/network/poster_cache.dart';
+import 'package:animewitcher/core/utils/localized_text.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -83,7 +89,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    // The search page's MyAnimeList rows take seconds to gather; started
+    // here, they are usually ready by the time search is opened.
+    for (final ranking in MalRanking.values) {
+      ref.read(malRankingProvider(ranking).future).ignore();
+    }
+    // Once home has had the network to itself for a while, the manga tab's
+    // first page is fetched too, so the tab opens already filled.
+    _prefetchTimer = Timer(const Duration(seconds: 6), () {
+      if (!mounted || !ref.read(mangaHasOwnTabProvider)) return;
+      ref.read(mangaHomeFirstPageProvider.future).ignore();
+    });
   }
+
+  Timer? _prefetchTimer;
 
   void _onScroll() {
     if (!_scrollController.hasClients) return;
@@ -99,6 +118,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   @override
   void dispose() {
+    _prefetchTimer?.cancel();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     _showBottomFade.dispose();
@@ -238,6 +258,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       sections.add(buildNewsSection());
     }
 
+    // Each rail's first posters are fetched to disk now, before the rail
+    // is scrolled to: drawn from disk, they appear at once.
+    for (final entry in entries) {
+      warmPosters(entry.value.take(12).map((item) => item.posterUrl));
+    }
+
     for (var index = 0; index < entries.length; index++) {
       final entry = entries[index];
       sections.add(
@@ -278,9 +304,50 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       if (news.isNotEmpty && index == newsAfterIndex) {
         sections.add(buildNewsSection());
       }
+      // MyAnimeList's rankings, after the newest episodes.
+      if (index == 0) sections.addAll(_malRankingRails(context));
     }
+    if (entries.isEmpty) sections.addAll(_malRankingRails(context));
+
 
     return sections;
+  }
+
+  /// MyAnimeList's rankings — popular now, best rated, most watched — as
+  /// rails with their "view all" pages. Only the catalogue's own shows are
+  /// in them; a ranking not fetched yet is left out until it is.
+  List<Widget> _malRankingRails(BuildContext context) {
+    final load = ref.watch(malRankingLoaderProvider);
+    final rails = <Widget>[];
+    for (final (ranking, english, arabic)
+        in const <(MalRanking, String, String)>[
+          (MalRanking.airing, 'Trending now', 'رائج الآن'),
+          (MalRanking.top, 'Top rated', 'الأفضل'),
+          (MalRanking.popular, 'Most watched', 'الأكثر مشاهدة'),
+        ]) {
+      final items =
+          ref.watch(malRankingProvider(ranking)).value ??
+          const <MultimediaItem>[];
+      if (items.isEmpty) continue;
+      warmPosters(items.take(12).map((item) => item.posterUrl));
+      rails.add(
+        MediaHorizontalList(
+          key: ValueKey<String>('home-mal-${ranking.name}'),
+          title: appText(context, english: english, arabic: arabic),
+          mediaList: items,
+          category: ViewAllCategory.providerContent,
+          showViewAll: true,
+          loadViewAllPage: (offset) => load(ranking, offset),
+          onTap: (item) {
+            DetailsRoute($extra: DetailsRouteExtra(item: item))
+                .push<void>(context);
+          },
+          heroTagPrefix: 'home_mal_${ranking.name}',
+          forcePortrait: true,
+        ),
+      );
+    }
+    return rails;
   }
 
   bool _isNewEpisodesSectionTitle(String title) {

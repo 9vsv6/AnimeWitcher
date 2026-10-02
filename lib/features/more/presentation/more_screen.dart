@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:animewitcher/features/settings/presentation/general_settings_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animewitcher/shared/widgets/app_side_menu.dart';
 
@@ -537,7 +538,11 @@ class _SettingsGroupPane extends ConsumerWidget {
           LivePreviewFrame(
             followTheme: true,
             caption: '$caption · ${arabic ? 'الرئيسية' : 'Home'}',
-            child: HomeLayoutPreview(layout: layout, theme: theme),
+            child: HomeLayoutPreview(
+              layout: layout,
+              theme: theme,
+              mangaTab: ref.watch(mangaHasOwnTabProvider),
+            ),
           ),
           LivePreviewFrame(
             followTheme: true,

@@ -64,6 +64,15 @@ void main() {
       expect(rect.left, greaterThan(account.right), reason: destination.name);
       expect(rect.right, lessThanOrEqualTo(800), reason: destination.name);
     }
+    // Sized for a finger: tests run as a tablet would, not a desktop.
+    final library = tester.widget<Icon>(
+      find.byIcon(TaskbarDestination.library.icon),
+    );
+    expect(library.size, 24);
+    expect(
+      tester.getSize(find.byIcon(TaskbarDestination.library.icon)).height,
+      24,
+    );
     // Only the page showing is named; the rest keep their icons.
     expect(find.text('الرئيسية'), findsOneWidget);
     expect(find.text('المكتبة'), findsNothing);

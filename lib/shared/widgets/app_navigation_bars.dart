@@ -212,6 +212,9 @@ class AppTopBar extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final width = constraints.maxWidth;
+          // A tablet is used with a finger: bigger targets than a mouse
+          // needs, and the room the screen has for them.
+          final touch = !ResponsiveBreakpoints.isDesktopPlatform();
           // The name in the left corner, opposite the caption buttons, with
           // the account and the news beside it: this layout takes the news
           // off home. A narrow window — a tablet held upright — drops the
@@ -232,7 +235,7 @@ class AppTopBar extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
                 ],
-                AccountAvatarButton(onTap: onAccount, size: 32),
+                AccountAvatarButton(onTap: onAccount, size: touch ? 38 : 32),
                 const SizedBox(width: 4),
                 IconButton(
                   tooltip: l10n.localeName.toLowerCase().startsWith('ar')
@@ -242,7 +245,7 @@ class AppTopBar extends StatelessWidget {
                   icon: Icon(
                     Icons.newspaper_rounded,
                     color: foreground.withValues(alpha: 0.8),
-                    size: 22,
+                    size: touch ? 26 : 22,
                   ),
                 ),
               ],
@@ -267,6 +270,7 @@ class AppTopBar extends StatelessWidget {
                     showLabel:
                         width >= 1000 ||
                         destination.branchIndex == currentBranchIndex,
+                    large: touch,
                     onTap: () => onTap(destination),
                   ),
               ],
@@ -320,7 +324,11 @@ class _TopBarItem extends StatelessWidget {
     required this.onTap,
     required this.foreground,
     this.showLabel = true,
+    this.large = false,
   });
+
+  /// Sized for a finger on a tablet rather than a mouse.
+  final bool large;
 
   /// The page's name beside its icon; off, the icon alone with the name as
   /// its tooltip.
@@ -348,7 +356,9 @@ class _TopBarItem extends StatelessWidget {
           borderRadius: BorderRadius.circular(99),
           onTap: onTap,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            padding: large
+                ? const EdgeInsets.symmetric(horizontal: 16, vertical: 10)
+                : const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
             decoration: BoxDecoration(
               color: selected
                   ? foreground.withValues(alpha: 0.12)
@@ -358,14 +368,18 @@ class _TopBarItem extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: 18, color: selected ? accent : color),
+                Icon(
+                  icon,
+                  size: large ? 24 : 18,
+                  color: selected ? accent : color,
+                ),
                 if (showLabel) ...[
-                  const SizedBox(width: 6),
+                  SizedBox(width: large ? 8 : 6),
                   Text(
                     label,
                     style: TextStyle(
                       color: color,
-                      fontSize: 14,
+                      fontSize: large ? 16 : 14,
                       fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                     ),
                   ),

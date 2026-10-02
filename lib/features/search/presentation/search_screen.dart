@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:animewitcher/features/home/presentation/widgets/home_section_header.dart';
 import 'package:animewitcher/shared/widgets/app_side_menu.dart';
@@ -25,7 +27,6 @@ import 'widgets/search_glass_surface.dart';
 import 'widgets/search_result_section.dart';
 import 'widgets/search_header_bar.dart';
 import 'widgets/search_sort_dialog.dart';
-import 'widgets/bouncy_entry_animation.dart';
 import '../../../shared/widgets/catalog_direction.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 import '../../../shared/widgets/anime_catalog_shimmer.dart';
@@ -38,6 +39,18 @@ import 'package:animewitcher/core/utils/localized_text.dart';
 
 import '../data/recent_searches.dart';
 import 'widgets/recent_searches_view.dart';
+import 'widgets/search_start_page.dart';
+import '../../library/presentation/history_provider.dart';
+import '../../../core/account/account_providers.dart';
+import '../../../core/storage/library_category.dart';
+import '../../../core/storage/history_repository.dart';
+import '../../../core/storage/library_repository.dart';
+import 'widgets/search_instant_results.dart';
+import 'widgets/phone_suggestion_box.dart';
+import '../../home/presentation/home_provider.dart';
+import '../../home/presentation/home_state.dart';
+import '../data/mal_rankings.dart';
+import '../../../core/domain/entity/multimedia_item.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
@@ -93,6 +106,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
     _focusNode.onKeyEvent = (node, event) {
       if (event is KeyDownEvent) {
+        // Esc closes the results panel, as in Harbor.
+        if (event.logicalKey == LogicalKeyboardKey.escape &&
+            _controller.text.isNotEmpty) {
+          _closeResultsPanel();
+          return KeyEventResult.handled;
+        }
         if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
           if (_controller.text.isNotEmpty &&
               _controller.selection.extentOffset == _controller.text.length) {
@@ -348,6 +367,22 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     }
   }
 
+  /// Closes the floating results: the typed text goes, the page returns.
+  void _closeResultsPanel() {
+    _controller.clear();
+    ref.read(searchSuggestionControllerProvider.notifier).clear();
+    ref.read(searchQueryProvider.notifier).set('');
+    _focusNode.requestFocus();
+  }
+
+  /// From a search's results back to the search page, keyboard down.
+  void _backToSearchPage() {
+    _controller.clear();
+    ref.read(searchSuggestionControllerProvider.notifier).clear();
+    ref.read(searchQueryProvider.notifier).set('');
+    _focusNode.unfocus();
+  }
+
   void _submitSearch(String val) {
     final trimmed = val.trim();
     _resetResultsScrollPosition();
@@ -369,17 +404,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     await ref.read(searchPagedResultsProvider.notifier).retry();
   }
 
-  void _fillSuggestion(String suggestion) {
-    _controller.value = TextEditingValue(
-      text: suggestion,
-      selection: TextSelection.collapsed(offset: suggestion.length),
-    );
-    ref
-        .read(searchSuggestionControllerProvider.notifier)
-        .onQueryChanged(suggestion);
-    _requestSearchFocus();
-  }
-
   @override
   Widget build(BuildContext context) {
     final profile = ref.watch(deviceProfileProvider).asData?.value;
@@ -387,7 +411,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final isWidescreen = isTv || context.isTabletOrLarger;
 
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     final domain = ref.watch(searchDomainProvider);
     final domainCapabilities = domain.capabilities;
 
@@ -396,137 +419,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         backgroundColor: theme.scaffoldBackgroundColor,
         body: Stack(
           children: [
-            // Cinematic Background Image - Local Asset (Dark Mode only)
-            if (isDark)
-              Positioned.fill(
-                child: Image.asset(
-                  'assets/images/search_background.jpg',
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) =>
-                      const SizedBox.shrink(),
-                ),
-              ),
-            // Rich Architectural Stage Overlay (Vignette + Dark overlay - Dark Mode only)
-            if (isDark)
-              Positioned.fill(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(
-                      alpha: 0.7,
-                    ), // Rich dark overlay
-                  ),
-                ),
-              ),
-            // Radial Vignette Overlay centered on search area (Dark Mode only)
-            if (isDark)
-              Positioned.fill(
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: RadialGradient(
-                      center: Alignment.center,
-                      radius: 1.1,
-                      colors: [
-                        Colors.black.withValues(alpha: 0.1),
-                        Colors.black.withValues(alpha: 0.85),
-                        Colors.black.withValues(alpha: 0.98),
-                      ],
-                      stops: const [0.0, 0.65, 1.0],
-                    ),
-                  ),
-                ),
-              ),
-            // Left-to-right fade to blend backdrop image with the sidebar / background (Dark Mode only)
-            if (isDark)
-              Positioned(
-                left: 0,
-                top: 0,
-                bottom: 0,
-                width: 320, // Wide fanning width to ease the transition
-                child: IgnorePointer(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                        colors: [
-                          theme.scaffoldBackgroundColor,
-                          theme.scaffoldBackgroundColor.withValues(alpha: 0.85),
-                          theme.scaffoldBackgroundColor.withValues(alpha: 0.50),
-                          theme.scaffoldBackgroundColor.withValues(alpha: 0.18),
-                          Colors.transparent,
-                        ],
-                        stops: const [0.0, 0.25, 0.55, 0.8, 1.0],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            // Top-to-bottom edge vignette to mask out top/bottom image boundaries/black letterboxing (Dark Mode only)
-            if (isDark)
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          theme.scaffoldBackgroundColor,
-                          theme.scaffoldBackgroundColor.withValues(alpha: 0.8),
-                          Colors.transparent,
-                          Colors.transparent,
-                          theme.scaffoldBackgroundColor.withValues(alpha: 0.8),
-                          theme.scaffoldBackgroundColor,
-                        ],
-                        stops: const [0.0, 0.08, 0.2, 0.8, 0.92, 1.0],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            // Focus Spotlight (Stage Lighting - Soft fanning semi-circle)
-            Positioned(
-              top: 76, // Anchored immediately below the search bar (24 top padding + 52 height)
-              left: 0,
-              right: 0,
-              height: 250,
-              child: ListenableBuilder(
-                listenable: _focusNode,
-                builder: (context, child) {
-                  if (!_focusNode.hasFocus) return const SizedBox.shrink();
-                  final spotlightColor = theme.colorScheme.primary;
-                  return IgnorePointer(
-                    child: Center(
-                      child: Container(
-                        width: 900, // Broader fanning footprint
-                        decoration: BoxDecoration(
-                          gradient: RadialGradient(
-                            center: Alignment.topCenter, // Fanning downward from the bottom edge of the search bar
-                            radius: 1.3,
-                            colors: [
-                              spotlightColor.withValues(
-                                alpha: isDark ? 0.35 : 0.22,
-                              ), // Soft center source point
-                              spotlightColor.withValues(
-                                alpha: isDark ? 0.18 : 0.10,
-                              ), // Smooth bleed
-                              spotlightColor.withValues(
-                                alpha: isDark ? 0.06 : 0.03,
-                              ), // Gentle falloff
-                              spotlightColor.withValues(
-                                alpha: 0.0,
-                              ), // Fade to transparent
-                            ],
-                            stops: const [0.0, 0.35, 0.70, 1.0],
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-
             // The results run to the top of the window and scroll under the
             // controls, so the strip the controls sit on shows the artwork
             // moving behind them rather than a band of background colour.
@@ -556,6 +448,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     searchFocusNode: _focusNode,
                     clearButtonFocusNode: _clearButtonFocusNode,
                     isCompact: false,
+                    onRandom: _surpriseMe,
+                    isRandomLoading: _surprising,
                     onShowFilters: _showSearchFilters,
                     onSortSelected: _applySearchSort,
                     sortValue: ref.watch(searchProviderFiltersProvider).sort,
@@ -607,6 +501,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final capabilities = domain.capabilities;
 
     return SearchActionButtons(
+      onRandom: _surpriseMe,
+      isRandomLoading: _surprising,
+      randomTooltip: appText(
+        context,
+        english: 'Surprise me',
+        arabic: 'اقترح لي أنمي',
+      ),
       showSort: capabilities.showSort,
       // The sheet also picks the category, so it is always there.
       showFilter: true,
@@ -665,7 +566,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           );
         }
 
-        return AppSearchField(
+        final field = AppSearchField(
           controller: _controller,
           focusNode: _focusNode,
           hintText: searchPlaceholder,
@@ -681,12 +582,20 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           onSubmitted: _submitSearch,
           suffixIcon: suffix,
         );
+        return field;
       },
     );
   }
 
+  /// A phone: neither a desktop nor a tablet-sized screen.
+  bool _isPhone(BuildContext context) =>
+      !ResponsiveBreakpoints.isDesktopPlatform() &&
+      MediaQuery.sizeOf(context).shortestSide < 600;
+
   Widget _buildMobileLayout(BuildContext context) {
     final usePersistentGlass = appleUsesPersistentLiquidGlassHeader;
+    // Results of a search are on screen: back returns to the search page.
+    final searched = ref.watch(searchQueryProvider).trim().isNotEmpty;
 
     // The chips ride in the bar rather than below it, so they stay put while
     // the results scroll under both.
@@ -726,8 +635,17 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           textDirection: TextDirection.ltr,
           child: Row(
             children: [
-              // The side menu's button, in the corner the menu comes from.
-              const AppSideMenuButton(padding: EdgeInsets.only(right: 8)),
+              // The side menu's button, in the corner the menu comes from —
+              // or, showing a search's results, the way back to the page.
+              if (searched)
+                IconButton(
+                  key: const ValueKey<String>('search-results-back'),
+                  tooltip: appText(context, english: 'Back', arabic: 'رجوع'),
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  onPressed: _backToSearchPage,
+                )
+              else
+                const AppSideMenuButton(padding: EdgeInsets.only(right: 8)),
               Expanded(child: _buildMobileSearchField(context)),
               const SizedBox(width: 2),
               _buildMobileSearchActionGroup(context),
@@ -742,12 +660,22 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       body: _buildBody(context, topInset: barExtent + 8),
     );
 
+    // The system back gesture leaves a search's results for the search page
+    // before it leaves the tab.
+    final withBack = PopScope(
+      canPop: !searched,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _backToSearchPage();
+      },
+      child: scaffold,
+    );
+
     // These glass controls belong to this row, not the persistent overlay.
-    if (!usePersistentGlass) return scaffold;
+    if (!usePersistentGlass) return withBack;
     return ApplePersistentGlassHeaderScope(
       branchIndex: TaskbarDestination.search.branchIndex,
       trailingButtons: const <AppleLiquidGlassToolbarButton>[],
-      child: scaffold,
+      child: withBack,
     );
   }
 
@@ -759,15 +687,22 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     BuildContext context, {
     bool withFilterChips = false,
     double topInset = 0,
+    bool behindPanel = false,
   }) {
     final state = ref.watch(searchPagedResultsProvider);
     final domain = ref.watch(searchDomainProvider);
     final suggestionState = ref.watch(searchSuggestionControllerProvider);
     final typedLongEnough = suggestionState.query.trim().length >= 2;
-    final hasSuggestionContent =
-        suggestionState.isLoading || suggestionState.suggestions.isNotEmpty;
+    // Typed but not yet searched: the floating results, in every category
+    // but characters — with "no results" in them rather than the catalogue
+    // that an empty search browses.
+    final phone = _isPhone(context);
     final showSuggestions =
-        domain == SearchDomain.anime && typedLongEnough && hasSuggestionContent;
+        !behindPanel &&
+        !phone &&
+        domain != SearchDomain.characters &&
+        typedLongEnough &&
+        ref.watch(searchQueryProvider).trim() != suggestionState.query.trim();
 
     // Only the results scroll, so every other state is simply held clear of
     // the floating controls rather than passing under them.
@@ -791,9 +726,124 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           : child,
     );
 
-    if (showSuggestions) {
-      return belowHeader(_buildSuggestionsView(context, suggestionState));
+    // Typed but not searched — one letter, or anything on a phone, which
+    // searches on Enter: the search page stays.
+    if (!showSuggestions &&
+        !behindPanel &&
+        domain != SearchDomain.characters &&
+        _controller.text.trim().isNotEmpty &&
+        (phone
+            ? ref.watch(searchQueryProvider).trim() != _controller.text.trim()
+            : ref.watch(searchQueryProvider).isEmpty)) {
+      final page = _buildStartPage(context, typing: true);
+      // Behind the box: the search page, or what was searched last.
+      final base = page != null
+          ? belowHeader(page)
+          : phone
+          ? _buildBody(
+              context,
+              withFilterChips: withFilterChips,
+              topInset: topInset,
+              behindPanel: true,
+            )
+          : belowHeader(const SizedBox.shrink());
+      // On a phone, a box of the first results drops under the field; the
+      // page stays in view below it.
+      if (!phone || suggestionState.query.trim().length < 2) return base;
+      final everything = <MultimediaItem>[
+        ...suggestionState.items,
+        ...suggestionState.animation,
+        ...suggestionState.manga,
+      ];
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          base,
+          Positioned(
+            top: topInset - 4,
+            left: 12,
+            right: 12,
+            child: PhoneSuggestionBox(
+              query: suggestionState.query.trim(),
+              items: everything,
+              loading: suggestionState.isLoading,
+              onOpen: (item) => item.contentType == MultimediaContentType.manga
+                  ? MangaDetailsRoute(
+                      $extra: MangaDetailsRouteExtra(item: item),
+                    ).push<void>(context)
+                  : DetailsRoute($extra: DetailsRouteExtra(item: item))
+                        .push<void>(context),
+              onSeeAll: () => _submitSearch(_controller.text),
+            ),
+          ),
+        ],
+      );
     }
+
+    if (showSuggestions) {
+      // The results float over the search page, which stays behind them
+      // dimmed; a click outside or Esc closes them.
+      // Behind the panel: the search page, or what was last searched.
+      final page = _buildStartPage(context, typing: true);
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          if (page != null)
+            belowHeader(page)
+          else
+            _buildBody(
+              context,
+              withFilterChips: withFilterChips,
+              topInset: topInset,
+              behindPanel: true,
+            ),
+          GestureDetector(
+            key: const ValueKey<String>('search-results-barrier'),
+            onTap: _closeResultsPanel,
+            child: const ColoredBox(color: Color(0x8C000000)),
+          ),
+          Padding(
+            padding: EdgeInsets.fromLTRB(16, topInset, 16, 16),
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                // Sized to its results, up to three quarters of the window.
+                constraints: BoxConstraints(
+                  maxWidth: 820,
+                  maxHeight: MediaQuery.sizeOf(context).height * 0.75,
+                ),
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween<double>(begin: 0, end: 1),
+                  duration: const Duration(milliseconds: 160),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, t, child) => Opacity(
+                    opacity: t,
+                    child: Transform.translate(
+                      offset: Offset(0, (1 - t) * -12),
+                      child: child,
+                    ),
+                  ),
+                  child: Material(
+                    key: const ValueKey<String>('search-results-panel'),
+                    color: Theme.of(context).colorScheme.surfaceContainer,
+                    elevation: 16,
+                    shadowColor: Colors.black,
+                    borderRadius: BorderRadius.circular(18),
+                    clipBehavior: Clip.antiAlias,
+                    child: _buildSuggestionsView(context, suggestionState),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    // An empty box would browse the whole catalogue; it offers recent
+    // searches and what is popular instead.
+    final startPage = _buildStartPage(context);
+    if (startPage != null) return belowHeader(startPage);
 
     if (domain == SearchDomain.characters) {
       if (state.characters.isEmpty && state.isLoading) {
@@ -1048,56 +1098,160 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     BuildContext context,
     SearchSuggestionState suggestionState,
   ) {
-    if (suggestionState.isLoading) {
-      return _buildLoadingIndicator(context);
-    }
-
-    if (suggestionState.suggestions.isEmpty) {
-      return Center(
-        child: Text(
-          appText(
-            context,
-            english: 'No results found',
-            arabic: 'لم يتم العثور على نتائج',
-          ),
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
+    final items = suggestionState.items;
+    if (!suggestionState.hasResults && suggestionState.isLoading) {
+      // A spinner, not the catalogue's poster placeholders, which need a
+      // page's height and are cut off in the panel.
+      return SizedBox(
+        height: 120,
+        child: Center(
+          child: AppLoadingIndicator(
+            color: Theme.of(context).colorScheme.primary,
+            constraints: BoxConstraints.tight(const Size(28, 28)),
           ),
         ),
       );
     }
 
-    return ListView.builder(
-      itemCount: suggestionState.suggestions.length,
-      itemBuilder: (context, index) {
-        final suggestion = suggestionState.suggestions[index];
-        return BouncyEntryAnimation(
-          delay: Duration(milliseconds: index * 40),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-            child: _SuggestionCard(
-              suggestion: suggestion,
-              focusNode: index == 0 ? _firstSuggestionFocusNode : null,
-              isFirst: index == 0,
-              onFocusSearch: () => _focusNode.requestFocus(),
-              onTap: () => _submitSearch(suggestion),
-              onFill: () => _fillSuggestion(suggestion),
+    if (!suggestionState.hasResults) {
+      return SizedBox(
+        height: 160,
+        child: Center(
+          child: Text(
+            appText(
+              context,
+              english: 'No results found',
+              arabic: 'لم يتم العثور على نتائج',
+            ),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
-        );
-      },
+        ),
+      );
+    }
+
+    // The best match, the rest of its series, then series and films — the
+    // way Harbor answers a search as it is typed.
+    // Searching manga alone, its results are manga, not anime series.
+    final mangaOnly = ref.read(searchDomainProvider) == SearchDomain.manga;
+    return SearchInstantResults(
+      items: mangaOnly ? const <MultimediaItem>[] : items,
+      animation: suggestionState.animation,
+      manga: mangaOnly ? items : suggestionState.manga,
+      characters: suggestionState.characters,
+      onOpenCharacter: (character) => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => CharacterDetailsScreen(
+            characterId: character.id,
+            initialName: character.name,
+            initialImageUrl: character.imageUrl,
+          ),
+        ),
+      ),
+      loading: suggestionState.isLoading,
+      firstFocusNode: _firstSuggestionFocusNode,
+      onOpen: (item) => item.contentType == MultimediaContentType.manga
+          ? MangaDetailsRoute($extra: MangaDetailsRouteExtra(item: item))
+                .push<void>(context)
+          : DetailsRoute($extra: DetailsRouteExtra(item: item))
+                .push<void>(context),
+      onSeeAll: () => _submitSearch(_controller.text),
+      onClose: _closeResultsPanel,
     );
   }
 
+  /// Saved as a favourite or to watch later, and never played: from the
+  /// library, less anything with watch history.
+  List<MultimediaItem> _savedNotStarted() {
+    ref.watch(accountDataRevisionProvider);
+    ref.watch(continueWatchingProvider);
+    try {
+      final library = ref.read(libraryRepositoryProvider);
+      final history = ref.read(historyRepositoryProvider);
+      final watched = <String>{
+        for (final entry in history.getWatchHistory()) entry.item.url,
+        for (final entry in history.getContinueWatching()) entry.item.url,
+      };
+      final seen = <String>{};
+      return <MultimediaItem>[
+        for (final category in const [
+          LibraryCategory.planToWatch,
+          LibraryCategory.favorite,
+        ])
+          for (final item in library.getLibraryItems(category: category))
+            if (item.contentType != MultimediaContentType.manga &&
+                !watched.contains(item.url) &&
+                seen.add(item.url))
+              item,
+      ].take(20).toList(growable: false);
+    } catch (_) {
+      return const <MultimediaItem>[];
+    }
+  }
+
+  bool _surprising = false;
+
+  /// Opens a random anime from MyAnimeList's two hundred best rated that the
+  /// catalogue carries; with MyAnimeList out of reach, one from home's rows.
+  Future<void> _surpriseMe() async {
+    if (_surprising) return;
+    setState(() => _surprising = true);
+    final random = math.Random();
+    MultimediaItem? pick;
+    try {
+      final load = ref.read(malRankingLoaderProvider);
+      for (var attempt = 0; attempt < 3 && pick == null; attempt++) {
+        final page = await load(
+          MalRanking.top,
+          random.nextInt(8) * malRankingPageSize,
+        );
+        if (page.items.isNotEmpty) {
+          pick = page.items[random.nextInt(page.items.length)];
+        }
+      }
+    } catch (_) {}
+    if (pick == null) {
+      final home = ref.read(homeDataProvider);
+      if (home is HomeSuccess) {
+        final all = home.data.values.expand((items) => items).toList();
+        if (all.isNotEmpty) pick = all[random.nextInt(all.length)];
+      }
+    }
+    if (!mounted) return;
+    setState(() => _surprising = false);
+    if (pick == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            appText(
+              context,
+              english: "Couldn't pick one right now. Try again.",
+              arabic: 'تعذر الاختيار الآن، حاول مرة أخرى.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+    await DetailsRoute($extra: DetailsRouteExtra(item: pick))
+        .push<void>(context);
+  }
+
   Widget _buildEmptyState(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     final query = ref.watch(searchQueryProvider);
     final isInputEmpty = _controller.text.trim().isEmpty;
 
     if (query.isEmpty || isInputEmpty) {
+      final recents = ref.watch(recentSearchesProvider);
+      final domain = ref.watch(searchDomainProvider);
+      // Before anything is typed: recent searches and what is popular.
+      // Characters are only found by name.
+      if (domain != SearchDomain.characters) {
+        return _buildStartPage(context) ?? _buildSearchInvitation(context);
+      }
       // What you searched for last is more useful than an invitation to
       // search, so it takes the placeholder's place when there is any.
-      final recents = ref.watch(recentSearchesProvider);
       if (recents.isNotEmpty) {
         return RecentSearchesView(
           searches: recents,
@@ -1107,31 +1261,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           onClearAll: () => ref.read(recentSearchesProvider.notifier).clear(),
         );
       }
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.movie_filter_rounded,
-              size: 64,
-              color: Theme.of(context).colorScheme.onSurfaceVariant
-                  .withValues(alpha: 0.65),
-            ),
-            const SizedBox(height: LayoutConstants.spacingMd),
-            Text(
-              l10n.searchFavoriteContent,
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              l10n.pressSearchOrEnter,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-      );
+      return _buildSearchInvitation(context);
     }
     return Center(
       child: Text(
@@ -1142,6 +1272,74 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         ),
         style: Theme.of(context).textTheme.bodyLarge
             ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+      ),
+    );
+  }
+
+  /// Recent searches and what is popular, for an empty search box, in place
+  /// of browsing the whole catalogue. Null where they do not belong:
+  /// something typed, filters set, or characters, which are only found by
+  /// name.
+  Widget? _buildStartPage(
+    BuildContext context, {
+    double topPadding = 0,
+    bool typing = false,
+  }) {
+    // While typing, the page shows behind the floating results.
+    if ((!typing && _controller.text.trim().isNotEmpty) ||
+        ref.watch(searchQueryProvider).isNotEmpty ||
+        ref.watch(searchProviderFiltersProvider).isNotEmpty) {
+      return null;
+    }
+    final domain = ref.watch(searchDomainProvider);
+    if (domain == SearchDomain.characters) return null;
+    final recents = ref.watch(recentSearchesProvider);
+    final page = SearchStartPage(
+      recents: recents,
+      onRecent: _submitSearch,
+      onRemoveRecent: (value) =>
+          ref.read(recentSearchesProvider.notifier).remove(value),
+      onClearRecents: () => ref.read(recentSearchesProvider.notifier).clear(),
+      topPadding: topPadding,
+      topTen: domain == SearchDomain.manga
+          ? const <MultimediaItem>[]
+          : ref.watch(malTopTenProvider).value ?? const <MultimediaItem>[],
+      notStarted: domain == SearchDomain.manga
+          ? const <MultimediaItem>[]
+          : _savedNotStarted(),
+      onOpen: (item) =>
+          DetailsRoute($extra: DetailsRouteExtra(item: item))
+              .push<void>(context),
+    );
+    if (page.hasAnything) return page;
+    return _buildSearchInvitation(context);
+  }
+
+  Widget _buildSearchInvitation(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.movie_filter_rounded,
+            size: 64,
+            color: Theme.of(context).colorScheme.onSurfaceVariant
+                .withValues(alpha: 0.65),
+          ),
+          const SizedBox(height: LayoutConstants.spacingMd),
+          Text(
+            l10n.searchFavoriteContent,
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            l10n.pressSearchOrEnter,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1238,269 +1436,6 @@ class _ActiveSearchFilterChips extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _SuggestionCard extends StatefulWidget {
-  final String suggestion;
-  final VoidCallback onTap;
-  final VoidCallback onFill;
-  final FocusNode? focusNode;
-  final bool isFirst;
-  final VoidCallback onFocusSearch;
-
-  const _SuggestionCard({
-    required this.suggestion,
-    required this.onTap,
-    required this.onFill,
-    required this.isFirst,
-    required this.onFocusSearch,
-    this.focusNode,
-  });
-
-  @override
-  State<_SuggestionCard> createState() => _SuggestionCardState();
-}
-
-class _SuggestionCardState extends State<_SuggestionCard> {
-  bool _isBodyHovered = false;
-  bool _isButtonHovered = false;
-
-  late final FocusNode _bodyNode;
-  late final FocusNode _buttonNode;
-
-  @override
-  void initState() {
-    super.initState();
-    _bodyNode = widget.focusNode ?? FocusNode();
-    _bodyNode.addListener(_onFocusChange);
-    _buttonNode = FocusNode();
-    _buttonNode.addListener(_onFocusChange);
-  }
-
-  void _onFocusChange() {
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  @override
-  void dispose() {
-    if (widget.focusNode == null) {
-      _bodyNode.dispose();
-    } else {
-      if (_bodyNode.hasFocus) {
-        _bodyNode.unfocus();
-      }
-      _bodyNode.removeListener(_onFocusChange);
-    }
-    _buttonNode.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final nativeFont = theme.textTheme.bodyLarge?.fontFamily;
-
-    final isBodyHighlighted = _isBodyHovered || _bodyNode.hasFocus;
-    final isButtonHighlighted = _isButtonHovered || _buttonNode.hasFocus;
-    final isAnyHighlighted = isBodyHighlighted || isButtonHighlighted;
-
-    final baseBorderColor = isDark
-        ? Colors.white.withValues(alpha: 0.1)
-        : theme.colorScheme.outlineVariant;
-    final highlightColor = theme.colorScheme.primary;
-
-    final borderColor = isAnyHighlighted
-        ? highlightColor.withValues(alpha: 0.85)
-        : baseBorderColor;
-
-    final cardBgColor = isDark
-        ? Colors.black.withValues(alpha: 0.65)
-        : theme.colorScheme.surfaceContainer;
-
-    final bodyHighlightBg = theme.colorScheme.primary.withValues(
-      alpha: isDark ? 0.25 : 0.12,
-    );
-
-    final buttonHighlightBg = theme.colorScheme.primary.withValues(
-      alpha: isDark ? 0.35 : 0.18,
-    );
-
-    final iconColor = isDark
-        ? Colors.white70
-        : theme.colorScheme.onSurfaceVariant;
-
-    final textColor = isDark ? Colors.white : theme.colorScheme.onSurface;
-
-    final buttonIconColor = isDark
-        ? Colors.white54
-        : theme.colorScheme.onSurfaceVariant;
-
-    final dividerColor = isDark
-        ? Colors.white.withValues(alpha: 0.08)
-        : theme.colorScheme.outlineVariant;
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeInOut,
-      decoration: BoxDecoration(
-        color: cardBgColor, // Theme-aware card background
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: borderColor, width: 1.5),
-        boxShadow: isAnyHighlighted
-            ? [
-                BoxShadow(
-                  color: highlightColor.withValues(alpha: 0.2),
-                  blurRadius: 8,
-                  spreadRadius: 1,
-                ),
-              ]
-            : null,
-      ),
-      child: Row(
-        children: [
-          // Main Body Focus (Search text)
-          Expanded(
-            child: Focus(
-              focusNode: _bodyNode,
-              onKeyEvent: (node, event) {
-                if (event is KeyDownEvent) {
-                  if (event.logicalKey == LogicalKeyboardKey.arrowUp &&
-                      widget.isFirst) {
-                    widget.onFocusSearch();
-                    return KeyEventResult.handled;
-                  }
-                  if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-                    _buttonNode.requestFocus();
-                    return KeyEventResult.handled;
-                  }
-                  if (event.logicalKey == LogicalKeyboardKey.select ||
-                      event.logicalKey == LogicalKeyboardKey.enter ||
-                      event.logicalKey == LogicalKeyboardKey.numpadEnter ||
-                      event.logicalKey == LogicalKeyboardKey.space) {
-                    widget.onTap();
-                    return KeyEventResult.handled;
-                  }
-                }
-                return KeyEventResult.ignored;
-              },
-              child: MouseRegion(
-                onEnter: (_) => setState(() => _isBodyHovered = true),
-                onExit: (_) => setState(() => _isBodyHovered = false),
-                child: GestureDetector(
-                  onTap: widget.onTap,
-                  behavior: HitTestBehavior.opaque,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    curve: Curves.easeInOut,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isBodyHighlighted
-                          ? bodyHighlightBg
-                          : Colors.transparent,
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(11),
-                        bottomLeft: Radius.circular(11),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.search_rounded,
-                          color: isBodyHighlighted ? highlightColor : iconColor,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Text(
-                            widget.suggestion,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontFamily: nativeFont,
-                              color: textColor,
-                              fontSize: 16.0,
-                              fontWeight: isBodyHighlighted
-                                  ? FontWeight.w500
-                                  : FontWeight.w400,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          // Vertical divider line between text block and arrow button
-          Container(width: 1.0, height: 24.0, color: dividerColor),
-          // Fill Button Focus (Arrow icon button)
-          Focus(
-            focusNode: _buttonNode,
-            onKeyEvent: (node, event) {
-              if (event is KeyDownEvent) {
-                if (event.logicalKey == LogicalKeyboardKey.arrowUp &&
-                    widget.isFirst) {
-                  widget.onFocusSearch();
-                  return KeyEventResult.handled;
-                }
-                if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-                  _bodyNode.requestFocus();
-                  return KeyEventResult.handled;
-                }
-                if (event.logicalKey == LogicalKeyboardKey.select ||
-                    event.logicalKey == LogicalKeyboardKey.enter ||
-                    event.logicalKey == LogicalKeyboardKey.numpadEnter ||
-                    event.logicalKey == LogicalKeyboardKey.space) {
-                  widget.onFill();
-                  return KeyEventResult.handled;
-                }
-              }
-              return KeyEventResult.ignored;
-            },
-            child: MouseRegion(
-              onEnter: (_) => setState(() => _isButtonHovered = true),
-              onExit: (_) => setState(() => _isButtonHovered = false),
-              child: GestureDetector(
-                onTap: widget.onFill,
-                behavior: HitTestBehavior.opaque,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.easeInOut,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isButtonHighlighted
-                        ? buttonHighlightBg
-                        : Colors.transparent,
-                    borderRadius: const BorderRadius.only(
-                      topRight: Radius.circular(11),
-                      bottomRight: Radius.circular(11),
-                    ),
-                  ),
-                  child: Icon(
-                    Icons.north_west_rounded,
-                    color: isButtonHighlighted
-                        ? highlightColor
-                        : buttonIconColor,
-                    size: 20,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
