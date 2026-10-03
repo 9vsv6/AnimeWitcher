@@ -50,6 +50,7 @@ import 'widgets/phone_suggestion_box.dart';
 import '../../home/presentation/home_provider.dart';
 import '../../home/presentation/home_state.dart';
 import '../data/mal_rankings.dart';
+import '../../home/presentation/view_all_screen.dart';
 import '../../../core/domain/entity/multimedia_item.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
@@ -245,39 +246,47 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
       // Use the exact same filter surface as the Home page so both entry
       // points have identical tabs, spacing, selection behavior, and glass.
-      selected = await showGlassDialog<ProviderSearchFilters>(
-        context: context,
-        builder: (dialogContext) => ProviderSearchFilterDialog(
-          options: options,
-          initialValue: ref.read(searchProviderFiltersProvider),
-          categories: [
-            for (final value in SearchDomain.values)
-              ProviderSearchFilterCategory(
-                value: value.name,
-                label: searchDomainLabel(dialogContext, value),
-                icon: searchDomainIcon(value),
-                noFiltersNote: switch (value) {
-                  SearchDomain.all => appText(
-                    dialogContext,
-                    english: 'All searches every section at once. Pick anime, animation or manga to filter one of them.',
-                    arabic: 'الكل يبحث في كل الأقسام معًا. اختر أنمي أو انميشن أو مانجا لتصفية قسم منها.',
-                  ),
-                  SearchDomain.characters => appText(
-                    dialogContext,
-                    english:
-                        'Characters are found by name: type one in search.',
-                    arabic: 'الشخصيات يُبحث عنها بالاسم: اكتب اسمًا في البحث.',
-                  ),
-                  _ => null,
-                },
-              ),
-          ],
-          category: domain.name,
-          optionsFor: (name) => optionsFor(SearchDomain.values.byName(name)),
-          onCategoryApplied: (name) =>
-              pickedDomain = SearchDomain.values.byName(name),
-        ),
+      // A phone's filters rise from the bottom over the whole screen.
+      final sheet = _isPhone(context);
+      Widget filters(BuildContext dialogContext) => ProviderSearchFilterDialog(
+        asSheet: sheet,
+        options: options,
+        initialValue: ref.read(searchProviderFiltersProvider),
+        categories: [
+          for (final value in SearchDomain.values)
+            ProviderSearchFilterCategory(
+              value: value.name,
+              label: searchDomainLabel(dialogContext, value),
+              icon: searchDomainIcon(value),
+              noFiltersNote: switch (value) {
+                SearchDomain.all => appText(
+                  dialogContext,
+                  english: 'All searches every section at once. Pick anime, animation or manga to filter one of them.',
+                  arabic: 'الكل يبحث في كل الأقسام معًا. اختر أنمي أو انميشن أو مانجا لتصفية قسم منها.',
+                ),
+                SearchDomain.characters => appText(
+                  dialogContext,
+                  english: 'Characters are found by name: type one in search.',
+                  arabic: 'الشخصيات يُبحث عنها بالاسم: اكتب اسمًا في البحث.',
+                ),
+                _ => null,
+              },
+            ),
+        ],
+        category: domain.name,
+        optionsFor: (name) => optionsFor(SearchDomain.values.byName(name)),
+        onCategoryApplied: (name) =>
+            pickedDomain = SearchDomain.values.byName(name),
       );
+      selected = sheet
+          ? await showProviderSearchFilterSheet(
+              context: context,
+              builder: filters,
+            )
+          : await showGlassDialog<ProviderSearchFilters>(
+              context: context,
+              builder: filters,
+            );
     } finally {
       if (mounted) setState(() => _isLoadingProviderFilters = false);
     }
@@ -1190,6 +1199,29 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     }
   }
 
+  /// A ranking as a whole page, loading on as it scrolls.
+  void _openRanking(
+    BuildContext context,
+    MalRanking ranking,
+    List<MultimediaItem> first,
+  ) {
+    final load = ref.read(malRankingLoaderProvider);
+    void open(MultimediaItem item) =>
+        DetailsRoute($extra: DetailsRouteExtra(item: item)).push<void>(context);
+    ViewAllRoute(
+      $extra: ViewAllRouteExtra(
+        title: ranking == MalRanking.topMovies
+            ? appText(context, english: 'Top movies', arabic: 'أفضل الأفلام')
+            : appText(context, english: 'Top rated', arabic: 'الأعلى تقييمًا'),
+        initialMediaList: first,
+        category: ViewAllCategory.providerContent,
+        onTap: open,
+        loadPage: (offset) => load(ranking, offset),
+        forcePortrait: true,
+      ),
+    ).push<void>(context);
+  }
+
   bool _surprising = false;
 
   /// Opens a random anime from MyAnimeList's two hundred best rated that the
@@ -1294,6 +1326,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final domain = ref.watch(searchDomainProvider);
     if (domain == SearchDomain.characters) return null;
     final recents = ref.watch(recentSearchesProvider);
+    // The anime rows; manga has none of its own yet.
+    final anime = domain != SearchDomain.manga;
+    final topRated = anime
+        ? ref.watch(malRankingProvider(MalRanking.top)).value ??
+              const <MultimediaItem>[]
+        : const <MultimediaItem>[];
+    final topMovies = anime
+        ? ref.watch(malRankingProvider(MalRanking.topMovies)).value ??
+              const <MultimediaItem>[]
+        : const <MultimediaItem>[];
     final page = SearchStartPage(
       recents: recents,
       onRecent: _submitSearch,
@@ -1301,12 +1343,18 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           ref.read(recentSearchesProvider.notifier).remove(value),
       onClearRecents: () => ref.read(recentSearchesProvider.notifier).clear(),
       topPadding: topPadding,
-      topTen: domain == SearchDomain.manga
-          ? const <MultimediaItem>[]
-          : ref.watch(malTopTenProvider).value ?? const <MultimediaItem>[],
-      notStarted: domain == SearchDomain.manga
-          ? const <MultimediaItem>[]
-          : _savedNotStarted(),
+      topTen: anime
+          ? ref.watch(malTopTenProvider).value ?? const <MultimediaItem>[]
+          : const <MultimediaItem>[],
+      notStarted: anime ? _savedNotStarted() : const <MultimediaItem>[],
+      topRated: topRated.take(20).toList(growable: false),
+      onTopRatedViewAll: topRated.isEmpty
+          ? null
+          : () => _openRanking(context, MalRanking.top, topRated),
+      topMovies: topMovies.take(20).toList(growable: false),
+      onTopMoviesViewAll: topMovies.isEmpty
+          ? null
+          : () => _openRanking(context, MalRanking.topMovies, topMovies),
       onOpen: (item) =>
           DetailsRoute($extra: DetailsRouteExtra(item: item))
               .push<void>(context),

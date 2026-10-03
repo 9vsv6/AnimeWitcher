@@ -7,9 +7,9 @@ import '../../../../shared/widgets/multimedia_card.dart';
 import '../../../../shared/widgets/paged_rail.dart';
 import '../../../../shared/widgets/poster_plate.dart';
 
-/// What the search tab shows before anything is typed: a random pick, the
-/// searches made last, this week's top ten and the saved shows not yet
-/// started. The rankings as rows are on the home page.
+/// What the search tab shows before anything is typed: the searches made
+/// last, this week's top ten, the best rated films and shows, and the saved
+/// shows not yet started.
 class SearchStartPage extends StatelessWidget {
   const SearchStartPage({
     super.key,
@@ -22,6 +22,10 @@ class SearchStartPage extends StatelessWidget {
     this.surprising = false,
     this.topTen = const <MultimediaItem>[],
     this.notStarted = const <MultimediaItem>[],
+    this.topRated = const <MultimediaItem>[],
+    this.onTopRatedViewAll,
+    this.topMovies = const <MultimediaItem>[],
+    this.onTopMoviesViewAll,
     this.topPadding = 0,
   });
 
@@ -43,6 +47,18 @@ class SearchStartPage extends StatelessWidget {
   /// Saved to the library but not watched yet.
   final List<MultimediaItem> notStarted;
 
+  /// MyAnimeList's best rated of all time.
+  final List<MultimediaItem> topRated;
+
+  /// Opens the whole best-rated list; no "view all" without it.
+  final VoidCallback? onTopRatedViewAll;
+
+  /// The best rated films.
+  final List<MultimediaItem> topMovies;
+
+  /// Opens the whole list of films; no "view all" without it.
+  final VoidCallback? onTopMoviesViewAll;
+
   /// Room left above for the floating search bar.
   final double topPadding;
 
@@ -50,16 +66,74 @@ class SearchStartPage extends StatelessWidget {
       onSurprise != null ||
       topTen.isNotEmpty ||
       notStarted.isNotEmpty ||
+      topRated.isNotEmpty ||
+      topMovies.isNotEmpty ||
       recents.isNotEmpty;
 
-  Widget _heading(BuildContext context, double side, String text) => Padding(
-    padding: EdgeInsetsDirectional.fromSTEB(side, 22, side, 10),
-    child: Text(
+  Widget _heading(
+    BuildContext context,
+    double side,
+    String text, {
+    VoidCallback? onViewAll,
+  }) {
+    final title = Text(
       text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
       style: Theme.of(context).textTheme.titleLarge
           ?.copyWith(fontWeight: FontWeight.w800),
-    ),
-  );
+    );
+    if (onViewAll == null) {
+      return Padding(
+        padding: EdgeInsetsDirectional.fromSTEB(side, 22, side, 10),
+        child: title,
+      );
+    }
+    return Padding(
+      padding: EdgeInsetsDirectional.fromSTEB(side, 14, side - 8, 2),
+      child: Row(
+        children: [
+          Expanded(child: title),
+          TextButton(
+            onPressed: onViewAll,
+            child: Text(
+              appText(context, english: 'View all', arabic: 'عرض الكل'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// A row of posters with their titles, as the library's.
+  Widget _posterRail(
+    BuildContext context,
+    double side,
+    String name,
+    List<MultimediaItem> items,
+  ) {
+    return SizedBox(
+      height: MultimediaCardLayout.listHeight(130, isPortrait: true),
+      child: PagedRail(
+        key: ValueKey<String>('search-$name'),
+        itemExtent: 140,
+        padding: EdgeInsets.symmetric(horizontal: side - 4),
+        itemCount: items.length,
+        itemBuilder: (context, index) {
+          final item = items[index];
+          return Padding(
+            padding: const EdgeInsetsDirectional.only(end: 10),
+            child: MultimediaCard.fromItem(
+              key: ValueKey<String>('search-$name-${item.url}'),
+              item: item,
+              heroTag: 'search_${name}_${item.url}',
+              onTap: () => onOpen(item),
+            ),
+          );
+        },
+      ),
+    );
+  }
 
   /// "Surprise me": a random well-rated anime.
   Widget _surpriseButton(BuildContext context) {
@@ -180,6 +254,24 @@ class SearchStartPage extends StatelessWidget {
             ),
           ),
         ],
+        if (topMovies.isNotEmpty) ...[
+          _heading(
+            context,
+            side,
+            appText(context, english: 'Top movies', arabic: 'أفضل الأفلام'),
+            onViewAll: onTopMoviesViewAll,
+          ),
+          _posterRail(context, side, 'top-movies', topMovies),
+        ],
+        if (topRated.isNotEmpty) ...[
+          _heading(
+            context,
+            side,
+            appText(context, english: 'Top rated', arabic: 'الأعلى تقييمًا'),
+            onViewAll: onTopRatedViewAll,
+          ),
+          _posterRail(context, side, 'top-rated', topRated),
+        ],
         if (notStarted.isNotEmpty) ...[
           _heading(
             context,
@@ -190,27 +282,7 @@ class SearchStartPage extends StatelessWidget {
               arabic: 'في قائمتك ولم تبدأه',
             ),
           ),
-          SizedBox(
-            height: MultimediaCardLayout.listHeight(130, isPortrait: true),
-            child: PagedRail(
-              key: const ValueKey<String>('search-not-started'),
-              itemExtent: 140,
-              padding: EdgeInsets.symmetric(horizontal: side - 4),
-              itemCount: notStarted.length,
-              itemBuilder: (context, index) {
-                final item = notStarted[index];
-                return Padding(
-                  padding: const EdgeInsetsDirectional.only(end: 10),
-                  child: MultimediaCard.fromItem(
-                    key: ValueKey<String>('search-not-started-${item.url}'),
-                    item: item,
-                    heroTag: 'search_not_started_${item.url}',
-                    onTap: () => onOpen(item),
-                  ),
-                );
-              },
-            ),
-          ),
+          _posterRail(context, side, 'not-started', notStarted),
         ],
       ],
     );

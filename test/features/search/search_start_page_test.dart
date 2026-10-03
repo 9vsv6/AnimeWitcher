@@ -130,4 +130,46 @@ void main() {
     expect(opened?.title, 'Show 2');
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('the best rated films and shows get rows with view all', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    MultimediaItem? opened;
+    var viewAll = 0;
+    MultimediaItem show(String name) => MultimediaItem(
+      title: name,
+      url: 'https://example.test/$name',
+      posterUrl: '',
+      contentType: MultimediaContentType.anime,
+    );
+    final page = SearchStartPage(
+      recents: const <String>[],
+      onRecent: (_) {},
+      onRemoveRecent: (_) {},
+      onClearRecents: () {},
+      onOpen: (item) => opened = item,
+      topMovies: [show('Film')],
+      onTopMoviesViewAll: () => viewAll += 10,
+      topRated: [show('Best')],
+      onTopRatedViewAll: () => viewAll++,
+    );
+    expect(page.hasAnything, isTrue);
+    await tester.pumpWidget(_app(page));
+
+    expect(find.text('أفضل الأفلام'), findsOneWidget);
+    expect(find.text('الأعلى تقييمًا'), findsOneWidget);
+    await tester.tap(find.text('عرض الكل').first);
+    await tester.tap(find.text('عرض الكل').last);
+    expect(viewAll, 11);
+    await tester.tap(
+      find.byKey(
+        const ValueKey<String>('search-top-movies-https://example.test/Film'),
+      ),
+    );
+    expect(opened?.title, 'Film');
+    expect(tester.takeException(), isNull);
+  });
 }

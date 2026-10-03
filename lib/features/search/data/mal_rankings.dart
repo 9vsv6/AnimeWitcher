@@ -23,6 +23,9 @@ enum MalRanking {
 
   /// Most members: the most watched.
   popular,
+
+  /// The best rated films, as AniList's "top movies" ranks them.
+  topMovies,
 }
 
 /// One page of a ranking: MyAnimeList ids in rank order.
@@ -92,51 +95,56 @@ Future<MalRankingPage> fetchMalRanking(
   MalRanking ranking,
   int page,
 ) async {
-  try {
-    final response = await _inJikanTurn(
-      () => dio.get<Map<String, dynamic>>(
-        _jikanTopEndpoint,
-        queryParameters: <String, dynamic>{
-          'page': page,
-          'limit': malRankingPageSize,
-          'sfw': true,
-          if (ranking == MalRanking.airing) 'filter': 'airing',
-          if (ranking == MalRanking.popular) 'filter': 'bypopularity',
-        },
-        // Jikan answers a compressed request with 504 instead of the list.
-        options: Options(
-          headers: const <String, String>{
-            'Accept': 'application/json',
-            'Accept-Encoding': 'identity',
+  // Films are ranked as AniList ranks them; Jikan is for the other rows.
+  if (ranking != MalRanking.topMovies) {
+    try {
+      final response = await _inJikanTurn(
+        () => dio.get<Map<String, dynamic>>(
+          _jikanTopEndpoint,
+          queryParameters: <String, dynamic>{
+            'page': page,
+            'limit': malRankingPageSize,
+            'sfw': true,
+            if (ranking == MalRanking.airing) 'filter': 'airing',
+            if (ranking == MalRanking.popular) 'filter': 'bypopularity',
           },
+          // Jikan answers a compressed request with 504 instead of the list.
+          options: Options(
+            headers: const <String, String>{
+              'Accept': 'application/json',
+              'Accept-Encoding': 'identity',
+            },
+          ),
         ),
-      ),
-    );
-    final ids = malIdsFromJikanList(response.data);
-    if (ids.isNotEmpty) {
-      final pagination = response.data?['pagination'];
-      final hasMore = pagination is Map
-          ? pagination['has_next_page'] == true
-          : ids.length >= malRankingPageSize;
-      return MalRankingPage(ids, hasMore: hasMore);
+      );
+      final ids = malIdsFromJikanList(response.data);
+      if (ids.isNotEmpty) {
+        final pagination = response.data?['pagination'];
+        final hasMore = pagination is Map
+            ? pagination['has_next_page'] == true
+            : ids.length >= malRankingPageSize;
+        return MalRankingPage(ids, hasMore: hasMore);
+      }
+    } catch (_) {
+      // Falls through to AniList.
     }
-  } catch (_) {
-    // Falls through to AniList.
   }
 
   final sort = switch (ranking) {
     MalRanking.airing => 'TRENDING_DESC',
-    MalRanking.top => 'SCORE_DESC',
+    MalRanking.top || MalRanking.topMovies => 'SCORE_DESC',
     MalRanking.popular => 'POPULARITY_DESC',
   };
   final response = await dio.post<Map<String, dynamic>>(
     _aniListEndpoint,
     data: <String, dynamic>{
       'query': r'''
-query ($page: Int, $perPage: Int, $sort: [MediaSort], $status: MediaStatus) {
+query ($page: Int, $perPage: Int, $sort: [MediaSort], $status: MediaStatus,
+    $format: MediaFormat) {
   Page(page: $page, perPage: $perPage) {
     pageInfo { hasNextPage }
-    media(type: ANIME, isAdult: false, sort: $sort, status: $status) { idMal }
+    media(type: ANIME, isAdult: false, sort: $sort, status: $status,
+        format: $format) { idMal }
   }
 }''',
       'variables': <String, dynamic>{
@@ -144,6 +152,7 @@ query ($page: Int, $perPage: Int, $sort: [MediaSort], $status: MediaStatus) {
         'perPage': malRankingPageSize,
         'sort': <String>[sort],
         if (ranking == MalRanking.airing) 'status': 'RELEASING',
+        if (ranking == MalRanking.topMovies) 'format': 'MOVIE',
       },
     },
     options: Options(
