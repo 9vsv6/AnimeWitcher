@@ -356,12 +356,13 @@ class SettingsScreen extends ConsumerWidget {
               english: playerSettings.skipSegmentsEnabled
                   ? 'A skip button appears when the episode has known '
                         'times. The times are community-submitted '
-                        '(AniSkip), so some episodes have none.'
+                        '(AniSkip, IntroDB, SkipDB), so some episodes have '
+                        'none.'
                   : 'Disabled',
               arabic: playerSettings.skipSegmentsEnabled
                   ? 'يظهر زر التخطي عند توفر توقيتات للحلقة. التوقيتات '
-                        'من مساهمات المستخدمين (AniSkip)، لذا لا تتوفر '
-                        'لكل الحلقات.'
+                        'من مساهمات المستخدمين (AniSkip وIntroDB وSkipDB)، '
+                        'لذا لا تتوفر لكل الحلقات.'
                   : 'معطل',
             ),
             trailing: Switch(

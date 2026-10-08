@@ -35,6 +35,7 @@ import '../../settings/presentation/player_settings_provider.dart';
 import '../../../../core/services/local_proxy_service.dart';
 import '../../../../core/network/http_defaults.dart';
 import '../../skip/data/intro_db_service.dart';
+import '../../skip/data/imdb_skip_sources.dart';
 import '../../skip/data/aniskip_service.dart';
 import '../../skip/data/chapter_skip_source.dart';
 import '../../skip/data/anime_id_mappings.dart';
@@ -929,7 +930,7 @@ class PlayerController extends Notifier<PlayerState> {
 
     if (kDebugMode) {
       debugPrint('=============================================');
-      debugPrint('SKIP SEGMENTS (AniSkip/IntroDB/chapters)');
+      debugPrint('SKIP SEGMENTS (AniSkip/IntroDB/IntroDB.app/SkipDB/chapters)');
       debugPrint(
         'ids: mal=$malId tmdb=${state.tmdbId} imdb=${state.imdbId} '
         'anilist=${_item.syncData?['anilist'] ?? _item.syncData?['anilistId'] ?? _item.syncData?['anilist_id']}',
@@ -942,7 +943,12 @@ class PlayerController extends Notifier<PlayerState> {
     // for, without ever contradicting it.
     var introDbSegments = const <SkipSegment>[];
     var aniSkipSegments = const <SkipSegment>[];
+    var introDbAppSegments = const <SkipSegment>[];
+    var skipDbSegments = const <SkipSegment>[];
     var chapterSegments = const <SkipSegment>[];
+    // The IMDb id the IMDb-only databases are asked with: the item's own,
+    // or for anime the one ani.zip keeps against its MyAnimeList id.
+    var imdbId = state.imdbId;
     final int season = _episode!.season > 0 ? _episode!.season : 1;
     final int episodeNum = _episode!.episode > 0 ? _episode!.episode : 1;
 
@@ -1060,13 +1066,17 @@ class PlayerController extends Notifier<PlayerState> {
       // AniSkip waits for a viewer to submit an episode, this one carries
       // the licensed catalogue — and anime never reached it before, because
       // no anime source hands out a TMDB or IMDb id.
-      if (introDbSegments.isEmpty && resolvedMalId != null) {
+      if ((introDbSegments.isEmpty || imdbId == null) &&
+          resolvedMalId != null) {
         try {
           final ids = await ref
               .read(animeIdMappingsProvider)
               .byMalId(resolvedMalId);
           if (_isDisposed) return;
-          if (ids != null && (ids.imdbId != null || ids.tmdbId != null)) {
+          imdbId ??= ids?.imdbId;
+          if (introDbSegments.isEmpty &&
+              ids != null &&
+              (ids.imdbId != null || ids.tmdbId != null)) {
             final durationSec = await _awaitDurationSeconds();
             if (_isDisposed) return;
             introDbSegments = await ref
@@ -1095,10 +1105,47 @@ class PlayerController extends Notifier<PlayerState> {
         debugPrint('AniSkip: Bypassed lookup (media is not anime/animated)');
       }
     }
-    // 3. The file's own chapter markers. Per-file data, so it covers the
-    // episodes no crowd-sourced service has, and it costs no network call.
+    // 3. IntroDB.app and SkipDB: two more IMDb-keyed crowd databases, asked
+    // together. They rank below AniSkip and TheIntroDB and fill the episodes
+    // those have nothing for.
     final durationSec = await _awaitDurationSeconds();
     if (_isDisposed) return;
+    if (imdbId != null) {
+      try {
+        final results = await Future.wait(<Future<List<SkipSegment>>>[
+          ref
+              .read(introDbAppServiceProvider)
+              .getSkipSegments(
+                imdbId: imdbId,
+                season: season,
+                episode: episodeNum,
+                duration: durationSec,
+              ),
+          ref
+              .read(skipDbServiceProvider)
+              .getSkipSegments(
+                imdbId: imdbId,
+                season: season,
+                episode: episodeNum,
+                duration: durationSec,
+              ),
+        ]);
+        if (_isDisposed) return;
+        introDbAppSegments = results[0];
+        skipDbSegments = results[1];
+        if (kDebugMode) {
+          debugPrint(
+            'IntroDB.app returned ${introDbAppSegments.length}, '
+            'SkipDB ${skipDbSegments.length} segments ($imdbId)',
+          );
+        }
+      } catch (e) {
+        if (kDebugMode) debugPrint('IntroDB.app/SkipDB error: $e');
+      }
+    }
+
+    // 4. The file's own chapter markers. Per-file data, so it covers the
+    // episodes no crowd-sourced service has, and it costs no network call.
     try {
       chapterSegments = await ChapterSkipSource.read(
         _player,
@@ -1121,6 +1168,8 @@ class PlayerController extends Notifier<PlayerState> {
     final merged = SkipSegment.merge(<List<SkipSegment>>[
       aniSkipSegments,
       introDbSegments,
+      introDbAppSegments,
+      skipDbSegments,
       chapterSegments,
     ], durationSec: durationSec?.toDouble());
 
