@@ -1103,37 +1103,19 @@ class _SeekBarState extends State<_SeekBar> {
               }
             }
 
-            // Adjust intervals to introduce a 2px visual gap (seam)
-            final List<_TrackInterval> visualIntervals = [];
-            for (final interval in intervals) {
-              double start = interval.start;
-              double end = interval.end;
-              if (start > 0.0) {
-                start += 1.0;
-              }
-              if (end < trackWidth) {
-                end -= 1.0;
-              }
-              if (start < end) {
-                visualIntervals.add(
-                  _TrackInterval(
-                    start: start,
-                    end: end,
-                    isSkipSegment: interval.isSkipSegment,
-                  ),
-                );
-              }
-            }
+            // One continuous bar: the sections meet edge to edge, and a skip
+            // section is told apart by its colour alone.
+            final List<_TrackInterval> visualIntervals = intervals;
 
-            // Precompute heights for each interval depending on hover position
-            final List<double> intervalHeights = [];
-            for (final interval in visualIntervals) {
-              final bool isIntervalHovered =
-                  (_isTrackHovered || _isDragging) &&
-                  _hoverX >= interval.start &&
-                  _hoverX <= interval.end;
-              intervalHeights.add(isIntervalHovered ? 7.0 : 5.0);
-            }
+            // The whole bar thickens together on hover, so no section stands
+            // proud of its neighbours.
+            final double barHeight = (_isTrackHovered || _isDragging)
+                ? 7.0
+                : 5.0;
+            final List<double> intervalHeights = List<double>.filled(
+              visualIntervals.length,
+              barHeight,
+            );
 
             // Thumb grows (but stays a round handle) while hovering anywhere
             // on the track or actively dragging — always visible at rest so
@@ -1255,7 +1237,10 @@ class _SeekBarState extends State<_SeekBar> {
                               height: intervalHeights[i],
                               width: double.infinity,
                               decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(4.0),
+                                borderRadius: _barEnds(
+                                  visualIntervals[i],
+                                  trackWidth,
+                                ),
                                 color: visualIntervals[i].isSkipSegment
                                     ? HotstarPlayerStyle.skipSegment.withValues(
                                         alpha: 0.35,
@@ -1282,6 +1267,7 @@ class _SeekBarState extends State<_SeekBar> {
                         _buildIntervalProgress(
                           visualIntervals[i],
                           progressWidth,
+                          trackWidth,
                           intervalHeights[i],
                         ),
 
@@ -1434,7 +1420,7 @@ class _SeekBarState extends State<_SeekBar> {
           height: height,
           width: double.infinity,
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(4.0),
+            borderRadius: _barEnds(interval, trackWidth),
             child: Container(color: Colors.white.withValues(alpha: 0.25)),
           ),
         ),
@@ -1442,9 +1428,22 @@ class _SeekBarState extends State<_SeekBar> {
     );
   }
 
+  /// Rounds only the bar's own two ends; where two sections meet, the
+  /// corners stay square so the join does not show as a notch.
+  static BorderRadius _barEnds(_TrackInterval interval, double trackWidth) {
+    const round = Radius.circular(4.0);
+    final first = interval.start <= 0.0;
+    final last = interval.end >= trackWidth;
+    return BorderRadius.horizontal(
+      left: first ? round : Radius.zero,
+      right: last ? round : Radius.zero,
+    );
+  }
+
   Widget _buildIntervalProgress(
     _TrackInterval interval,
     double progressWidth,
+    double trackWidth,
     double height,
   ) {
     final double intervalProgressWidth = (progressWidth - interval.start).clamp(
@@ -1463,7 +1462,7 @@ class _SeekBarState extends State<_SeekBar> {
           height: height,
           width: double.infinity,
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(4.0),
+            borderRadius: _barEnds(interval, trackWidth),
             child: Container(
               color: interval.isSkipSegment
                   ? HotstarPlayerStyle.skipSegment
