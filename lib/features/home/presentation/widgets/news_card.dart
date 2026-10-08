@@ -192,6 +192,279 @@ class NewsCard extends StatelessWidget {
   }
 }
 
+/// Opens the comments on [item].
+void openNewsComments(BuildContext context, NewsItem item) {
+  final target = animeWitcherNewsCommentTarget(item);
+  pushOverTaskbar<void>(
+    context,
+    MaterialPageRoute<void>(
+      builder: (_) => AnimeWitcherCommentsScreen(target: target),
+    ),
+  );
+}
+
+/// The news picture, or an article icon while it loads or when it fails.
+class NewsImage extends StatelessWidget {
+  const NewsImage({super.key, required this.item, required this.paintedWidth});
+
+  final NewsItem item;
+  final double paintedWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final fallback = ColoredBox(
+      color: colors.surfaceContainerHighest,
+      child: Center(
+        child: Icon(
+          Icons.article_outlined,
+          color: colors.onSurfaceVariant.withValues(alpha: 0.55),
+          size: 36,
+        ),
+      ),
+    );
+    final url = item.imageUrl.trim();
+    if (url.isEmpty) return fallback;
+    return ArtworkDecode(
+      paintedWidth: paintedWidth,
+      builder: (BuildContext context, int? decodeWidth) => CachedNetworkImage(
+        imageUrl: url,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        memCacheWidth: decodeWidth,
+        filterQuality: FilterQuality.medium,
+        fadeInDuration: const Duration(milliseconds: 120),
+        fadeOutDuration: Duration.zero,
+        placeholder: (context, url) => fallback,
+        errorWidget: (context, url, error) => fallback,
+      ),
+    );
+  }
+}
+
+/// The comments and, when the story is about one, the anime: small icons
+/// on a dark disc so they read over any picture.
+class _NewsActions extends StatelessWidget {
+  const _NewsActions({required this.item, this.onAnimeTap});
+
+  final NewsItem item;
+  final VoidCallback? onAnimeTap;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget disc(IconData icon, String tooltip, VoidCallback? onTap) => Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.black.withValues(alpha: 0.55),
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(7),
+            child: Icon(icon, size: 18, color: Colors.white),
+          ),
+        ),
+      ),
+    );
+    final arabic = Localizations.localeOf(context).languageCode == 'ar';
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (item.hasAnimeLink && onAnimeTap != null) ...[
+          disc(
+            Icons.link_rounded,
+            arabic ? 'فتح الأنمي' : 'Open anime',
+            onAnimeTap,
+          ),
+          const SizedBox(width: 6),
+        ],
+        disc(
+          Icons.chat_bubble_outline_rounded,
+          arabic ? 'التعليقات' : 'Comments',
+          () => openNewsComments(context, item),
+        ),
+      ],
+    );
+  }
+}
+
+/// A lead story in the magazine layout: the picture fills the tile and the
+/// title sits over its darkened lower part.
+class NewsFeatureTile extends StatelessWidget {
+  const NewsFeatureTile({
+    super.key,
+    required this.item,
+    this.large = false,
+    this.onOpen,
+    this.onAnimeTap,
+  });
+
+  final NewsItem item;
+
+  /// The top story: a bigger title, three lines of it.
+  final bool large;
+  final VoidCallback? onOpen;
+  final VoidCallback? onAnimeTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final time = newsTimeAgo(context, item.publishedAt);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Material(
+        color: Colors.black,
+        child: InkWell(
+          onTap: onOpen,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              LayoutBuilder(
+                builder: (context, constraints) =>
+                    NewsImage(item: item, paintedWidth: constraints.maxWidth),
+              ),
+              const IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Colors.transparent, Color(0xE6000000)],
+                      stops: [0.35, 1],
+                    ),
+                  ),
+                ),
+              ),
+              PositionedDirectional(
+                top: 10,
+                end: 10,
+                child: _NewsActions(item: item, onAnimeTap: onAnimeTap),
+              ),
+              PositionedDirectional(
+                start: large ? 18 : 12,
+                end: large ? 18 : 12,
+                bottom: large ? 16 : 10,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      item.title,
+                      maxLines: large ? 3 : 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: large ? 20 : 14,
+                        height: 1.3,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    if (time.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        time,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.75),
+                          fontSize: large ? 12.5 : 11,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A story in the magazine grid: the picture, then the title and time.
+class NewsGridTile extends StatelessWidget {
+  const NewsGridTile({
+    super.key,
+    required this.item,
+    this.onOpen,
+    this.onAnimeTap,
+  });
+
+  final NewsItem item;
+  final VoidCallback? onOpen;
+  final VoidCallback? onAnimeTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final time = newsTimeAgo(context, item.publishedAt);
+    return Material(
+      color: colors.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onOpen,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AspectRatio(
+              aspectRatio: 16 / 9,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  LayoutBuilder(
+                    builder: (context, constraints) => NewsImage(
+                      item: item,
+                      paintedWidth: constraints.maxWidth,
+                    ),
+                  ),
+                  PositionedDirectional(
+                    top: 8,
+                    end: 8,
+                    child: _NewsActions(item: item, onAnimeTap: onAnimeTap),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 9, 12, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item.title,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: colors.onSurface,
+                          fontSize: 13.5,
+                          height: 1.3,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    if (time.isNotEmpty)
+                      Text(
+                        time,
+                        maxLines: 1,
+                        style: TextStyle(
+                          color: colors.onSurfaceVariant,
+                          fontSize: 11,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _NewsActionIcon extends StatelessWidget {
   const _NewsActionIcon({
     required this.icon,
@@ -217,7 +490,11 @@ class _NewsActionIcon extends StatelessWidget {
   }
 }
 
-String _newsTimeAgo(BuildContext context, DateTime? date) {
+String _newsTimeAgo(BuildContext context, DateTime? date) =>
+    newsTimeAgo(context, date);
+
+/// How long ago [date] was ("منذ 4 ساعة"), in the app's language.
+String newsTimeAgo(BuildContext context, DateTime? date) {
   if (date == null) return '';
   final difference = DateTime.now().difference(date);
   final elapsed = difference.isNegative ? Duration.zero : difference;
