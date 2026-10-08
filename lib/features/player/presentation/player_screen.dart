@@ -27,6 +27,9 @@ import 'widgets/animewitcher_player_controls.dart';
 import 'widgets/hotstar_player_style.dart';
 import 'widgets/player_ltr.dart';
 import 'player_controller.dart';
+import 'discord_presence_driver.dart';
+import '../../../../core/discord/discord_presence.dart';
+import '../../../../core/providers/locale_provider.dart';
 import 'player_shortcuts.dart';
 import 'player_gesture_handler.dart';
 
@@ -110,6 +113,27 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   late final PlayerController _playerController;
   ProviderSubscription<AsyncValue<PlayerSettings>>? _settingsSub;
   ProviderSubscription<PlayerState>? _playerStateSub;
+  DiscordPresenceDriver? _discordPresence;
+
+  /// Shows what is playing as the user's Discord status, on a computer with
+  /// Discord open, unless turned off in the player settings.
+  void _startDiscordPresence() {
+    final presence = ref.read(discordPresenceProvider);
+    final wanted =
+        ref
+            .read(settingsRepositoryProvider)
+            .getPlayerSetting<bool>(
+              kDiscordPresenceSetting,
+              defaultValue: true,
+            ) ??
+        true;
+    if (!presence.enabled || !wanted) return;
+    _discordPresence = DiscordPresenceDriver(
+      snapshot: _playerController.watchSnapshot,
+      presence: presence,
+      arabic: ref.read(localeProvider).languageCode == 'ar',
+    )..start();
+  }
 
   @override
   void initState() {
@@ -215,6 +239,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     );
 
     _playerController = ref.read(playerControllerProvider.notifier);
+    _startDiscordPresence();
     _playerStateSub = ref.listenManual<PlayerState>(playerControllerProvider, (
       _,
       __,
@@ -366,6 +391,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
     _settingsSub?.close();
     _playerStateSub?.close();
+    _discordPresence?.stop();
     _playerController.disposeController(player: _player);
 
     _player.dispose();

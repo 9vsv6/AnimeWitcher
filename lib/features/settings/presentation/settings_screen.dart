@@ -432,6 +432,37 @@ class SettingsScreen extends ConsumerWidget {
                   .setAutoSkipCredits(!playerSettings.autoSkipCredits),
             ),
           ],
+          // Discord's desktop client is the only one with a status to set.
+          if (Platform.isWindows || Platform.isMacOS || Platform.isLinux)
+            SettingsTile(
+              icon: Icons.videogame_asset_rounded,
+              title: appText(
+                context,
+                english: 'Show on Discord',
+                arabic: 'العرض في ديسكورد',
+              ),
+              subtitle: appText(
+                context,
+                english: playerSettings.discordPresence
+                    ? 'Your Discord status shows the anime you are watching, '
+                          'its season, episode and poster, while Discord is '
+                          'open.'
+                    : 'Disabled',
+                arabic: playerSettings.discordPresence
+                    ? 'تظهر حالتك في ديسكورد الأنمي الذي تشاهده مع الموسم '
+                          'والحلقة والصورة، طالما ديسكورد مفتوح.'
+                    : 'معطل',
+              ),
+              trailing: Switch(
+                value: playerSettings.discordPresence,
+                onChanged: (val) => ref
+                    .read(playerSettingsProvider.notifier)
+                    .setDiscordPresence(val),
+              ),
+              onTap: () => ref
+                  .read(playerSettingsProvider.notifier)
+                  .setDiscordPresence(!playerSettings.discordPresence),
+            ),
           SettingsTile(
             icon: Icons.fast_forward_rounded,
             title: appText(

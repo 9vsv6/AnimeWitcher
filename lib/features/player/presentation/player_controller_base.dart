@@ -50,6 +50,7 @@ import '../data/anime4k_shader_library.dart';
 import '../data/anime4k_performance.dart';
 import '../data/anime4k_metal_bridge.dart';
 import '../data/anime4k_metal_ffi.dart';
+import '../../../core/discord/discord_presence.dart';
 
 enum PlaybackUiPhaseKind {
   idle,
@@ -630,6 +631,29 @@ class PlayerController extends Notifier<PlayerState> {
       _connectivitySub?.cancel();
     });
     return const PlayerState();
+  }
+
+  /// What is playing, for the Discord status; null before a source opens.
+  DiscordWatchSnapshot? watchSnapshot() {
+    if (!_isInitialized || _isDisposed) return null;
+    final episode = _episode;
+    final isFilm = _item.contentType == MultimediaContentType.movie;
+    var positionMs = _lastKnownPlaybackPositionMs;
+    var durationMs = _lastKnownPlaybackDurationMs;
+    if (!state.useExoPlayer) {
+      positionMs = _player.state.position.inMilliseconds;
+      final engineDuration = _player.state.duration.inMilliseconds;
+      if (engineDuration > 0) durationMs = engineDuration;
+    }
+    return DiscordWatchSnapshot(
+      title: _item.title,
+      posterUrl: _item.posterUrl,
+      season: isFilm || episode == null ? null : episode.season,
+      episode: isFilm || episode == null ? null : episode.episode,
+      isPlaying: isPlaying,
+      positionMs: positionMs,
+      durationMs: durationMs,
+    );
   }
 
   bool get isSeries =>

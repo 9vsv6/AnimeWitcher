@@ -2,6 +2,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../core/discord/discord_presence.dart';
 import '../../../core/storage/settings_repository.dart';
 import '../../player/data/anime4k.dart';
 
@@ -119,6 +120,9 @@ class PlayerSettings {
   /// and friends). When off, no lookup runs and no skip button appears.
   final bool skipSegmentsEnabled;
 
+  /// Show what is playing as the user's Discord status (computers only).
+  final bool discordPresence;
+
   /// Skip openings and recaps automatically instead of showing a button.
   /// Only meaningful while [skipSegmentsEnabled] is on.
   final bool autoSkipIntro;
@@ -206,6 +210,7 @@ class PlayerSettings {
     this.showFullscreen = true,
     this.showKeyHints = true,
     this.skipSegmentsEnabled = true,
+    this.discordPresence = true,
     this.autoSkipIntro = false,
     this.autoSkipCredits = false,
   });
@@ -253,6 +258,7 @@ class PlayerSettings {
     bool? showFullscreen,
     bool? showKeyHints,
     bool? skipSegmentsEnabled,
+    bool? discordPresence,
     FillerBehaviour? fillerBehaviour,
     bool? prefetchNextEpisode,
     bool? anime4kEnabled,
@@ -314,6 +320,7 @@ class PlayerSettings {
       showFullscreen: showFullscreen ?? this.showFullscreen,
       showKeyHints: showKeyHints ?? this.showKeyHints,
       skipSegmentsEnabled: skipSegmentsEnabled ?? this.skipSegmentsEnabled,
+      discordPresence: discordPresence ?? this.discordPresence,
       fillerBehaviour: fillerBehaviour ?? this.fillerBehaviour,
       prefetchNextEpisode: prefetchNextEpisode ?? this.prefetchNextEpisode,
       anime4kEnabled: anime4kEnabled ?? this.anime4kEnabled,
@@ -530,6 +537,12 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
           defaultValue: true,
         ) ??
         true;
+    final discordPresence =
+        storage.getPlayerSetting<bool>(
+          kDiscordPresenceSetting,
+          defaultValue: true,
+        ) ??
+        true;
     // Migration: the single auto-skip switch became two. Its old value
     // carries over to openings, never to credits — auto-skipping those is
     // what made episodes jump to the end.
@@ -637,6 +650,7 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
       showFullscreen: showFullscreen,
       showKeyHints: showKeyHints,
       skipSegmentsEnabled: skipSegmentsEnabled,
+      discordPresence: discordPresence,
       autoSkipIntro: autoSkipIntro,
       fillerBehaviour: fillerBehaviour,
       prefetchNextEpisode: prefetchNextEpisode,
@@ -819,6 +833,11 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
   Future<void> setSkipSegmentsEnabled(bool val) async {
     await _repository.setPlayerSetting('player_skip_segments', val);
     state = AsyncData(state.requireValue.copyWith(skipSegmentsEnabled: val));
+  }
+
+  Future<void> setDiscordPresence(bool val) async {
+    await _repository.setPlayerSetting(kDiscordPresenceSetting, val);
+    state = AsyncData(state.requireValue.copyWith(discordPresence: val));
   }
 
   Future<void> setAutoSkipIntro(bool val) async {
